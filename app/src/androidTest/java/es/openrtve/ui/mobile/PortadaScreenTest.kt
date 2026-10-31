@@ -31,7 +31,6 @@ class PortadaScreenTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val repository = FakeCatalogRepository()
     private val opened = mutableListOf<CatalogItem>()
-    private val errors = mutableListOf<String>()
 
     @Test
     fun rowsRenderTheirItemsAndEmptyRowsDisappear() {
@@ -76,15 +75,18 @@ class PortadaScreenTest {
     }
 
     @Test
-    fun aFailedFeedReportsTheErrorOnce() {
+    fun aFailedFeedExplainsTheErrorInPlaceInsteadOfAnEmptyHome() {
         repository.portada = { _, _, cachedOnly ->
             if (cachedOnly) throw es.openrtve.data.NotCachedException()
             throw IOException("offline")
         }
         setContent()
 
-        compose.waitUntil(5_000) { errors.isNotEmpty() }
-        assertEquals(listOf(context.getString(R.string.error_unknown)), errors)
+        val error = context.getString(R.string.error_unknown)
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText(error)).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(error).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.action_retry)).assertIsDisplayed()
+        compose.onAllNodes(hasText(context.getString(R.string.state_empty_home))).assertCountEquals(0)
     }
 
     private fun setContent() {
@@ -97,7 +99,6 @@ class PortadaScreenTest {
                     onBack = null,
                     onOpenItem = { opened += it },
                     onOpenRow = { _, _ -> },
-                    onError = { errors += it },
                 )
             }
         }

@@ -2,10 +2,22 @@ package es.openrtve.domain
 
 object RtveUrls {
     const val TV_HOME = "https://www.rtve.es/play/index_apps.json"
-    const val RADIO_HOME = "https://www.rtve.es/play/radio/index_apps.json"
     const val REMOTE_CONFIG = "https://www.rtve.es/m/configs/rtve_play/2026/estructura2.json"
     const val QUICK_SEARCHES = "https://www.rtve.es/m/configs/buscador/predefinidos.json"
     const val SEARCH = "https://api.rtve.es/api/search/results"
+    /** Base de las páginas siguientes de cada bloque de búsqueda: se le añade su `query` relativo. */
+    const val SEARCH_PAGES = "https://api.rtve.es/api/search"
+    const val RECOMMENDATIONS = "https://recomsys.rtve.es/recommendation"
+}
+
+/**
+ * Recomendaciones editoriales de RTVE (`recomsys`): "Similares" de una ficha.
+ * Cada tipo tiene su modelo y su forma de identificar el item.
+ */
+enum class RelatedKind(val path: String, val itemPrefix: String) {
+    PROGRAM("program", "pr"),
+    FILM("film", "v"),
+    DOCUMENTARY("documental", "v"),
 }
 
 /** Qué recorte pinta cada presentación, con sus respaldos; la única definición para móvil y TV. */
@@ -25,7 +37,6 @@ fun referenceItem(id: String, kind: ContentKind, title: String, imageUrl: String
     subtitle = null,
     imageUrl = imageUrl,
     kind = kind,
-    directQualityUrl = null,
     allowedInCountry = null,
     loginRequired = false,
     paid = false,
@@ -69,7 +80,7 @@ enum class RowLayout {
     POSTER,
     /** `ColeccionSuper`: pósters altos 1:2 con la imagen `imgCol`, distinta del póster. */
     POSTER_TALL,
-    /** `ColeccionCuadrado*`: tarjetas cuadradas (radio, música). */
+    /** `ColeccionCuadrado*`: tarjetas cuadradas. */
     SQUARE,
     /** `ColeccionApaisado`, `videos`, `directosTV*`: tarjetas apaisadas 16:9. */
     LANDSCAPE,
@@ -108,7 +119,7 @@ data class HomeFeed(
 )
 
 /** A qué apunta un enlace de una fila `links`; `enlaceExterno` sale de la app y no se modela. */
-enum class LinkKind { COLLECTION, PORTADA, PROGRAM, VIDEO, AUDIO }
+enum class LinkKind { COLLECTION, PORTADA, PROGRAM, VIDEO }
 
 /** Acceso editorial de una fila `links`: viene completo en la portada, sin descarga. */
 data class HomeLink(
@@ -146,20 +157,15 @@ data class HomeRow(
     val isRenderable: Boolean
         get() = isInline || contentUrl != null
 
-    /** Módulo de emisoras de radio: llega sin `urlContent`; la fuente está en la configuración remota. */
-    val isRadioLivesModule: Boolean
-        get() = moduleType.equals("moduloDirectoRadio", ignoreCase = true) || presentation.equals("moduloDirectoRadio", ignoreCase = true)
-
     /** Fila de directos: su contenido caduca en minutos. */
     val isLive: Boolean
-        get() = presentation?.lowercase()?.let { it.startsWith("directos") || it == "modulodirectoradio" } == true ||
+        get() = presentation?.lowercase()?.startsWith("directos") == true ||
             moduleType.equals("livesCollection", ignoreCase = true)
 }
 
 enum class ContentKind {
     PROGRAM,
     VIDEO,
-    AUDIO,
     LIVE,
     UNKNOWN,
 }
@@ -176,17 +182,24 @@ data class CatalogItem(
     val kind: ContentKind,
     /** Póster vertical 2:3. */
     val posterUrl: String? = null,
-    /** Imagen cuadrada 1:1 (radio, música). */
+    /** Imagen cuadrada 1:1 (filas `ColeccionCuadrado`). */
     val squareUrl: String? = null,
     /** Imagen `imgCol` de un programa: el recorte alto (1:2) que usa `ColeccionSuper`; no es el póster. */
     val tallPosterUrl: String? = null,
-    val directQualityUrl: String?,
     val allowedInCountry: Boolean?,
     val loginRequired: Boolean,
     val paid: Boolean,
     val drm: Boolean,
     /** Programa al que pertenece el medio, si el feed lo indica. */
     val programId: String? = null,
+    /** Temporada a la que pertenece el medio; permite cargar los demás capítulos desde una ficha. */
+    val seasonId: String? = null,
+    /** Tipo editorial de RTVE (`39816` completo, `39978` fragmento, `39980` avance). */
+    val mediaTypeId: String? = null,
+    val mediaTypeName: String? = null,
+    val mediaSubtypeName: String? = null,
+    /** El programa publica fragmentos/avances además de emisiones completas. */
+    val programShowsFragments: Boolean? = null,
     val durationMs: Long? = null,
     /** Fecha tal como la entrega el feed (`dd-MM-yyyy HH:mm:ss`); la UI la formatea. */
     val publicationDate: String? = null,
@@ -212,8 +225,6 @@ data class LiveInfo(
     val progressPercent: Int?,
     val channelLogoUrl: String?,
     val category: String?,
-    /** Emisora de radio: el stream es HLS pero solo audio. */
-    val isAudio: Boolean = false,
 ) {
     fun progressAt(nowMillis: Long): Float? {
         val start = startsAtMillis
@@ -233,6 +244,9 @@ data class CatalogModule(
     val title: String,
     val items: List<CatalogItem>,
 )
+
+/** "Ver todo" solo tiene sentido si la fila trae más de lo que cabe de un vistazo. */
+const val SEE_ALL_MIN_ITEMS = 6
 
 data class CatalogPage(
     val items: List<CatalogItem>,
@@ -260,14 +274,21 @@ data class ProgramDetail(
     /** Ya en el orden en que se muestran (ver [seasonsInDisplayOrder]). */
     val seasons: List<ProgramSeason>,
     val webUrl: String? = null,
-    /** Programa de radio: sus episodios están en `audios.json`. */
-    val isRadio: Boolean = false,
     /** `programTypeID` del feed ("136519" = Series Prime Time...); falta en muchos programas antiguos. */
     val programTypeId: String? = null,
     /** `outOfEmission == false`: sigue publicando episodios. */
     val inEmission: Boolean = true,
     /** `isComplete`: la serie está completa en el catálogo. */
     val isComplete: Boolean = false,
+    /** RTVE anuncia que el programa publica fragmentos y avances. */
+    val showFragments: Boolean = false,
+    val year: String? = null,
+    val ageRating: String? = null,
+    val genres: List<String> = emptyList(),
+    val director: String? = null,
+    val cast: List<String> = emptyList(),
+    val originalLanguage: String? = null,
+    val country: String? = null,
 )
 
 data class CatalogLoad<T>(
@@ -278,8 +299,13 @@ data class CatalogLoad<T>(
 data class SearchResults(
     val programs: List<CatalogItem>,
     val videos: List<CatalogItem>,
+    /** Paginación de los vídeos: la página cargada, el total y el `query` relativo para pedir más. */
+    val videosPage: Int = 1,
+    val videosTotalPages: Int = 1,
+    val videosQuery: String? = null,
 ) {
     val isEmpty: Boolean get() = programs.isEmpty() && videos.isEmpty()
+    val hasMoreVideos: Boolean get() = videosQuery != null && videosPage < videosTotalPages
 }
 
 /** Pestaña de búsqueda predefinida ("Más buscados", "Series TV"...). */
@@ -307,6 +333,15 @@ data class ExploreGroup(
 )
 
 /** Ficha completa de un vídeo (`videos/{id}.json`): lo que Findroid muestra en su pantalla de película. */
+/**
+ * Un "contenedor" (ciclo de cine, colección de documentales) agrupa piezas
+ * sueltas: no tiene capítulos que recorrer. Un programa de verdad sí, aunque el
+ * vídeo no traiga temporada ni número de episodio.
+ */
+val VideoDetail.belongsToEpisodicProgram: Boolean
+    get() = item.programId != null &&
+        (item.seasonId != null || item.episode != null || programType?.contains("contenedor", ignoreCase = true) == false)
+
 data class VideoDetail(
     val item: CatalogItem,
     val backdropUrl: String?,
@@ -315,6 +350,8 @@ data class VideoDetail(
     val promo: String?,
     val subtypeName: String?,
     val programTitle: String?,
+    /** Tipo del programa al que pertenece ("Serie Documental", "Contenedor Películas"...). */
+    val programType: String? = null,
     val year: String?,
     val ageRating: String?,
     val genres: List<String>,

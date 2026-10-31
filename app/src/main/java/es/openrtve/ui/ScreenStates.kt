@@ -57,7 +57,6 @@ fun rememberPortadaScreen(
     repository: CatalogRepository,
     url: String,
     history: WatchHistory?,
-    onError: (String) -> Unit,
 ): PortadaScreenState {
     val viewModel: PortadaViewModel = viewModel(
         key = "portada-$url",
@@ -80,7 +79,7 @@ fun rememberPortadaScreen(
             }
         }
     }
-    ErrorEffect(state.error, onError, viewModel::dismissError)
+    // Sin ErrorEffect: el fallo de la portada se pinta en su sitio (ver PortadaUiState.error).
     return PortadaScreenState(viewModel, state, resumable)
 }
 
@@ -120,7 +119,10 @@ fun rememberProgramScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val historyEntries by history.entries.collectAsStateWithLifecycle()
     val entriesById = remember(historyEntries) { historyEntries.associateBy { it.item.id } }
-    val suggestion = remember(historyEntries, state.episodes, state.order) { suggestPlay(history, program.id, state.episodes, state.order) }
+    // De la lista completa, no de la temporada que se esté mirando: el botón grande es estable.
+    val suggestion = remember(historyEntries, state.headerEpisodes, state.headerOrder) {
+        suggestPlay(history, program.id, state.headerEpisodes, state.headerOrder)
+    }
     ErrorEffect(state.error, onError, viewModel::dismissError)
     return ProgramScreenState(viewModel, state, entriesById, suggestion)
 }
@@ -131,8 +133,9 @@ fun rememberProgramScreen(
  * página corta que no saca al usuario de la zona final encadena la siguiente.
  */
 @Composable
-fun LoadMoreOnScrollEnd(listState: LazyListState, threshold: Int, loadMore: () -> Unit) {
-    LaunchedEffect(listState) {
+fun LoadMoreOnScrollEnd(listState: LazyListState, threshold: Int, enabled: Boolean = true, loadMore: () -> Unit) {
+    LaunchedEffect(listState, enabled) {
+        if (!enabled) return@LaunchedEffect
         snapshotFlow {
             val info = listState.layoutInfo
             (info.visibleItemsInfo.lastOrNull()?.index ?: -1) to info.totalItemsCount
@@ -155,7 +158,6 @@ fun rememberVideoScreen(
     repository: CatalogRepository,
     history: WatchHistory,
     item: CatalogItem,
-    onError: (String) -> Unit,
 ): VideoScreenState {
     val viewModel: VideoViewModel = viewModel(
         key = "video-${item.id}",
@@ -164,17 +166,17 @@ fun rememberVideoScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val historyEntries by history.entries.collectAsStateWithLifecycle()
     val resume = remember(historyEntries, state.item.id) { history.entryFor(state.item.id)?.takeIf { it.inProgress } }
-    ErrorEffect(state.error, onError, viewModel::dismissError)
+    // Sin ErrorEffect: si falla la ficha, la pantalla lo explica en su sitio con su reintento.
     return VideoScreenState(viewModel, state, resume)
 }
 
 class SearchScreenState(val viewModel: SearchViewModel, val state: SearchUiState)
 
 @Composable
-fun rememberSearchScreen(repository: CatalogRepository, onError: (String) -> Unit): SearchScreenState {
+fun rememberSearchScreen(repository: CatalogRepository): SearchScreenState {
     val viewModel: SearchViewModel = viewModel(factory = viewModelFactory { initializer { SearchViewModel(repository) } })
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    ErrorEffect(state.error, onError, viewModel::dismissError)
+    // Sin ErrorEffect: filtros y búsqueda explican su fallo en el sitio, con su reintento.
     return SearchScreenState(viewModel, state)
 }
 

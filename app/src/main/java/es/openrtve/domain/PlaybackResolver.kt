@@ -27,8 +27,6 @@ sealed interface PlaybackDecision {
         val resumePositionMs: Long = 0L,
         /** ID del vídeo bajo demanda: da acceso a previews de la barra y al siguiente episodio. */
         val videoId: String? = null,
-        /** Radio en directo va por HLS, así que el MIME no basta para saber que es audio. */
-        val isAudioOnly: Boolean = mimeType.startsWith("audio/"),
     ) : PlaybackDecision
 
     data class Blocked(val reason: BlockReason) : PlaybackDecision
@@ -40,7 +38,6 @@ sealed interface PlaybackDecision {
  * (verificado el 12-09-2026). Por defecto se ignora, como hace la TV.
  */
 class PlaybackResolver(
-    private val hostPolicy: RtveHostPolicy = RtveHostPolicy(),
     private val enforceLoginGate: Boolean = false,
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
@@ -59,7 +56,6 @@ class PlaybackResolver(
         }
 
         val source = when (item.kind) {
-            ContentKind.AUDIO -> audioSource(item)
             // Los directos con DRM solo son reproducibles en Android por DASH; el HLS lleva FairPlay.
             ContentKind.LIVE -> item.assetId?.let { if (item.drm) dashSource(it) else hlsSource(it) }
             ContentKind.VIDEO, ContentKind.PROGRAM -> item.playbackId?.let(::dashSource)
@@ -75,7 +71,6 @@ class PlaybackResolver(
             fallbackUri = source.fallbackUri,
             historyKey = item.id.takeIf { item.kind != ContentKind.LIVE },
             videoId = item.playbackId.takeIf { item.kind == ContentKind.VIDEO || item.kind == ContentKind.PROGRAM },
-            isAudioOnly = item.kind == ContentKind.AUDIO || item.live?.isAudio == true,
         )
     }
 
@@ -92,13 +87,6 @@ class PlaybackResolver(
 
     private fun hlsSource(assetId: String) = Source("$ZTNR/$assetId.m3u8", MIME_HLS)
 
-    private fun audioSource(item: CatalogItem): Source? {
-        val direct = item.directQualityUrl
-            ?.takeIf { hostPolicy.isAllowed(it) && !it.contains("_TOKEN_") }
-            ?.let { Source(it, MIME_MP3) }
-        return direct ?: item.playbackId?.let { Source("$ZTNR/$it.mp3", MIME_MP3) }
-    }
-
     private data class Source(
         val uri: String,
         val mimeType: String,
@@ -111,6 +99,5 @@ class PlaybackResolver(
         const val API = "https://api.rtve.es/api"
         const val MIME_HLS = "application/x-mpegURL"
         const val MIME_DASH = "application/dash+xml"
-        const val MIME_MP3 = "audio/mpeg"
     }
 }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,13 +50,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import es.openrtve.R
 import es.openrtve.data.CatalogRepository
-import es.openrtve.data.WatchEntry
 import es.openrtve.data.WatchHistory
 import androidx.compose.runtime.remember
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.HomeLink
 import es.openrtve.domain.HomeRow
 import es.openrtve.domain.RowLayout
+import es.openrtve.domain.SEE_ALL_MIN_ITEMS
 import es.openrtve.ui.HomeSection
 import es.openrtve.ui.SectionState
 import es.openrtve.ui.rememberPortadaScreen
@@ -75,12 +76,14 @@ fun PortadaScreen(
     onBack: (() -> Unit)?,
     onOpenItem: (CatalogItem) -> Unit,
     onOpenRow: (HomeRow, String) -> Unit,
-    onError: (String) -> Unit,
     onOpenSettings: (() -> Unit)? = null,
     history: WatchHistory? = null,
     onOpenLink: (HomeLink) -> Unit = {},
+    /** "Seguir viendo": continuar al tocar y quitar desde el menú de la tarjeta. */
+    onResume: (CatalogItem) -> Unit = onOpenItem,
+    onRemoveFromHistory: (CatalogItem) -> Unit = {},
 ) {
-    val screen = rememberPortadaScreen(repository, url, history, onError)
+    val screen = rememberPortadaScreen(repository, url, history)
     val viewModel = screen.viewModel
     val state = screen.state
     val resumable = screen.resumable
@@ -103,7 +106,11 @@ fun PortadaScreen(
             }
             when {
                 state.isLoading -> LoadingPanel()
-                state.sections.isEmpty() -> EmptyPanel(stringResource(R.string.state_empty_home), viewModel::refresh)
+                // Sin conexión no es "portada vacía": se dice qué falló.
+                state.sections.isEmpty() -> EmptyPanel(
+                    state.error?.text(LocalContext.current) ?: stringResource(R.string.state_empty_home),
+                    viewModel::refresh,
+                )
                 else -> LazyColumn(
                     state = listState,
                     contentPadding = PaddingValues(bottom = 16.dp),
@@ -118,7 +125,7 @@ fun PortadaScreen(
                     }
                     val heroFirst = startsWithHero && state.sections.first().state !is SectionState.Failed
                     if (resumable.isNotEmpty() && !heroFirst) {
-                        item(key = "continue") { ContinueWatchingRow(resumable, onOpenItem, Modifier.animateItem()) }
+                        item(key = "continue") { ContinueWatchingRow(resumable, onResume, onOpenItem, onRemoveFromHistory, Modifier.animateItem()) }
                     }
                     items(state.sections, key = { it.row.id }) { section ->
                         SectionView(
@@ -134,19 +141,35 @@ fun PortadaScreen(
                         // Tras el hero, como en la app oficial y en Findroid.
                         if (heroFirst && resumable.isNotEmpty() && section.row.id == state.sections.first().row.id) {
                             Spacer(Modifier.height(22.dp))
-                            ContinueWatchingRow(resumable, onOpenItem)
+                            ContinueWatchingRow(resumable, onResume, onOpenItem, onRemoveFromHistory)
                         }
                     }
                 }
             }
             if (isRoot) {
+                val brandVisible = showBrand || state.isLoading || state.sections.isEmpty()
                 androidx.compose.animation.AnimatedVisibility(
-                    visible = showBrand || state.isLoading || state.sections.isEmpty(),
+                    visible = brandVisible,
                     enter = fadeIn(),
                     exit = fadeOut(),
                     modifier = Modifier.align(Alignment.TopCenter),
                 ) {
                     FloatingBrandBar(onOpenSettings)
+                }
+                // Sin la marca, el contenido pasaría por debajo de la hora y los iconos:
+                // la barra de estado lleva el fondo de la pantalla, como en Material 3.
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !brandVisible,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.TopCenter),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .windowInsetsTopHeight(WindowInsets.statusBars)
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f)),
+                    )
                 }
             }
         }
@@ -180,26 +203,6 @@ private fun FloatingBrandBar(onOpenSettings: (() -> Unit)?) {
                 IconButton(onClick = onOpenSettings) {
                     Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title), tint = Color.White)
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ContinueWatchingRow(entries: List<WatchEntry>, onOpenItem: (CatalogItem) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(
-            text = stringResource(R.string.continue_watching),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = ScreenPadding, end = 4.dp, bottom = 12.dp),
-        )
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = ScreenPadding),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(entries, key = { it.item.id }) { entry ->
-                ItemCard(entry.item, { onOpenItem(entry.item) }, Modifier.width(LandscapeWidth), progress = entry.progress)
             }
         }
     }
@@ -245,8 +248,8 @@ private fun SectionView(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                // Los enlaces ya están todos en la fila: no hay "ver todo".
-                if (!isLinks) {
+                // Los enlaces ya están todos en la fila, y una fila corta se ve entera: sin "ver todo".
+                if (!isLinks && ((section.state as? SectionState.Loaded)?.items?.size ?: 0) >= SEE_ALL_MIN_ITEMS) {
                     IconButton(onClick = onSeeAll) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.action_see_all))
                     }
@@ -308,7 +311,7 @@ private fun PlaceholderRow(layout: RowLayout, fullBleedHero: Boolean) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = if (fullBleed) 0.dp else ScreenPadding)
-                .aspectRatio(if (fullBleed) 4f / 3f else 16f / 9f)
+                .aspectRatio(16f / 9f)
                 .clip(if (fullBleed) androidx.compose.foundation.shape.RoundedCornerShape(0.dp) else CardShape)
                 .background(MaterialTheme.colorScheme.surface),
         )

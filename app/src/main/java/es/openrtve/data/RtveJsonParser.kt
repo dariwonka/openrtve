@@ -52,7 +52,7 @@ class RtveJsonParser(
                 if (isLinks && links.isEmpty()) return@mapNotNull null
                 HomeRow(
                     id = -1,
-                    title = row.text("title", "name").orEmpty(),
+                    title = row.text("title", "name")?.let(::editorialTitle).orEmpty(),
                     order = row.number("orden", "order") ?: Int.MAX_VALUE,
                     moduleType = row.text("moduleType"),
                     presentation = presentation,
@@ -88,7 +88,7 @@ class RtveJsonParser(
         val items = toCatalogItems((collection?.array("collectionItems") ?: pageItems).mapNotNull { it as? JsonObject })
 
         return CatalogModule(
-            title = fallbackTitle.ifBlank { collection?.text("title") ?: fallbackTitle },
+            title = fallbackTitle.ifBlank { collection?.text("title")?.let(::editorialTitle) ?: fallbackTitle },
             items = items,
         )
     }
@@ -98,7 +98,15 @@ class RtveJsonParser(
         fun block(key: String) = toCatalogItems(
             root.obj(key)?.obj("page")?.array("items").orEmpty().mapNotNull { it as? JsonObject },
         )
-        return SearchResults(programs = block("programs"), videos = block("videos"))
+        val videos = root.obj("videos")
+        return SearchResults(
+            programs = block("programs"),
+            videos = block("videos"),
+            videosPage = videos?.obj("page")?.number("number") ?: 1,
+            videosTotalPages = videos?.obj("page")?.number("totalPages") ?: 1,
+            // Ruta relativa al buscador; si cambiara de host o de forma, no se pagina.
+            videosQuery = videos?.text("query")?.takeIf { it.startsWith("/") && !it.startsWith("//") },
+        )
     }
 
     fun parseQuickFilters(raw: String): List<QuickFilter> =
@@ -178,7 +186,6 @@ class RtveJsonParser(
                 "portadaPlay" -> LinkKind.PORTADA
                 "programaPlay" -> LinkKind.PROGRAM
                 "videoPlay" -> LinkKind.VIDEO
-                "audioPlay" -> LinkKind.AUDIO
                 else -> return@mapNotNull null
             }
             HomeLink(
@@ -227,11 +234,17 @@ class RtveJsonParser(
             emission = program.text("emission"),
             seasons = seasons,
             webUrl = program.text("htmlUrl")?.let(hostPolicy::sanitize),
-            isRadio = program.text("mainTopic")?.startsWith("Radio", ignoreCase = true) == true ||
-                program.text("htmlUrl")?.contains("/audios/") == true,
             programTypeId = program.text("programTypeID"),
             inEmission = program.flag("outOfEmission") != true,
             isComplete = program.flag("isComplete") == true,
+            showFragments = program.flag("showFragments") == true,
+            year = program.text("productionDate")?.let(::productionYear),
+            ageRating = program.text("ageRange"),
+            genres = program.genres(),
+            director = program.people("director"),
+            cast = program.peopleList("casting"),
+            originalLanguage = program.text("languageOriginal"),
+            country = program.text("country"),
         )
         return detail.copy(seasons = detail.seasonsInDisplayOrder())
     }
@@ -293,6 +306,9 @@ class RtveJsonParser(
         val contentType = media.text("contentType")
             ?: item.text("contentType")
         val editorialType = media.text("tipo") ?: item.text("tipo")
+        val type = media.obj("type") ?: item.obj("type")
+        val subtype = media.obj("subType") ?: item.obj("subType")
+        val programInfo = media.obj("programInfo") ?: item.obj("programInfo")
         val assetId = media.text("idAsset") ?: item.text("idAsset")
         val kind = contentKind(contentType, editorialType, nestedMedia != null, assetId)
         val live = if (kind == ContentKind.LIVE) liveInfo(item) else null
@@ -314,10 +330,12 @@ class RtveJsonParser(
             posterUrl = posterImage(kind, id, media, item),
             squareUrl = squareImage(kind, id, media, item),
             tallPosterUrl = if (kind == ContentKind.PROGRAM) derivedImage("p", id, "imgCol", POSTER_WIDTH) else null,
-            programId = if (kind == ContentKind.PROGRAM) id else item.obj("programInfo")?.text("id"),
-            directQualityUrl = media.array("qualities")
-                ?.mapNotNull { it as? JsonObject }
-                ?.firstNotNullOfOrNull { it.text("filePath") },
+            programId = if (kind == ContentKind.PROGRAM) id else programInfo?.text("id"),
+            seasonId = media.text("temporadaId") ?: item.text("temporadaId"),
+            mediaTypeId = type?.text("id"),
+            mediaTypeName = type?.text("name"),
+            mediaSubtypeName = subtype?.text("name"),
+            programShowsFragments = programInfo?.flag("showFragments"),
             allowedInCountry = media.flag("allowedInCountry")
                 ?: item.flag("allowedInCountry"),
             loginRequired = media.flag("requireLogged")
@@ -345,7 +363,6 @@ class RtveJsonParser(
         progressPercent = item.number("porcentaje"),
         channelLogoUrl = item.text("logo")?.let(hostPolicy::sanitize),
         category = item.text("antetitulo")?.let(::titleCase),
-        isAudio = item.flag("audio") == true,
     )
 
     /** El feed escribe las horas en local de Madrid, sin zona. */
@@ -355,6 +372,13 @@ class RtveJsonParser(
             .parse(value)?.time
     }.getOrNull()
 
+    /**
+     * Algunas colecciones llegan con su ruta editorial como título ("Portada En
+     * Play > Destacados"): se muestra solo el último tramo.
+     */
+    private fun editorialTitle(value: String): String =
+        value.substringAfterLast(" > ").trim().ifEmpty { value }
+
     /** "OTRAS TEMÁTICAS" -> "Otras temáticas"; los títulos del menú llegan en mayúsculas. */
     private fun sentenceCase(value: String): String =
         if (value != value.uppercase()) value else value.lowercase().replaceFirstChar { it.uppercase() }
@@ -363,11 +387,6 @@ class RtveJsonParser(
     private fun titleCase(value: String): String =
         if (value != value.uppercase()) value
         else value.lowercase().split(' ').joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
-
-    /** Fuente de las emisoras de radio en directo, en `radio.secciones.directosRadio.urlContent` de la configuración. */
-    fun parseRadioLivesUrl(raw: String): String? = json.parseToJsonElement(raw).jsonObject
-        .obj("radio")?.obj("secciones")?.obj("directosRadio")?.text("urlContent")
-        ?.let(hostPolicy::sanitize)
 
     /** Respuesta de `tiivii-previews/api/sprite`: URLs del sprite y de su VTT, o `null` si no está disponible. */
     fun parseSpriteInfo(raw: String): Pair<String, String>? {
@@ -428,14 +447,12 @@ class RtveJsonParser(
             promo = video.text("promoDesc"),
             subtypeName = video.obj("subType")?.text("name"),
             programTitle = video.obj("programInfo")?.text("title"),
-            year = video.text("productionDate")?.take(4),
+            programType = video.obj("programInfo")?.text("programType"),
+            year = video.text("productionDate")?.let(::productionYear),
             ageRating = video.text("ageRange"),
-            genres = video.array("generos")
-                .orEmpty()
-                .mapNotNull { (it as? JsonObject)?.text("subGeneroInf", "generoInf") }
-                .distinct(),
-            director = video.text("director")?.split('|')?.map(String::trim)?.filter(String::isNotEmpty)?.joinToString(", "),
-            cast = video.text("casting")?.split('|')?.map(String::trim)?.filter(String::isNotEmpty).orEmpty(),
+            genres = video.genres(),
+            director = video.people("director"),
+            cast = video.peopleList("casting"),
             originalLanguage = video.text("languageOriginal"),
             expirationDate = video.text("expirationDate"),
             webUrl = video.text("htmlUrl")?.let(hostPolicy::sanitize),
@@ -463,7 +480,6 @@ class RtveJsonParser(
             return ContentKind.LIVE
         }
         return when (contentType?.lowercase()) {
-            "audio" -> ContentKind.AUDIO
             "video" -> if (isProgramWithMedia) ContentKind.PROGRAM else ContentKind.VIDEO
             "program", "programa" -> ContentKind.PROGRAM
             "directo", "live", "broadcast" -> ContentKind.LIVE
@@ -477,13 +493,12 @@ class RtveJsonParser(
      * Imágenes por proporción, medidas el 12-09-2026: `imgPortada`, `thumb` y
      * `previews.horizontal*` son 16:9; `imgPoster`, `thumb_vertical` y
      * `previews.vertical*` 2:3; `imgBackground`, `thumb_square` y `previews.square*`
-     * 1:1; `imgCol` 1:2 e `imgBanner` 4:1. Para vídeos, programas y audios el
+     * 1:1; `imgCol` 1:2 e `imgBanner` 4:1. Para vídeos y programas el
      * servicio por id devuelve siempre la variante pedida y admite `w=`.
      */
     private fun landscapeImage(kind: ContentKind, id: String, media: JsonObject, item: JsonObject): String? = when (kind) {
         ContentKind.VIDEO -> derivedImage("v", id, "horizontal2", LANDSCAPE_WIDTH)
         ContentKind.PROGRAM -> derivedImage("p", id, "imgPortada", LANDSCAPE_WIDTH)
-        ContentKind.AUDIO -> squareImage(kind, id, media, item)
         else -> firstAllowed(
             item.text("thumb", "imagen", "imgPortada", "imgPortada2", "thumbnail"),
             media.obj("previews")?.text("horizontal2", "horizontal"),
@@ -494,7 +509,6 @@ class RtveJsonParser(
     private fun posterImage(kind: ContentKind, id: String, media: JsonObject, item: JsonObject): String? = when (kind) {
         ContentKind.VIDEO -> derivedImage("v", id, "vertical", POSTER_WIDTH)
         ContentKind.PROGRAM -> derivedImage("p", id, "imgPoster", POSTER_WIDTH)
-        ContentKind.AUDIO -> null
         else -> firstAllowed(
             item.text("thumb_vertical", "imgPoster", "imgPoster2"),
             media.obj("previews")?.text("vertical2", "vertical"),
@@ -503,12 +517,6 @@ class RtveJsonParser(
 
     private fun squareImage(kind: ContentKind, id: String, media: JsonObject, item: JsonObject): String? = when (kind) {
         ContentKind.PROGRAM -> derivedImage("p", id, "imgBackground", SQUARE_WIDTH)
-        // Muchos audios no tienen imagen propia: la del programa (cuadrada) es mejor reserva que un 404.
-        ContentKind.AUDIO -> firstAllowed(
-            media.obj("previews")?.text("square", "square2"),
-            item.text("imgBackground", "imagePodcast"),
-        ) ?: item.obj("programInfo")?.text("id")?.let { derivedImage("p", it, "imgBackground", SQUARE_WIDTH) }
-            ?: derivedImage("a", id, null, SQUARE_WIDTH)
         ContentKind.VIDEO -> null
         else -> firstAllowed(item.text("thumb_square", "imgBackground"), media.obj("previews")?.text("square", "square2"))
     }
@@ -557,9 +565,25 @@ class RtveJsonParser(
 
     private fun JsonObject.array(key: String): JsonArray? = get(key) as? JsonArray
 
+    private fun JsonObject.genres(): List<String> = array("generos")
+        .orEmpty()
+        .mapNotNull { (it as? JsonObject)?.text("subGeneroInf", "generoInf") }
+        .distinct()
+
+    private fun JsonObject.people(key: String): String? = peopleList(key).joinToString(", ").ifBlank { null }
+
+    private fun JsonObject.peopleList(key: String): List<String> = text(key)
+        ?.split('|')
+        ?.map(String::trim)
+        ?.filter(String::isNotEmpty)
+        .orEmpty()
+
+    private fun productionYear(value: String): String? = YEAR.find(value)?.value
+
     private companion object {
         val LIVE_EDITORIAL_TYPES = setOf("broadcast", "peticion", "directo")
         val NON_CATALOG_ROWS = setOf("noticias", "parrilla")
+        val YEAR = Regex("\\b(?:19|20)\\d{2}\\b")
         private const val CLAN_PACKAGE = "com.rtve.clan"
         const val IMAGE_SERVICE = "https://img.rtve.es"
         const val LANDSCAPE_WIDTH = 960

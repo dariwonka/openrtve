@@ -19,9 +19,9 @@ class DeepLinkTest {
     @Test
     fun `web urls resolve to video, audio, program and live`() {
         assertEquals(DeepLink.Video("16368062"), parseDeepLink("https://www.rtve.es/play/videos/cine-internacional/la-favorita/16368062/"))
-        assertEquals(DeepLink.Audio("17150412"), parseDeepLink("https://www.rtve.es/play/audios/ficcion-sonora/el-buscon/17150412/"))
-        assertEquals(DeepLink.ProgramPermalink("telediario-2", isAudio = false), parseDeepLink("https://www.rtve.es/play/videos/telediario-2/"))
-        assertEquals(DeepLink.ProgramPermalink("ficcion-sonora", isAudio = true), parseDeepLink("https://rtve.es/play/audios/ficcion-sonora"))
+        assertNull("los audios son de RTVE Audio", parseDeepLink("https://www.rtve.es/play/audios/ficcion-sonora/el-buscon/17150412/"))
+        assertEquals(DeepLink.ProgramPermalink("telediario-2"), parseDeepLink("https://www.rtve.es/play/videos/telediario-2/"))
+        assertNull(parseDeepLink("https://rtve.es/play/audios/ficcion-sonora"))
         assertEquals(DeepLink.LivePermalink("la-1"), parseDeepLink("https://www.rtve.es/play/videos/directo/la-1/"))
     }
 

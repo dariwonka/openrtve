@@ -83,7 +83,7 @@ class SearchScreenTest {
     private fun setContent() {
         compose.setContent {
             OpenRtveTheme {
-                SearchScreen(repository = repository, onOpenItem = { opened += it }, onError = {})
+                SearchScreen(repository = repository, onOpenItem = { opened += it })
             }
         }
     }

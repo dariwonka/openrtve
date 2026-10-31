@@ -15,11 +15,15 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -39,11 +43,11 @@ import es.openrtve.domain.RtveUrls
 import es.openrtve.ui.Destination
 import es.openrtve.ui.DestinationHost
 import es.openrtve.ui.GlobalDestination
-import es.openrtve.ui.LocalNowMillis
 import es.openrtve.ui.NavigationViewModel
 import es.openrtve.ui.Tab
+import es.openrtve.ui.UiMessage
 import es.openrtve.ui.rememberCatalogActions
-import es.openrtve.ui.rememberNowMillis
+import es.openrtve.ui.ProvideClock
 import es.openrtve.ui.text
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -65,10 +69,12 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
     BackHandler(enabled = nav.canGoBack, onBack = navigation::pop)
 
     val message = nav.message?.text(context)
-    if (message != null) {
-        LaunchedEffect(message) {
+    val pending = nav.message
+    if (pending != null && pending != UiMessage.OpeningLink) {
+        // "Abriendo enlace…" se queda hasta que el enlace se resuelve.
+        LaunchedEffect(pending) {
             delay(MESSAGE_VISIBLE_MS)
-            navigation.dismissMessage()
+            navigation.dismissMessage(pending)
         }
     }
 
@@ -77,21 +83,25 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
     }
 
     val destination = nav.current
-    val nowMillis = rememberNowMillis()
-    CompositionLocalProvider(LocalNowMillis provides nowMillis) {
+    ProvideClock {
         NavigationDrawer(
             drawerContent = {
+                // Al entrar en el menú desde el contenido, el foco va a la sección activa,
+                // no a la entrada que geométricamente quede más cerca.
+                val selectedEntry = remember { FocusRequester() }
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
                         .background(MaterialTheme.colorScheme.surface)
-                        .padding(12.dp),
+                        .padding(12.dp)
+                        .focusProperties { onEnter = { selectedEntry.requestFocus() } }
+                        .focusGroup(),
                 ) {
                     Spacer(Modifier.height(TvVerticalMargin))
-                    DrawerEntry(Icons.Filled.Home, stringResource(R.string.tab_home), nav.global == null && nav.tab == Tab.HOME) { navigation.selectTab(Tab.HOME) }
-                    DrawerEntry(Icons.Filled.Search, stringResource(R.string.tab_search), nav.global == null && nav.tab == Tab.SEARCH) { navigation.selectTab(Tab.SEARCH) }
-                    DrawerEntry(Icons.Filled.Menu, stringResource(R.string.tab_explore), nav.global == null && nav.tab == Tab.EXPLORE) { navigation.selectTab(Tab.EXPLORE) }
-                    DrawerEntry(Icons.Filled.Settings, stringResource(R.string.settings_title), destination == GlobalDestination.Settings) {
+                    DrawerEntry(Icons.Filled.Home, stringResource(R.string.tab_home), nav.global == null && nav.tab == Tab.HOME, selectedEntry) { navigation.selectTab(Tab.HOME) }
+                    DrawerEntry(Icons.Filled.Search, stringResource(R.string.tab_search), nav.global == null && nav.tab == Tab.SEARCH, selectedEntry) { navigation.selectTab(Tab.SEARCH) }
+                    DrawerEntry(Icons.Filled.Menu, stringResource(R.string.tab_explore), nav.global == null && nav.tab == Tab.EXPLORE, selectedEntry) { navigation.selectTab(Tab.EXPLORE) }
+                    DrawerEntry(Icons.Filled.Settings, stringResource(R.string.settings_title), destination == GlobalDestination.Settings, selectedEntry) {
                         if (destination != GlobalDestination.Settings) actions.openSettings()
                     }
                 }
@@ -110,7 +120,6 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
                             onOpenItem = actions.openItem,
                             onOpenRow = actions.openRow,
                             onOpenLink = actions.openLink,
-                            onError = actions.showMessage,
                         )
                         is Destination.Module -> TvModuleScreen(
                             repository = repository,
@@ -124,6 +133,7 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
                             history = container.watchHistory,
                             program = current.item,
                             onOpenItem = actions.playItem,
+                            onOpenRelated = actions.openItem,
                             onError = actions.showMessage,
                         )
                         is Destination.Video -> TvVideoScreen(
@@ -132,7 +142,7 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
                             item = current.item,
                             onPlay = actions::play,
                             onOpenProgram = actions.openProgram,
-                            onError = actions.showMessage,
+                            onOpenItem = actions.openItem,
                         )
                         GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage)
                         null -> when (nav.tab) {
@@ -144,9 +154,10 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
                                 onOpenItem = actions.openItem,
                                 onOpenRow = actions.openRow,
                                 onOpenLink = actions.openLink,
-                                onError = actions.showMessage,
+                                onResume = actions.playItem,
+                                onRemoveFromHistory = actions.removeFromHistory,
                             )
-                            Tab.SEARCH -> TvSearchScreen(repository, actions.openItem, actions.showMessage)
+                            Tab.SEARCH -> TvSearchScreen(repository, actions.openItem)
                             Tab.EXPLORE -> TvExploreScreen(repository, actions.openCategory)
                         }
                     }
@@ -169,10 +180,11 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
 }
 
 @Composable
-private fun NavigationDrawerScope.DrawerEntry(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+private fun NavigationDrawerScope.DrawerEntry(icon: ImageVector, label: String, selected: Boolean, selectedFocus: FocusRequester, onClick: () -> Unit) {
     NavigationDrawerItem(
         selected = selected,
         onClick = onClick,
+        modifier = if (selected) Modifier.focusRequester(selectedFocus) else Modifier,
         leadingContent = { Icon(icon, contentDescription = null) },
     ) {
         Text(label, fontWeight = FontWeight.SemiBold)

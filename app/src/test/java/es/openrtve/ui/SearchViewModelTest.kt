@@ -2,6 +2,7 @@ package es.openrtve.ui
 
 import es.openrtve.data.HttpStatusException
 import es.openrtve.domain.CatalogModule
+import es.openrtve.domain.CatalogPage
 import es.openrtve.domain.QuickFilter
 import es.openrtve.domain.SearchResults
 import es.openrtve.testing.FakeCatalogRepository
@@ -97,18 +98,40 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `search failures surface as an error and can be dismissed`() = runTest(mainDispatcher.dispatcher) {
-        repository.search = { throw UnknownHostException() }
+    fun `search failures are shown in place and retry repeats the same query`() = runTest(mainDispatcher.dispatcher) {
+        var fail = true
+        repository.search = { query -> if (fail) throw UnknownHostException() else SearchResults(emptyList(), listOf(catalogItem("r-$query"))) }
         val viewModel = SearchViewModel(repository)
         advanceUntilIdle()
 
         viewModel.setQuery("cine")
         advanceUntilIdle()
-        assertEquals(LoadError.Offline, viewModel.uiState.value.error)
+        assertEquals(LoadError.Offline, viewModel.uiState.value.searchError)
+        assertNull("sin resultados de otra consulta", viewModel.uiState.value.results)
         assertFalse(viewModel.uiState.value.isSearching)
 
-        viewModel.dismissError()
-        assertNull(viewModel.uiState.value.error)
+        fail = false
+        viewModel.retrySearch()
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.searchError)
+        assertEquals(listOf("r-cine"), viewModel.uiState.value.results!!.videos.map { it.id })
+    }
+
+    @Test
+    fun `more videos come from the relative query of the search block`() = runTest(mainDispatcher.dispatcher) {
+        repository.search = { SearchResults(emptyList(), listOf(catalogItem("v1")), videosPage = 1, videosTotalPages = 2, videosQuery = "/contents?search=cine") }
+        repository.searchPage = { _, page -> CatalogPage(listOf(catalogItem("v$page"), catalogItem("v1")), page = page, totalPages = 2) }
+        val viewModel = SearchViewModel(repository)
+        advanceUntilIdle()
+        viewModel.setQuery("cine")
+        advanceUntilIdle()
+
+        viewModel.loadMoreVideos()
+        advanceUntilIdle()
+        val results = viewModel.uiState.value.results!!
+        assertEquals(listOf("v1", "v2"), results.videos.map { it.id })
+        assertFalse(results.hasMoreVideos)
+        assertTrue(repository.calls.contains("searchPage(/contents?search=cine, page=2)"))
     }
 
     @Test
@@ -117,13 +140,30 @@ class SearchViewModelTest {
         val viewModel = SearchViewModel(repository)
         advanceUntilIdle()
 
-        assertEquals(LoadError.Http(500), viewModel.uiState.value.error)
+        assertEquals("se pinta en el sitio, con reintento", FilterState.Failed(LoadError.Http(500)), viewModel.uiState.value.filter)
+        assertNull(viewModel.uiState.value.searchError)
         assertTrue(viewModel.uiState.value.filters.isEmpty())
 
         viewModel.setQuery("cine")
         advanceUntilIdle()
         assertEquals(listOf("r-cine"), viewModel.uiState.value.results!!.videos.map { it.id })
-        assertNull("una búsqueda con éxito limpia el error", viewModel.uiState.value.error)
+        assertNull("una búsqueda con éxito no tiene error", viewModel.uiState.value.searchError)
+    }
+
+    @Test
+    fun `retrying after a failing filter feed reloads the filters`() = runTest(mainDispatcher.dispatcher) {
+        var fail = true
+        val working = repository.quickFilters
+        repository.quickFilters = { if (fail) throw HttpStatusException(500) else working() }
+        val viewModel = SearchViewModel(repository)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.filter is FilterState.Failed)
+
+        fail = false
+        viewModel.retryFilter()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.filters.isNotEmpty())
+        assertTrue(viewModel.uiState.value.filter is FilterState.Loaded)
     }
 
     @Test
@@ -136,7 +176,7 @@ class SearchViewModelTest {
         advanceUntilIdle()
 
         assertEquals(FilterState.Failed(LoadError.Http(503)), viewModel.uiState.value.filter)
-        assertNull("el fallo del filtro no es un aviso suelto", viewModel.uiState.value.error)
+        assertNull("el fallo del filtro no es un fallo de búsqueda", viewModel.uiState.value.searchError)
         assertTrue(viewModel.uiState.value.filterItems.isEmpty())
 
         failFilter = false

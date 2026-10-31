@@ -70,12 +70,17 @@ fun UiMessage.text(context: Context): String = when (this) {
     is UiMessage.Text -> text
     is UiMessage.StartsAt -> context.getString(R.string.blocked_starts_at, schedule)
     UiMessage.LinkNotFound -> context.getString(R.string.deeplink_not_found)
+    UiMessage.OpeningLink -> context.getString(R.string.deeplink_opening)
+    is UiMessage.RemovedFromHistory -> context.getString(R.string.continue_removed, entry.item.title)
 }
 
-/** "Temporada 1 · E3 · 12/09/2026 · 52 min", omitiendo lo que falte. */
+/**
+ * "Temporada 1 · E3 · 12/09/2026 · 52 min", omitiendo lo que falte. El número de
+ * episodio no se repite si el título ya lo dice ("Episodio 512").
+ */
 fun CatalogItem.metaLine(context: Context): String? = listOfNotNull(
     seasonTitle,
-    episode?.let { context.getString(R.string.meta_episode, it) },
+    episode?.takeUnless { Regex("\\b$it\\b").containsMatchIn(title) }?.let { context.getString(R.string.meta_episode, it) },
     publicationDate?.feedDateToDisplay(),
     durationMs?.let { minutesLabel(context, it) },
 ).takeIf { it.isNotEmpty() }?.joinToString(" · ")

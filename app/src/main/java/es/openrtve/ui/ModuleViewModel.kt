@@ -19,7 +19,10 @@ data class ModuleUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val isStale: Boolean = false,
+    /** Fallo de un refresco con contenido ya pintado: aviso de una vez. */
     val error: LoadError? = null,
+    /** Fallo que deja la rejilla vacía: se explica en el sitio, con su reintento. */
+    val failure: LoadError? = null,
 )
 
 /** Rejilla completa de una fila ("Ver todo"). La caché evita repetir la petición de la portada. */
@@ -46,7 +49,7 @@ class ModuleViewModel(
         job?.cancel()
         job = viewModelScope.launch {
             val hasItems = mutableUiState.value.items.isNotEmpty()
-            mutableUiState.update { it.copy(isLoading = !hasItems, isRefreshing = hasItems, error = null) }
+            mutableUiState.update { it.copy(isLoading = !hasItems, isRefreshing = hasItems, error = null, failure = null) }
             try {
                 val module = repository.loadModule(row, forceRefresh)
                 mutableUiState.update {
@@ -62,7 +65,13 @@ class ModuleViewModel(
                 throw error
             } catch (error: Exception) {
                 mutableUiState.update {
-                    it.copy(isLoading = false, isRefreshing = false, error = error.toLoadError())
+                    val loadError = error.toLoadError()
+                    it.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        error = loadError.takeIf { _ -> hasItems },
+                        failure = loadError.takeUnless { _ -> hasItems },
+                    )
                 }
             }
         }

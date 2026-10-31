@@ -1,5 +1,6 @@
 package es.openrtve.data
 
+import es.openrtve.BuildConfig
 import es.openrtve.domain.RtveHostPolicy
 import java.io.IOException
 import java.net.URI
@@ -79,13 +80,17 @@ class SafeHttpsClient(
      */
     private fun Call.executeInterruptibly(): Response {
         val done = CountDownLatch(1)
+        val lock = Any()
         var result: Response? = null
         var failure: IOException? = null
+        // Quien espera se ha ido: una respuesta que llegue tarde se cierra aquí o la
+        // conexión quedaría ocupada hasta el timeout.
+        var abandoned = false
         enqueue(
             object : Callback {
                 // El cuerpo lo lee quien espera; aquí solo se entrega.
                 override fun onResponse(call: Call, response: Response) {
-                    result = response
+                    synchronized(lock) { if (abandoned) response.close() else result = response }
                     done.countDown()
                 }
 
@@ -98,6 +103,10 @@ class SafeHttpsClient(
         try {
             done.await()
         } catch (interrupted: InterruptedException) {
+            synchronized(lock) {
+                abandoned = true
+                result?.close()
+            }
             cancel()
             throw interrupted
         }
@@ -105,7 +114,7 @@ class SafeHttpsClient(
     }
 
     companion object {
-        const val USER_AGENT = "OpenRTVE-Android/0.2"
+        val USER_AGENT = "OpenRTVE-Android/${BuildConfig.VERSION_NAME}"
         private const val MAX_REDIRECTS = 3
 
         /** Cliente base de la app: timeouts y allowlist en cada salto. Lo comparten catálogo e imágenes. */

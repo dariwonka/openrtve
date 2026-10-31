@@ -187,7 +187,6 @@ class PortadaViewModelTest {
                     subtitle = null,
                     imageUrl = null,
                     kind = ContentKind.VIDEO,
-                    directQualityUrl = null,
                     allowedInCountry = null,
                     loginRequired = false,
                     paid = false,
@@ -214,13 +213,14 @@ class PortadaViewModelTest {
         override suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>> = throw UnsupportedOperationException()
         override suspend fun loadQuickFilterItems(filter: QuickFilter): CatalogLoad<CatalogModule> = throw UnsupportedOperationException()
         override suspend fun search(query: String): SearchResults = throw UnsupportedOperationException()
+        override suspend fun searchPage(relativeQuery: String, page: Int): CatalogPage = throw UnsupportedOperationException()
+        override suspend fun loadRelated(kind: es.openrtve.domain.RelatedKind, id: String): CatalogLoad<List<CatalogItem>> = throw UnsupportedOperationException()
         override suspend fun loadProgram(programId: String, forceRefresh: Boolean): CatalogLoad<ProgramDetail> = throw UnsupportedOperationException()
         override suspend fun loadVideo(videoId: String, forceRefresh: Boolean): CatalogLoad<VideoDetail> = throw UnsupportedOperationException()
-        override suspend fun loadAudio(audioId: String, forceRefresh: Boolean): CatalogLoad<VideoDetail> = throw UnsupportedOperationException()
-        override suspend fun loadProgramAudios(programId: String, page: Int, forceRefresh: Boolean): CatalogLoad<CatalogPage> = throw UnsupportedOperationException()
         override suspend fun loadNextVideo(videoId: String): CatalogItem? = null
         override suspend fun loadPreviewSprite(videoId: String): PreviewSprite? = null
         override suspend fun loadProgramVideos(programId: String, seasonId: String?, page: Int, completeOnly: Boolean, order: EpisodeOrder, forceRefresh: Boolean): CatalogLoad<CatalogPage> = throw UnsupportedOperationException()
+        override suspend fun loadProgramExtras(programId: String, page: Int, order: EpisodeOrder, forceRefresh: Boolean): CatalogLoad<CatalogPage> = throw UnsupportedOperationException()
     }
 
     private companion object {

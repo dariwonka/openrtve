@@ -1,6 +1,5 @@
 package es.openrtve.playback
 
-import android.Manifest
 import android.app.PictureInPictureParams
 import android.content.ComponentName
 import android.content.Context
@@ -15,23 +14,31 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.annotation.RequiresApi
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -39,7 +46,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -110,9 +119,6 @@ class PlayerActivity : ComponentActivity() {
     /** Ya se probó la variante sin DRM de la petición actual; no hay más alternativas. */
     private var usedFallback = false
 
-    private val notificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
-
     private val playerListener = object : Player.Listener {
         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
             title = mediaMetadata.title?.toString().orEmpty()
@@ -122,7 +128,10 @@ class PlayerActivity : ComponentActivity() {
 
         override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) = refreshLiveState()
 
-        override fun onIsPlayingChanged(isPlaying: Boolean) = refreshLiveState()
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            refreshLiveState()
+            updateKeepScreenOn()
+        }
 
         override fun onTracksChanged(tracks: Tracks) {
             if (menu != null) controller?.let { menu = buildPlayerMenu(this@PlayerActivity, it) }
@@ -157,8 +166,6 @@ class PlayerActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
         request = PlaybackRequest.from(intent)
         applyPresentation()
 
@@ -191,6 +198,7 @@ class PlayerActivity : ComponentActivity() {
                     feedback = feedback,
                     canPictureInPicture = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && canEnterPictureInPicture(),
                     onBack = ::finish,
+                    onRetry = ::retry,
                     onPictureInPicture = ::enterPictureInPictureNow,
                     onLock = { locked = true; showUnlock = true },
                     onUnlock = { locked = false; showUnlock = false },
@@ -251,16 +259,13 @@ class PlayerActivity : ComponentActivity() {
 
     /**
      * Comportamiento estándar de un reproductor de vídeo: al salir de la pantalla
-     * se pausa, y al cerrarla (atrás, o cerrar la ventana PiP) se detiene. El audio
-     * (radio, pódcast) sigue en segundo plano con su notificación, salvo que el
-     * usuario lo desactive en ajustes.
+     * se pausa (salvo en imagen en imagen), y al cerrarla (atrás, o cerrar la
+     * ventana PiP) se detiene.
      */
     override fun onStop() {
         super.onStop()
         saveProgress()
         val player = controller ?: return
-        val keepInBackground = request?.isAudioOnly == true && settings.current.backgroundAudio
-        if (keepInBackground) return
         val inPictureInPicture = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
         when {
             isFinishing -> {
@@ -268,6 +273,15 @@ class PlayerActivity : ComponentActivity() {
                 player.clearMediaItems()
             }
             !inPictureInPicture -> player.pause()
+        }
+    }
+
+    /** La pantalla sigue encendida solo mientras se reproduce; en pausa, al terminar o con un error se apaga como siempre. */
+    private fun updateKeepScreenOn() {
+        if (controller?.isPlaying == true) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
@@ -291,6 +305,19 @@ class PlayerActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    /** Reintento tras un error: reconecta con la sesión si falló la conexión; si no, vuelve a preparar el item. */
+    private fun retry() {
+        errorRes = null
+        usedFallback = false
+        val player = controller
+        if (player == null) {
+            controllerFuture?.let(MediaController::releaseFuture)
+            connect()
+            return
+        }
+        startRequested(player)
+    }
+
     private fun connect() {
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
@@ -304,13 +331,19 @@ class PlayerActivity : ComponentActivity() {
                         applyTrackPreferences(connected)
                         controller = connected
                         startRequested(connected)
+                        updateKeepScreenOn()
+                        liveTicker?.cancel()
+                        // Solo con la pantalla visible (también en PiP): en segundo plano no hay
+                        // nada que pintar y onStop ya guarda la posición.
                         liveTicker = lifecycleScope.launch {
-                            var ticks = 0
-                            while (true) {
-                                delay(LIVE_TICK_MS)
-                                refreshLiveState()
-                                refreshNextState()
-                                if (++ticks % PROGRESS_SAVE_EVERY_TICKS == 0 && controller?.isPlaying == true) saveProgress()
+                            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                                var ticks = 0
+                                while (true) {
+                                    delay(LIVE_TICK_MS)
+                                    refreshLiveState()
+                                    refreshNextState()
+                                    if (++ticks % PROGRESS_SAVE_EVERY_TICKS == 0 && controller?.isPlaying == true) saveProgress()
+                                }
                             }
                         }
                     }
@@ -431,6 +464,8 @@ class PlayerActivity : ComponentActivity() {
         val next = nextItem ?: return
         val player = controller ?: return
         val decision = container.playbackResolver.resolve(next) as? PlaybackDecision.Ready ?: return
+        // El ticker guarda cada 10 s: sin esto, el episodio que acaba puede no quedar como visto.
+        saveProgress()
         history.register(next)
         request = PlaybackRequest.from(decision, restart = false)
         usedFallback = false
@@ -457,33 +492,23 @@ class PlayerActivity : ComponentActivity() {
         errorCode in PlaybackException.ERROR_CODE_DRM_UNSPECIFIED..PlaybackException.ERROR_CODE_DRM_LICENSE_EXPIRED
 
     private fun applyPresentation() {
-        val isVideo = request?.isAudioOnly == false
-        // Solo el audio sigue en segundo plano con notificación; el vídeo no la necesita.
-        if (request?.isAudioOnly == true) requestNotificationPermissionIfNeeded()
-        // La actividad sigue la orientación elegida por el usuario. Así el vídeo puede
-        // verse apaisado al girar el dispositivo sin forzar esa orientación al catálogo
-        // cuando se cierra el reproductor, y la app sigue siendo adaptable en pantallas grandes.
+        // Pantalla completa inmersiva; la orientación apaisada la fija el manifiesto.
         val insets = WindowCompat.getInsetsController(window, window.decorView)
-        if (isVideo) {
-            insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            insets.hide(WindowInsetsCompat.Type.systemBars())
-        } else {
-            insets.show(WindowInsetsCompat.Type.systemBars())
-        }
+        insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insets.hide(WindowInsetsCompat.Type.systemBars())
         refreshPictureInPictureParams()
     }
 
     /**
-     * Parámetros de PiP para el sistema: entrada automática al salir (si es vídeo y
-     * el ajuste lo permite) y, con la vista ya medida, el recuadro del vídeo como
+     * Parámetros de PiP para el sistema: entrada automática al salir (si el ajuste
+     * lo permite) y, con la vista ya medida, el recuadro del vídeo como
      * origen para que la transición salga de él y no de toda la pantalla.
      */
     internal fun refreshPictureInPictureParams() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        val isVideo = request?.isAudioOnly == false
         setPictureInPictureParams(
             pictureInPictureParams()
-                .setAutoEnterEnabled(isVideo && canEnterPictureInPicture() && settings.current.pictureInPictureOnLeave)
+                .setAutoEnterEnabled(canEnterPictureInPicture() && settings.current.pictureInPictureOnLeave)
                 .setSeamlessResizeEnabled(false)
                 .build(),
         )
@@ -500,17 +525,7 @@ class PlayerActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.N)
     private fun canEnterPictureInPicture(): Boolean =
-        request?.isAudioOnly == false &&
-            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
-
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
+        request != null && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     @StringRes
     private fun PlaybackException.toMessageRes(): Int {
@@ -534,7 +549,6 @@ class PlayerActivity : ComponentActivity() {
         val historyKey: String?,
         val restart: Boolean,
         val videoId: String?,
-        val isAudioOnly: Boolean,
     ) {
 
         fun toMediaItem(uri: String, licenseUrl: String?): MediaItem = MediaItem.Builder()
@@ -563,7 +577,6 @@ class PlayerActivity : ComponentActivity() {
                 historyKey = decision.historyKey,
                 restart = restart,
                 videoId = decision.videoId,
-                isAudioOnly = decision.isAudioOnly,
             )
 
             fun from(intent: Intent): PlaybackRequest? {
@@ -578,7 +591,6 @@ class PlayerActivity : ComponentActivity() {
                     historyKey = intent.getStringExtra(EXTRA_HISTORY_KEY),
                     restart = intent.getBooleanExtra(EXTRA_RESTART, false),
                     videoId = intent.getStringExtra(EXTRA_VIDEO_ID),
-                    isAudioOnly = intent.getBooleanExtra(EXTRA_AUDIO_ONLY, mimeType.startsWith("audio/")),
                 )
             }
         }
@@ -593,7 +605,6 @@ class PlayerActivity : ComponentActivity() {
         private const val EXTRA_HISTORY_KEY = "playback_history_key"
         private const val EXTRA_RESTART = "playback_restart"
         private const val EXTRA_VIDEO_ID = "playback_video_id"
-        private const val EXTRA_AUDIO_ONLY = "playback_audio_only"
 
         fun intent(context: Context, decision: PlaybackDecision.Ready, restart: Boolean = false): Intent =
             Intent(context, PlayerActivity::class.java).apply {
@@ -605,7 +616,6 @@ class PlayerActivity : ComponentActivity() {
                 putExtra(EXTRA_HISTORY_KEY, decision.historyKey)
                 putExtra(EXTRA_RESTART, restart)
                 putExtra(EXTRA_VIDEO_ID, decision.videoId)
-                putExtra(EXTRA_AUDIO_ONLY, decision.isAudioOnly)
             }
     }
 }
@@ -634,6 +644,7 @@ private fun PlaybackScreen(
     feedback: GestureFeedback?,
     canPictureInPicture: Boolean,
     onBack: () -> Unit,
+    onRetry: () -> Unit,
     onPictureInPicture: () -> Unit,
     onLock: () -> Unit,
     onUnlock: () -> Unit,
@@ -648,11 +659,7 @@ private fun PlaybackScreen(
             .background(Color.Black),
     ) {
         when {
-            errorRes != null -> Text(
-                text = stringResource(errorRes),
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(24.dp),
-            )
+            errorRes != null -> PlaybackError(errorRes, onRetry, onBack)
             controller == null -> CircularProgressIndicator()
             else -> AndroidView(
                 factory = { context ->
@@ -771,6 +778,33 @@ private fun PlaybackScreen(
                     tint = Color.White,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Error de reproducción con salida: los controles del reproductor no se pintan
+ * aquí y, en modo inmersivo, sin botones solo quedaba el gesto de atrás.
+ */
+@Composable
+private fun PlaybackError(@StringRes errorRes: Int, onRetry: () -> Unit, onBack: () -> Unit) {
+    // En TV el mando necesita un botón con foco desde el principio.
+    val retryFocus = remember { FocusRequester() }
+    LaunchedEffect(errorRes) { runCatching { retryFocus.requestFocus() } }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.padding(24.dp),
+    ) {
+        Text(
+            text = stringResource(errorRes),
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onBack) { Text(stringResource(R.string.action_back)) }
+            Button(onClick = onRetry, modifier = Modifier.focusRequester(retryFocus)) { Text(stringResource(R.string.action_retry)) }
         }
     }
 }

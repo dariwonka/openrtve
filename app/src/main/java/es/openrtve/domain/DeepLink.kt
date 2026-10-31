@@ -7,11 +7,10 @@ import java.net.URLDecoder
 sealed interface DeepLink {
     data class Program(val id: String) : DeepLink
     data class Video(val id: String) : DeepLink
-    data class Audio(val id: String) : DeepLink
     data class Live(val assetId: String) : DeepLink
 
-    /** `/play/videos/{permalink}/` o `/play/audios/{permalink}/`: el programa hay que buscarlo. */
-    data class ProgramPermalink(val permalink: String, val isAudio: Boolean) : DeepLink
+    /** `/play/videos/{permalink}/`: el programa hay que buscarlo. */
+    data class ProgramPermalink(val permalink: String) : DeepLink
 
     /** `/play/videos/directo/{permalink}/`: el directo hay que buscarlo en el feed. */
     data class LivePermalink(val permalink: String) : DeepLink
@@ -47,17 +46,13 @@ fun parseDeepLink(raw: String): DeepLink? {
         }
     }
 
-    if (segments.firstOrNull() != "play") return null
-    val kind = segments.getOrNull(1) ?: return null
+    // Solo vídeo: los audios (`/play/audios/...`) son de RTVE Audio y no se abren aquí.
+    if (segments.firstOrNull() != "play" || segments.getOrNull(1) != "videos") return null
     val rest = segments.drop(2)
-    return when (kind) {
-        "videos", "audios" -> when {
-            rest.firstOrNull() == "directo" -> rest.getOrNull(1)?.let { DeepLink.LivePermalink(it) }
-            rest.lastOrNull()?.all(Char::isDigit) == true ->
-                if (kind == "audios") DeepLink.Audio(rest.last()) else DeepLink.Video(rest.last())
-            rest.size == 1 -> DeepLink.ProgramPermalink(rest.first(), isAudio = kind == "audios")
-            else -> null
-        }
+    return when {
+        rest.firstOrNull() == "directo" -> rest.getOrNull(1)?.let { DeepLink.LivePermalink(it) }
+        rest.lastOrNull()?.all(Char::isDigit) == true -> DeepLink.Video(rest.last())
+        rest.size == 1 -> DeepLink.ProgramPermalink(rest.first())
         else -> null
     }
 }

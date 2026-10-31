@@ -246,7 +246,10 @@ class RtveJsonParserTest {
               "id":"178291","name":"La amiga estupenda","contentType":"programa",
               "description":"<p>Elena y Lila</p>","emission":"Sábado a las 22:00",
               "imgPortada":"https://img.rtve.es/imagenes/x.jpg",
-              "programTypeID":136519,"outOfEmission":false,"isComplete":false,
+              "programTypeID":136519,"outOfEmission":false,"isComplete":false,"showFragments":true,
+              "productionDate":"01-01-2022 00:00:00","ageRange":"No recomendable para menores de 16 años",
+              "generos":[{"generoInf":"Drama"}],"director":"Una Directora | Otro Director",
+              "casting":"Actriz Uno | Actor Dos","languageOriginal":"es","country":"ES",
               "seasons":[
                 {"shorttitle":"T1","longTitle":"Temporada 1","id":1000013,"orden":1,"numEpisodes":8},
                 {"shorttitle":"T2","longTitle":"Temporada 2","id":1000014,"orden":2,"numEpisodes":6},
@@ -262,6 +265,12 @@ class RtveJsonParserTest {
         assertEquals("136519", detail.programTypeId)
         assertTrue(detail.inEmission)
         assertFalse(detail.isComplete)
+        assertTrue(detail.showFragments)
+        assertEquals("2022", detail.year)
+        assertEquals(listOf("Drama"), detail.genres)
+        assertEquals("Una Directora, Otro Director", detail.director)
+        assertEquals(listOf("Actriz Uno", "Actor Dos"), detail.cast)
+        assertEquals("ES", detail.country)
         // En emisión: la temporada más reciente primero; sin episodios no se lista.
         assertEquals(listOf("1000014", "1000013"), detail.seasons.map { it.id })
         assertEquals(6, detail.seasons.first().episodeCount)
@@ -269,30 +278,22 @@ class RtveJsonParserTest {
     }
 
     @Test
-    fun `radio lives url comes from the remote config`() {
-        assertEquals(
-            "https://www.rtve.es/m/configs/rtve_play/testDirectos.json",
-            parser.parseRadioLivesUrl("""{"radio":{"secciones":{"directosRadio":{"urlContent":"https://www.rtve.es/m/configs/rtve_play/testDirectos.json"}}}}"""),
+    fun `collection titles drop their editorial path`() {
+        val module = parser.parseModule(
+            raw = """{"page":{"items":[{"title":"Portada En Play > Destacados","collectionItems":[{"id":"7","title":"Vídeo","contentType":"video"}]}]}}""",
+            fallbackTitle = "",
         )
-        val row = parser.parseHome("""{"rows":[{"orden":1,"title":"En directo","moduleType":"moduloDirectoRadio"}]}""").rows.single()
-        assertTrue(row.isRadioLivesModule)
-        assertNull(row.contentUrl)
+        assertEquals("Destacados", module.title)
     }
 
     @Test
-    fun `radio programs and stations are recognised`() {
-        val program = parser.parseProgram(
-            """{"page":{"items":[{"id":"11271","name":"Ficción sonora","mainTopic":"Radio/Programas de RNE/Cultura/Ficción sonora","htmlUrl":"https://www.rtve.es/play/audios/ficcion-sonora/"}]}}""",
-        )
-        assertTrue(program.isRadio)
-        assertFalse(parser.parseProgram("""{"page":{"items":[{"id":"1","name":"TD","mainTopic":"Televisión/Informativos"}]}}""").isRadio)
-
-        val station = parser.parseModule(
-            """{"page":{"items":[{"id":"1852","titulo":"Radio Nacional","tipo":"broadcast","contentType":"directo","idAsset":"1712486","live":true,"audio":true}]}}""",
+    fun `audios are not part of the video catalog`() {
+        val items = parser.parseModule(
+            raw = """{"page":{"items":[{"id":"42","title":"Episodio","contentType":"audio"},{"id":"7","title":"Vídeo","contentType":"video"}]}}""",
             fallbackTitle = "",
-        ).items.single()
-        assertTrue(station.live!!.isAudio)
-        assertTrue((PlaybackResolver().resolve(station) as PlaybackDecision.Ready).isAudioOnly)
+        ).items
+
+        assertEquals("los audios son de RTVE Audio", listOf("7"), items.map { it.id })
     }
 
     @Test
@@ -301,7 +302,9 @@ class RtveJsonParserTest {
             """
             {"page":{"number":2,"totalPages":72,"items":[{
               "id":"17222216","title":"Telediario - 21 horas","contentType":"video",
-              "duration":3103400,"publicationDate":"11-09-2026 21:00:00","episode":3,"temporada":"Temporada 1",
+              "duration":3103400,"publicationDate":"11-09-2026 21:00:00","episode":3,"temporada":"Temporada 1","temporadaId":1028870,
+              "type":{"id":39816,"name":"Completo"},"subType":{"id":1,"name":"Tráiler"},
+              "programInfo":{"id":"169690","title":"La Promesa","showFragments":true},
               "requireLogged":false,"hasDRM":true,"allowedInCountry":true
             }]}}
             """.trimIndent(),
@@ -316,6 +319,11 @@ class RtveJsonParserTest {
             assertEquals("11-09-2026 21:00:00", publicationDate)
             assertEquals(3, episode)
             assertEquals("Temporada 1", seasonTitle)
+            assertEquals("1028870", seasonId)
+            assertEquals("39816", mediaTypeId)
+            assertEquals("Completo", mediaTypeName)
+            assertEquals("Tráiler", mediaSubtypeName)
+            assertTrue(programShowsFragments == true)
             assertTrue(needsAccount)
         }
     }
@@ -514,28 +522,6 @@ class RtveJsonParserTest {
 
         assertEquals(ContentKind.PROGRAM, result.kind)
         assertNull(result.playbackId)
-    }
-
-    @Test
-    fun `audio quality and nullable rights are retained`() {
-        val result = parser.parseModule(
-            raw = """
-                {
-                  "page": {"items": [{
-                    "id": "42",
-                    "title": "Episodio",
-                    "contentType": "audio",
-                    "qualities": [{"filePath":"https://ztnr.rtve.es/ztnr/42.mp3"}]
-                  }]}
-                }
-            """.trimIndent(),
-            fallbackTitle = "Radio",
-        ).items.single()
-
-        assertEquals(ContentKind.AUDIO, result.kind)
-        assertEquals("42", result.playbackId)
-        assertEquals("https://ztnr.rtve.es/ztnr/42.mp3", result.directQualityUrl)
-        assertNull(result.allowedInCountry)
     }
 
     @Test

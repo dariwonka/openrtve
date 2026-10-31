@@ -43,11 +43,18 @@ class CatalogActions(
 
     val playItem: (CatalogItem) -> Unit = { play(it) }
 
-    /** Programas y vídeos abren su ficha; directos y audios se reproducen al momento. */
+    /** Quita un item de "Seguir viendo" (la portada lo refleja al momento) y ofrece deshacerlo. */
+    val removeFromHistory: (CatalogItem) -> Unit = { item ->
+        container.watchHistory.remove(item.id)?.let { navigation.show(UiMessage.RemovedFromHistory(it)) }
+    }
+
+    fun undoRemoveFromHistory(message: UiMessage.RemovedFromHistory) = container.watchHistory.restore(message.entry)
+
+    /** Programas y vídeos abren su ficha; los directos se reproducen al momento. */
     val openItem: (CatalogItem) -> Unit = { item ->
         when (item.kind) {
             ContentKind.PROGRAM -> navigation.push(Destination.Program(item))
-            ContentKind.VIDEO, ContentKind.AUDIO -> navigation.push(Destination.Video(item))
+            ContentKind.VIDEO -> navigation.push(Destination.Video(item))
             else -> play(item)
         }
     }
@@ -68,20 +75,26 @@ class CatalogActions(
 
     /** Enlace recibido (VIEW o Compartir): construye Inicio -> ficha, como una navegación manual. */
     suspend fun openIncomingLink(url: String) {
+        // Resolver un permalink puede costar una búsqueda: se avisa en vez de no hacer nada.
+        navigation.show(UiMessage.OpeningLink)
         val item = try {
             container.deepLinkResolver.resolve(url)
         } catch (error: kotlinx.coroutines.CancellationException) {
+            navigation.dismissMessage(UiMessage.OpeningLink)
             throw error
-        } catch (_: Exception) {
-            null
+        } catch (error: Exception) {
+            // Sin red el enlace no es "inexistente": se dice qué pasó.
+            navigation.show(UiMessage.Error(error.toLoadError()))
+            return
         }
         if (item == null) {
             navigation.show(UiMessage.LinkNotFound)
             return
         }
+        navigation.dismissMessage(UiMessage.OpeningLink)
         when (item.kind) {
             ContentKind.PROGRAM -> navigation.openDeepLink(Destination.Program(item))
-            ContentKind.VIDEO, ContentKind.AUDIO -> navigation.openDeepLink(Destination.Video(item))
+            ContentKind.VIDEO -> navigation.openDeepLink(Destination.Video(item))
             else -> play(item)
         }
     }

@@ -30,10 +30,12 @@ import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
 import es.openrtve.ui.LoadMoreOnScrollEnd
+import es.openrtve.ui.FichaFacts
 import es.openrtve.ui.PlaySuggestion
 import es.openrtve.ui.ProgramBody
 import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.ProgramUiState
+import es.openrtve.ui.facts
 import es.openrtve.ui.programBody
 import es.openrtve.ui.programTabs
 import es.openrtve.ui.rememberProgramScreen
@@ -55,6 +57,8 @@ fun ProgramScreen(
     onError: (String) -> Unit,
     /** Reproducir desde el principio lo que se estaba viendo; sin él, el botón grande sólo continúa. */
     onPlay: ((CatalogItem, restart: Boolean) -> Unit)? = null,
+    /** Abrir un similar: su ficha, no reproducirlo. */
+    onOpenRelated: (CatalogItem) -> Unit = onOpenItem,
 ) {
     val screen = rememberProgramScreen(repository, history, program, onError)
     val viewModel = screen.viewModel
@@ -63,11 +67,18 @@ fun ProgramScreen(
     val context = LocalContext.current
     val detail = state.detail
     val body = programBody(state)
-    val tabs = remember(body) { programTabs(body) }
+    val tabs = remember(body, state.extras, state.related, detail) { programTabs(body, state) }
+    val columns = relatedColumns()
     val (current, selectTab) = rememberSelectedTab(tabs)
     val listState = rememberLazyListState()
     // Paginación infinita: pide la siguiente página al acercarse al final.
-    LoadMoreOnScrollEnd(listState, threshold = 4, loadMore = viewModel::loadMore)
+    LoadMoreOnScrollEnd(listState, threshold = 4, enabled = current == ProgramTab.EPISODES && state.hasMore, loadMore = viewModel::loadMore)
+    LoadMoreOnScrollEnd(
+        listState,
+        threshold = 4,
+        enabled = current == ProgramTab.MORE_VIDEOS && state.extras.hasMore,
+        loadMore = viewModel::loadMoreExtras,
+    )
 
     FichaLayout(
         title = state.title,
@@ -99,24 +110,16 @@ fun ProgramScreen(
             null
         },
     ) {
-        if (body == ProgramBody.Loading) {
-            item(key = "loading") { LoadingMoreRow() }
-            return@FichaLayout
-        }
         when (current) {
             ProgramTab.EPISODES -> {
+                // Las temporadas se quedan mientras carga la elegida: si desaparecieran,
+                // la lista encogería y la fila de chips perdería su desplazamiento.
                 if (detail?.seasons?.isNotEmpty() == true) {
                     item(key = "seasons") { SeasonChips(state, onSelect = viewModel::selectSeason) }
                 }
-                if (state.showingClips) {
-                    item(key = "clips-notice") {
-                        Text(
-                            text = stringResource(R.string.program_clips_notice),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 8.dp),
-                        )
-                    }
+                if (body == ProgramBody.Loading) {
+                    item(key = "loading") { LoadingMoreRow() }
+                    return@FichaLayout
                 }
                 items(state.episodes, key = { it.id }) { episode ->
                     val entry = screen.entriesById[episode.id]
@@ -153,7 +156,29 @@ fun ProgramScreen(
                 }
             }
 
-            ProgramTab.MORE_VIDEOS, ProgramTab.DETAILS, null -> Unit
+            ProgramTab.MORE_VIDEOS -> {
+                items(state.extras.items, key = { "extra-${it.id}" }) { extra ->
+                    EpisodeRow(item = extra, onClick = { onOpenItem(extra) })
+                }
+                if (state.extras.items.isEmpty() && state.extras.error != null) {
+                    item(key = "extras-error") {
+                        EmptyPanel(message = state.extras.error.text(context), onRetry = viewModel::retryExtras)
+                    }
+                }
+                if (state.extras.isLoading || state.extras.isLoadingMore) {
+                    item(key = "extras-loading") { LoadingMoreRow() }
+                } else if (state.extras.hasMore) {
+                    item(key = "extras-more") {
+                        Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                            TextButton(onClick = viewModel::loadMoreExtras) { Text(stringResource(R.string.program_load_more)) }
+                        }
+                    }
+                }
+            }
+
+            ProgramTab.RELATED -> relatedGrid(state.related, columns, onOpenRelated)
+            ProgramTab.DETAILS -> item(key = "details") { FichaFactsPanel(detail?.facts ?: FichaFacts()) }
+            null -> Unit
         }
     }
 }

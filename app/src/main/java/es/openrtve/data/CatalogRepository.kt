@@ -11,6 +11,7 @@ import es.openrtve.domain.HomeRow
 import es.openrtve.domain.PreviewSprite
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.QuickFilter
+import es.openrtve.domain.RelatedKind
 import es.openrtve.domain.RtveUrls
 import es.openrtve.domain.SearchResults
 import es.openrtve.domain.VideoDetail
@@ -32,14 +33,14 @@ interface CatalogRepository {
     suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>>
     suspend fun loadQuickFilterItems(filter: QuickFilter): CatalogLoad<CatalogModule>
     suspend fun search(query: String): SearchResults
+
+    /** Página [page] de un bloque de búsqueda, a partir de su `query` relativo (ver [SearchResults.videosQuery]). */
+    suspend fun searchPage(relativeQuery: String, page: Int): CatalogPage
+
+    /** "Similares" según RTVE (`recomsys`), sin el propio item ni contenido de pago. */
+    suspend fun loadRelated(kind: RelatedKind, id: String): CatalogLoad<List<CatalogItem>>
     suspend fun loadProgram(programId: String, forceRefresh: Boolean = false): CatalogLoad<ProgramDetail>
     suspend fun loadVideo(videoId: String, forceRefresh: Boolean = false): CatalogLoad<VideoDetail>
-
-    /** Ficha de un audio (`audios/{id}.json`), con la misma forma que la de vídeo. */
-    suspend fun loadAudio(audioId: String, forceRefresh: Boolean = false): CatalogLoad<VideoDetail>
-
-    /** Episodios de un programa de radio (`programas/{id}/audios.json`). */
-    suspend fun loadProgramAudios(programId: String, page: Int = 1, forceRefresh: Boolean = false): CatalogLoad<CatalogPage>
 
     /** Siguiente episodio según RTVE (`videos/{id}/next.json`), o `null` si no hay. */
     suspend fun loadNextVideo(videoId: String): CatalogItem?
@@ -60,6 +61,14 @@ interface CatalogRepository {
         order: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
         forceRefresh: Boolean = false,
     ): CatalogLoad<CatalogPage>
+
+    /** Fragmentos y avances/tráilers de un programa, separados de sus episodios completos. */
+    suspend fun loadProgramExtras(
+        programId: String,
+        page: Int = 1,
+        order: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
+        forceRefresh: Boolean = false,
+    ): CatalogLoad<CatalogPage>
 }
 
 class DefaultCatalogRepository(
@@ -72,39 +81,14 @@ class DefaultCatalogRepository(
         url: String,
         forceRefresh: Boolean,
         cachedOnly: Boolean,
-    ): CatalogLoad<HomeFeed> {
-        val feed = loadDocument(
-            url = url,
-            forceRefresh = forceRefresh,
-            freshForMillis = HOME_FRESH_MS,
-            staleForMillis = HOME_STALE_MS,
-            cachedOnly = cachedOnly,
-            parse = parser::parseHome,
-        )
-        // El módulo de emisoras de radio no trae fuente: se toma de la configuración remota.
-        if (feed.value.rows.none { it.isRadioLivesModule && it.contentUrl == null }) return feed
-        val livesUrl = try {
-            loadDocument(
-                url = RtveUrls.REMOTE_CONFIG,
-                forceRefresh = false,
-                freshForMillis = CONFIG_FRESH_MS,
-                staleForMillis = CONFIG_STALE_MS,
-                cachedOnly = cachedOnly,
-                parse = parser::parseRadioLivesUrl,
-            ).value
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            return feed
-        }
-        return feed.copy(
-            value = feed.value.copy(
-                rows = feed.value.rows.map { row ->
-                    if (row.isRadioLivesModule && row.contentUrl == null) row.copy(contentUrl = livesUrl) else row
-                },
-            ),
-        )
-    }
+    ): CatalogLoad<HomeFeed> = loadDocument(
+        url = url,
+        forceRefresh = forceRefresh,
+        freshForMillis = HOME_FRESH_MS,
+        staleForMillis = HOME_STALE_MS,
+        cachedOnly = cachedOnly,
+        parse = parser::parseHome,
+    )
 
     override suspend fun loadExplore(forceRefresh: Boolean): CatalogLoad<List<ExploreGroup>> = loadDocument(
         url = RtveUrls.REMOTE_CONFIG,
@@ -135,6 +119,21 @@ class DefaultCatalogRepository(
         val url = "${RtveUrls.SEARCH}?search=${encode(query)}&context=tve&tipology=video&type=completo"
         return parser.parseSearch(fetchRaw(url))
     }
+
+    override suspend fun searchPage(relativeQuery: String, page: Int): CatalogPage =
+        parser.parseVideoPage(fetchRaw("${RtveUrls.SEARCH_PAGES}$relativeQuery&page=$page"))
+
+    override suspend fun loadRelated(kind: RelatedKind, id: String): CatalogLoad<List<CatalogItem>> = loadDocument(
+        url = "${RtveUrls.RECOMMENDATIONS}/${kind.path}?source=apps&item=/${kind.itemPrefix}/${encode(id)}",
+        forceRefresh = false,
+        freshForMillis = PROGRAM_FRESH_MS,
+        staleForMillis = PROGRAM_STALE_MS,
+        parse = { raw ->
+            parser.parseVideoPage(raw).items
+                .filter { it.id != id && !it.paid }
+                .take(MAX_RELATED)
+        },
+    )
 
     override suspend fun loadModule(
         row: HomeRow,
@@ -174,29 +173,6 @@ class DefaultCatalogRepository(
         parse = parser::parseVideo,
     )
 
-    override suspend fun loadAudio(
-        audioId: String,
-        forceRefresh: Boolean,
-    ): CatalogLoad<VideoDetail> = loadDocument(
-        url = "$AUDIOS_BASE/${encode(audioId)}.json",
-        forceRefresh = forceRefresh,
-        freshForMillis = PROGRAM_FRESH_MS,
-        staleForMillis = PROGRAM_STALE_MS,
-        parse = parser::parseVideo,
-    )
-
-    override suspend fun loadProgramAudios(
-        programId: String,
-        page: Int,
-        forceRefresh: Boolean,
-    ): CatalogLoad<CatalogPage> = loadDocument(
-        url = "$PROGRAMS_BASE/${encode(programId)}/audios.json?page=$page",
-        forceRefresh = forceRefresh,
-        freshForMillis = PROGRAM_FRESH_MS,
-        staleForMillis = PROGRAM_STALE_MS,
-        parse = parser::parseVideoPage,
-    )
-
     override suspend fun loadNextVideo(videoId: String): CatalogItem? =
         parser.parseVideoPage(fetchRaw("$VIDEOS_BASE/${encode(videoId)}/next.json")).items.firstOrNull()
 
@@ -229,6 +205,19 @@ class DefaultCatalogRepository(
             parse = parser::parseVideoPage,
         )
     }
+
+    override suspend fun loadProgramExtras(
+        programId: String,
+        page: Int,
+        order: EpisodeOrder,
+        forceRefresh: Boolean,
+    ): CatalogLoad<CatalogPage> = loadDocument(
+        url = "$PROGRAMS_BASE/${encode(programId)}/videos.json?page=$page&type=$TYPE_FRAGMENT,$TYPE_PREVIEW&order=${encode(order.apiValue)}",
+        forceRefresh = forceRefresh,
+        freshForMillis = PROGRAM_FRESH_MS,
+        staleForMillis = PROGRAM_STALE_MS,
+        parse = parser::parseVideoPage,
+    )
 
     private fun encode(segment: String): String = URLEncoder.encode(segment, "UTF-8")
 
@@ -293,8 +282,10 @@ class DefaultCatalogRepository(
         const val CONFIG_STALE_MS = 7 * 24 * 60 * 60 * 1_000L
         const val PROGRAMS_BASE = "https://www.rtve.es/api/programas"
         const val VIDEOS_BASE = "https://api.rtve.es/api/videos"
-        const val AUDIOS_BASE = "https://api.rtve.es/api/audios"
         const val PREVIEWS_BASE = "https://videopreviews.rtve.es/tiivii-previews/api"
+        const val MAX_RELATED = 24
         const val TYPE_COMPLETE = "39816"
+        const val TYPE_FRAGMENT = "39978"
+        const val TYPE_PREVIEW = "39980"
     }
 }

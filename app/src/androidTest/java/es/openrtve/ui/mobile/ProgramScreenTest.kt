@@ -54,6 +54,7 @@ class ProgramScreenTest {
 
         compose.onNodeWithText(context.getString(R.string.program_play_episode, "Episodio 3")).assertIsDisplayed()
         compose.onNodeWithText("Episodio 1").assertIsDisplayed()
+        compose.onAllNodes(hasText(context.getString(R.string.action_more))).assertCountEquals(0)
 
         // Al verse el final de la lista, la siguiente página se pide sola y el botón manual no hace falta.
         compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("Episodio 3"))).performScrollToNode(hasText("Episodio 0"))
@@ -80,12 +81,33 @@ class ProgramScreenTest {
     @Test
     fun anEmptyProgramExplainsItselfAndRetries() {
         var attempts = 0
-        repository.programVideos = { _, _, _, _, _ -> if (attempts++ < 2) page(emptyList()) else page(episodes) }
+        repository.programVideos = { _, _, _, _, _ -> if (attempts++ < 1) page(emptyList()) else page(episodes) }
         setContent()
 
         compose.onNodeWithText(context.getString(R.string.program_empty)).assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.action_retry)).performClick()
         compose.onNodeWithText("Episodio 3").assertIsDisplayed()
+    }
+
+    @Test
+    fun shortSynopsisDoesNotOfferMore() {
+        compose.setContent {
+            OpenRtveTheme {
+                ExpandableText("Una sinopsis breve")
+            }
+        }
+        compose.onAllNodes(hasText(context.getString(R.string.action_more))).assertCountEquals(0)
+    }
+
+    @Test
+    fun longSynopsisCanExpandAndCollapse() {
+        compose.setContent {
+            OpenRtveTheme {
+                ExpandableText(List(30) { "Una sinopsis suficientemente larga para ocupar varias líneas." }.joinToString(" "))
+            }
+        }
+        compose.onNodeWithText(context.getString(R.string.action_more)).assertIsDisplayed().performClick()
+        compose.onNodeWithText(context.getString(R.string.action_less)).assertIsDisplayed()
     }
 
     private fun setContent() {

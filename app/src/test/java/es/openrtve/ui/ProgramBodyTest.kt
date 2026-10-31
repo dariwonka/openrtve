@@ -4,6 +4,7 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.referenceItem
 import es.openrtve.domain.ContentKind
 import es.openrtve.domain.VideoDetail
+import es.openrtve.domain.ProgramDetail
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,7 +34,8 @@ class ProgramBodyTest {
 
     @Test
     fun `la ficha de programa solo tiene capitulos, asi que no enseña fila de pestañas`() {
-        assertEquals(listOf(ProgramTab.EPISODES), programTabs(ProgramBody.Episodes))
+        val state = state(episodes = listOf(item("v1")))
+        assertEquals(listOf(ProgramTab.EPISODES), programTabs(ProgramBody.Episodes, state))
     }
 
     @Test
@@ -47,5 +49,23 @@ class ProgramBodyTest {
         // La sinopsis va en la cabecera: sola no justifica la pestaña.
         assertTrue(videoTabs(VideoUiState(item = video, detail = detail(null))).isEmpty())
         assertEquals(listOf(ProgramTab.DETAILS), videoTabs(VideoUiState(item = video, detail = detail("Alguien"))))
+    }
+
+    @Test
+    fun `las pestañas aparecen solo cuando su contenido existe`() {
+        val extras = PagedItemsState(items = listOf(item("clip")), page = 1, totalPages = 1)
+        val detail = ProgramDetail("p1", "Programa", null, null, null, emptyList(), genres = listOf("Drama"))
+        val programState = state(episodes = listOf(item("v1"))).copy(extras = extras, detail = detail)
+        assertEquals(
+            listOf(ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS, ProgramTab.DETAILS),
+            programTabs(ProgramBody.Episodes, programState),
+        )
+
+        val videoState = VideoUiState(
+            item = item("v1"),
+            chapters = PagedItemsState(items = listOf(item("v2"))),
+            extras = extras,
+        )
+        assertEquals(listOf(ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS), videoTabs(videoState))
     }
 }

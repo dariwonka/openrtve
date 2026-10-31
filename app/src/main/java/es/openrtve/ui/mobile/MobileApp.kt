@@ -14,13 +14,14 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScope
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -35,11 +36,11 @@ import es.openrtve.domain.RtveUrls
 import es.openrtve.ui.Destination
 import es.openrtve.ui.DestinationHost
 import es.openrtve.ui.GlobalDestination
-import es.openrtve.ui.LocalNowMillis
 import es.openrtve.ui.NavigationViewModel
 import es.openrtve.ui.Tab
+import es.openrtve.ui.UiMessage
 import es.openrtve.ui.rememberCatalogActions
-import es.openrtve.ui.rememberNowMillis
+import es.openrtve.ui.ProvideClock
 import es.openrtve.ui.text
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -59,11 +60,21 @@ fun MobileApp(
 
     BackHandler(enabled = nav.canGoBack, onBack = navigation::pop)
 
+    val undoLabel = stringResource(R.string.action_undo)
     nav.message?.let { message ->
         val text = message.text(context)
         LaunchedEffect(message) {
-            snackbarHostState.showSnackbar(text)
-            navigation.dismissMessage()
+            val undo = undoLabel.takeIf { message is UiMessage.RemovedFromHistory }
+            // "Abriendo enlace…" se queda hasta que el enlace se resuelve; con acción
+            // ("Deshacer") el aviso dura más: cuatro segundos no dan para pulsarla.
+            val duration = when {
+                message == UiMessage.OpeningLink -> SnackbarDuration.Indefinite
+                undo != null -> SnackbarDuration.Long
+                else -> SnackbarDuration.Short
+            }
+            val result = snackbarHostState.showSnackbar(text, actionLabel = undo, duration = duration)
+            if (result == SnackbarResult.ActionPerformed && message is UiMessage.RemovedFromHistory) actions.undoRemoveFromHistory(message)
+            navigation.dismissMessage(message)
         }
     }
 
@@ -71,8 +82,7 @@ fun MobileApp(
         incomingLinks.collect(actions::openIncomingLink)
     }
 
-    val nowMillis = rememberNowMillis()
-    CompositionLocalProvider(LocalNowMillis provides nowMillis) {
+    ProvideClock {
         NavigationSuiteScaffold(
             navigationSuiteItems = { appNavigationItems(nav.tab, navigation::selectTab) },
             modifier = Modifier.fillMaxSize(),
@@ -100,7 +110,6 @@ fun MobileApp(
                                 onOpenItem = actions.openItem,
                                 onOpenRow = actions.openRow,
                                 onOpenLink = actions.openLink,
-                                onError = actions.showMessage,
                             )
                             is Destination.Module -> ModuleScreen(
                                 repository = repository,
@@ -118,6 +127,7 @@ fun MobileApp(
                                 onOpenItem = actions.playItem,
                                 onError = actions.showMessage,
                                 onPlay = actions::play,
+                                onOpenRelated = actions.openItem,
                             )
                             GlobalDestination.Settings -> SettingsScreen(
                                 container = container,
@@ -130,8 +140,8 @@ fun MobileApp(
                                 item = destination.item,
                                 onBack = navigation::pop,
                                 onPlay = actions::play,
+                                onOpenItem = actions.openItem,
                                 onOpenProgram = actions.openProgram,
-                                onError = actions.showMessage,
                             )
                             null -> when (nav.tab) {
                                 Tab.HOME -> PortadaScreen(
@@ -143,13 +153,13 @@ fun MobileApp(
                                     onOpenItem = actions.openItem,
                                     onOpenRow = actions.openRow,
                                     onOpenLink = actions.openLink,
-                                    onError = actions.showMessage,
                                     onOpenSettings = actions.openSettings,
+                                    onResume = actions.playItem,
+                                    onRemoveFromHistory = actions.removeFromHistory,
                                 )
                                 Tab.SEARCH -> SearchScreen(
                                     repository = repository,
                                     onOpenItem = actions.openItem,
-                                    onError = actions.showMessage,
                                 )
                                 Tab.EXPLORE -> ExploreScreen(
                                     repository = repository,

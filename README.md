@@ -5,8 +5,9 @@
 # OpenRTVE
 
 Cliente libre de **RTVE Play** para Android y Android TV. Consulta y reproduce el
-catálogo público de RTVE (televisión, radio y pódcasts) a través de sus
-interfaces HTTP, con una interfaz propia en Jetpack Compose.
+catálogo público de vídeo de RTVE (televisión, directos y archivo) a través de
+sus interfaces HTTP, con una interfaz propia en Jetpack Compose. La radio y los
+pódcasts quedan fuera a propósito: como en la app oficial, son cosa de RTVE Audio.
 
 OpenRTVE no está afiliado a RTVE ni respaldado por ella. RTVE Play es una marca
 de la Corporación de Radio y Televisión Española.
@@ -15,27 +16,30 @@ de la Corporación de Radio y Televisión Española.
 
 - **Inicio, Buscar y Explorar**: barra inferior Material 3 en el móvil y
   panel de navegación lateral en la TV.
-- **Portadas** (principal, temáticas y radio) con la presentación que dicta
+- **Portadas** (principal y temáticas) con la presentación que dicta
   cada fila: carrusel destacado, pósters, cuadradas o apaisadas.
-- **Fichas** de programa (temporadas, episodios completos paginados) y de
-  vídeo o película (fondo, sinopsis, ficha técnica, reparto).
+- **Fichas** de programa (temporadas, episodios completos paginados, extras y
+  similares de RTVE) y de vídeo o película (fondo, sinopsis, ficha técnica,
+  reparto y, en películas y documentales, similares).
 - **Buscador** con los filtros rápidos de la app oficial y resultados por
-  bloque; **categorías** leídas de la configuración remota de RTVE.
+  bloque, paginados; **categorías** leídas de la configuración remota de RTVE.
 - **Directos** con logo del canal, "● Directo" y progreso de la emisión;
-  los programados muestran su horario. **Seguir viendo** local, sin cuenta.
-- **Reproductor** Media3 con panel de ajustes (calidad, velocidad, audio,
+  los programados muestran su horario. **Seguir viendo** local, sin cuenta:
+  tocar continúa; desde su menú se abre la ficha o se quita (con deshacer).
+- **Reproductor** Media3 apaisado a pantalla completa, con panel de ajustes (calidad, velocidad, audio,
   subtítulos), miniaturas al arrastrar, siguiente episodio con reproducción
   automática, ajuste de imagen, imagen en imagen, bloqueo, gestos (doble
   toque para saltar, deslizar para brillo y volumen), indicador de directo
-  con ventana DVR, MediaSession y audio en segundo plano para radio y pódcasts.
-- **DASH, HLS y MP3**, con Widevine para el contenido protegido.
+  con ventana DVR y MediaSession.
+- **DASH y HLS**, con Widevine para el contenido protegido.
 - **Enlaces de RTVE**: `play.rtve.es/pr|v|d/{id}` y las URL web de
-  `rtve.es/play/...` abren la ficha o el directo; también desde
+  `rtve.es/play/videos/...` abren la ficha o el directo; también desde
   "Compartir → OpenRTVE" en cualquier app.
-- **Ajustes**: imagen en imagen, audio en segundo plano, calidad máxima,
+- **Ajustes**: imagen en imagen, calidad máxima,
   reproducción automática, subtítulos por defecto y borrado de caché.
-- Caché con revalidación por ETag, una sola conexión HTTP/2 para catálogo e
-  imágenes y allowlist estricta de hosts.
+- Caché con revalidación por ETag y tope de tamaño, un solo cliente HTTP/2 para
+  catálogo, imágenes y vídeo, allowlist estricta de hosts para la API e imágenes
+  pedidas al tamaño en que se pintan.
 
 Todo se deduce de los feeds públicos de RTVE: no hay listas compiladas de
 canales, categorías ni filtros.

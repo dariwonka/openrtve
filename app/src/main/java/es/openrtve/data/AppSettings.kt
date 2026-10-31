@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.update
 data class Settings(
     /** Al salir del reproductor con un vídeo en marcha, seguir en una ventana flotante. */
     val pictureInPictureOnLeave: Boolean = true,
-    /** Radio y pódcasts siguen sonando al salir del reproductor, con su notificación. */
-    val backgroundAudio: Boolean = true,
     /** Altura máxima de vídeo (0 = automática). 576 equivale al ahorro de datos de la app oficial. */
     val maxVideoHeight: Int = 0,
     /** Activar subtítulos en español cuando existan. */
@@ -23,7 +21,7 @@ data class Settings(
 
 /**
  * Preferencias del usuario en `SharedPreferences`, expuestas como `StateFlow`.
- * Son cuatro booleanos: DataStore no aporta nada todavía.
+ * Son unos pocos valores simples: DataStore no aporta nada todavía.
  */
 class AppSettings(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -36,7 +34,6 @@ class AppSettings(context: Context) {
         val updated = transform(current)
         prefs.edit {
             putBoolean(KEY_PIP, updated.pictureInPictureOnLeave)
-            putBoolean(KEY_BACKGROUND_AUDIO, updated.backgroundAudio)
             putInt(KEY_MAX_HEIGHT, updated.maxVideoHeight)
             putBoolean(KEY_SUBTITLES, updated.subtitlesByDefault)
             putBoolean(KEY_AUTOPLAY, updated.autoplayNext)
@@ -46,7 +43,6 @@ class AppSettings(context: Context) {
 
     private fun read() = Settings(
         pictureInPictureOnLeave = prefs.getBoolean(KEY_PIP, true),
-        backgroundAudio = prefs.getBoolean(KEY_BACKGROUND_AUDIO, true),
         maxVideoHeight = prefs.getInt(KEY_MAX_HEIGHT, 0),
         subtitlesByDefault = prefs.getBoolean(KEY_SUBTITLES, false),
         autoplayNext = prefs.getBoolean(KEY_AUTOPLAY, true),
@@ -55,7 +51,6 @@ class AppSettings(context: Context) {
     private companion object {
         const val PREFS_NAME = "openrtve_settings"
         const val KEY_PIP = "pip_on_leave"
-        const val KEY_BACKGROUND_AUDIO = "background_audio"
         const val KEY_MAX_HEIGHT = "max_video_height"
         const val KEY_AUTOPLAY = "autoplay_next"
         const val KEY_SUBTITLES = "subtitles_by_default"

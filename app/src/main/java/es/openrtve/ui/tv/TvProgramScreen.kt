@@ -1,29 +1,20 @@
 package es.openrtve.ui.tv
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusRestorer
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -32,206 +23,199 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Tab
+import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
-import coil3.compose.AsyncImage
 import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchHistory
+import es.openrtve.domain.CatalogItem
 import es.openrtve.ui.LoadMoreOnScrollEnd
 import es.openrtve.ui.PlaySuggestion
+import es.openrtve.ui.ProgramUiState
+import es.openrtve.ui.ProgramViewModel
+import es.openrtve.ui.facts
 import es.openrtve.ui.rememberProgramScreen
-import es.openrtve.domain.CatalogItem
-import es.openrtve.ui.metaLine
 
 /**
- * Ficha de programa en TV al estilo de las apps de streaming: fondo a pantalla
- * completa con degradado, información arriba a la izquierda, selector de
- * temporada y una única fila horizontal de episodios abajo.
+ * Ficha de programa en TV (ver [TvDetailsScaffold]): cabecera con el botón de
+ * reproducir y, debajo, Capítulos (con las temporadas como pestañas), Extras,
+ * Similares y Detalles, una fila por sección, como la página de detalles de Google TV.
  */
 @Composable
 fun TvProgramScreen(
     repository: CatalogRepository,
     history: WatchHistory,
     program: CatalogItem,
+    /** Capítulos y extras se reproducen al pulsarlos. */
     onOpenItem: (CatalogItem) -> Unit,
     onError: (String) -> Unit,
+    /** Un similar abre su ficha. */
+    onOpenRelated: (CatalogItem) -> Unit = onOpenItem,
 ) {
     val screen = rememberProgramScreen(repository, history, program, onError)
     val viewModel = screen.viewModel
     val state = screen.state
-    val entriesById = screen.entriesById
     val suggestion = screen.suggestion
-    val context = LocalContext.current
-    val listState = rememberLazyListState()
-    val background = MaterialTheme.colorScheme.background
-    LoadMoreOnScrollEnd(listState, threshold = 3, loadMore = viewModel::loadMore)
+    val episodesState = rememberLazyListState()
+    LoadMoreOnScrollEnd(episodesState, threshold = 3, loadMore = viewModel::loadMore)
 
-    Box(Modifier.fillMaxSize()) {
-        AsyncImage(
-            model = state.detail?.imageUrl ?: program.imageUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            alignment = Alignment.TopCenter,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Brush.horizontalGradient(0f to background, 0.5f to background.copy(alpha = 0.9f), 1f to background.copy(alpha = 0.3f))),
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to background)),
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = TvVerticalMargin, bottom = TvVerticalMargin),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.55f)
-                    .padding(TvRowPadding),
-            ) {
+    TvDetailsScaffold(
+        backdropUrl = state.detail?.imageUrl ?: program.imageUrl,
+        header = {
+            Text(
+                text = state.title,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            state.detail?.emission?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(text = it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            state.detail?.description?.let {
+                Spacer(Modifier.height(12.dp))
                 Text(
-                    text = state.title,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
+                    text = remember(it) { AnnotatedString.fromHtml(it) },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
-                state.detail?.emission?.let {
-                    Spacer(Modifier.height(6.dp))
-                    Text(text = it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                }
-                state.detail?.description?.let {
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = remember(it) { AnnotatedString.fromHtml(it) },
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (state.showingClips) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(stringResource(R.string.program_clips_notice), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                }
-                Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = { suggestion?.let { onOpenItem(it.item) } },
-                    enabled = suggestion != null,
-                    modifier = Modifier.initialFocus(),
-                ) {
-                    Text(
-                        text = when (suggestion) {
-                            null -> stringResource(R.string.action_play)
-                            is PlaySuggestion.Continue -> stringResource(R.string.program_continue_episode, suggestion.item.title)
-                            is PlaySuggestion.Next -> stringResource(R.string.program_next_episode, suggestion.item.title)
-                            is PlaySuggestion.Play -> stringResource(R.string.program_play_episode, suggestion.item.title)
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
-            Column {
-                val seasons = state.detail?.seasons.orEmpty()
-                if (seasons.isNotEmpty()) {
-                    LazyRow(
-                        contentPadding = TvRowPadding,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.focusRestorer(),
-                    ) {
-                        item(key = "all") {
-                            TvChoiceButton(stringResource(R.string.program_all_seasons), state.selectedSeasonId == null) { viewModel.selectSeason(null) }
-                        }
-                        items(seasons, key = { it.id }) { season ->
-                            TvChoiceButton(season.title, state.selectedSeasonId == season.id) { viewModel.selectSeason(season.id) }
-                        }
-                    }
-                    Spacer(Modifier.height(16.dp))
-                }
-                when {
-                    state.isLoading -> Text(
-                        stringResource(R.string.state_loading),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(TvRowPadding),
-                    )
-                    state.episodes.isEmpty() -> Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(TvRowPadding),
-                    ) {
-                        Text(stringResource(R.string.program_empty), style = MaterialTheme.typography.titleMedium)
-                        Button(onClick = viewModel::retry) { Text(stringResource(R.string.action_retry)) }
-                    }
-                    else -> LazyRow(
-                        state = listState,
-                        contentPadding = TvRowPadding,
-                        horizontalArrangement = Arrangement.spacedBy(20.dp),
-                        modifier = Modifier.focusRestorer(),
-                    ) {
-                        items(state.episodes, key = { it.id }) { episode ->
-                            val entry = entriesById[episode.id]
-                            TvEpisodeCard(
-                                item = episode,
-                                onClick = { onOpenItem(episode) },
-                                modifier = Modifier.width(EpisodeWidth),
-                                progress = entry?.takeIf { it.inProgress }?.progress,
-                                badge = when {
-                                    entry?.finished == true -> stringResource(R.string.episode_watched)
-                                    suggestion is PlaySuggestion.Next && suggestion.item.id == episode.id -> stringResource(R.string.episode_next)
-                                    else -> null
-                                },
-                            )
-                        }
-                        if (state.hasMore) {
-                            item(key = "more") {
-                                Column(Modifier.width(EpisodeWidth)) {
-                                    TvFocusSurface(onClick = viewModel::loadMore, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-                                        Text(
-                                            stringResource(if (state.isLoadingMore) R.string.state_loading else R.string.program_load_more),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            modifier = Modifier.align(Alignment.Center),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = { suggestion?.let { onOpenItem(it.item) } },
+                enabled = suggestion != null,
+                // Deshabilitado no admite el foco: se concede en cuanto hay qué reproducir.
+                modifier = Modifier.initialFocus(enabled = suggestion != null),
+            ) {
+                Text(
+                    text = when (suggestion) {
+                        null -> stringResource(R.string.action_play)
+                        is PlaySuggestion.Continue -> stringResource(R.string.program_continue_episode, suggestion.item.title)
+                        is PlaySuggestion.Next -> stringResource(R.string.program_next_episode, suggestion.item.title)
+                        is PlaySuggestion.Play -> stringResource(R.string.program_play_episode, suggestion.item.title)
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+    ) {
+        tvDetailsSection("episodes", { stringResource(R.string.tab_episodes) }) {
+            SeasonTabs(state, viewModel)
+            EpisodesBody(state, viewModel, screen.entriesById, suggestion, episodesState, onOpenItem)
+        }
+        if (state.extras.items.isNotEmpty()) {
+            tvDetailsSection("extras", { stringResource(R.string.tab_more_videos) }) {
+                TvEpisodesRow(
+                    items = state.extras.items,
+                    onPlay = onOpenItem,
+                    hasMore = state.extras.hasMore,
+                    isLoadingMore = state.extras.isLoadingMore,
+                    onLoadMore = viewModel::loadMoreExtras,
+                )
+            }
+        }
+        if (state.related.isNotEmpty()) {
+            tvDetailsSection("related", { stringResource(R.string.tab_related) }) {
+                TvRelatedRow(state.related, onOpenRelated)
+            }
+        }
+        state.detail?.facts?.takeIf { it.hasDetails }?.let { facts ->
+            tvDetailsSection("details", { stringResource(R.string.tab_details) }) { TvFactsPanel(facts) }
+        }
+    }
+}
+
+/**
+ * Temporadas como pestañas de TV (indicador de píldora), que se activan al
+ * enfocarlas, como pide la guía de pestañas de Google TV. Al entrar en la fila,
+ * el foco vuelve a la temporada elegida y no cambia nada.
+ */
+@Composable
+private fun SeasonTabs(state: ProgramUiState, viewModel: ProgramViewModel) {
+    val seasons = state.detail?.seasons.orEmpty()
+    if (seasons.isEmpty()) return
+    val options = listOf<Pair<String?, String>>(null to stringResource(R.string.program_all_seasons)) + seasons.map { it.id to it.title }
+    val selected = options.indexOfFirst { it.first == state.selectedSeasonId }.coerceAtLeast(0)
+    // Al entrar en la fila (desde el botón o desde los capítulos) el foco va a la
+    // temporada elegida: si cayera en la más cercana, la activaría sin querer.
+    val selectedTab = remember { FocusRequester() }
+    TabRow(
+        selectedTabIndex = selected,
+        modifier = Modifier
+            .padding(TvRowPadding)
+            .padding(bottom = 16.dp)
+            .focusProperties { onEnter = { selectedTab.requestFocus() } }
+            .focusGroup(),
+    ) {
+        options.forEachIndexed { index, (seasonId, title) ->
+            Tab(
+                selected = index == selected,
+                onFocus = { viewModel.selectSeason(seasonId) },
+                onClick = { viewModel.selectSeason(seasonId) },
+                modifier = if (index == selected) Modifier.focusRequester(selectedTab) else Modifier,
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun TvEpisodeCard(
-    item: CatalogItem,
-    onClick: () -> Unit,
-    modifier: Modifier,
-    progress: Float? = null,
-    badge: String? = null,
+private fun EpisodesBody(
+    state: ProgramUiState,
+    viewModel: ProgramViewModel,
+    entriesById: Map<String, es.openrtve.data.WatchEntry>,
+    suggestion: PlaySuggestion?,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onPlay: (CatalogItem) -> Unit,
 ) {
-    val context = LocalContext.current
-    Column(modifier) {
-        TvFocusSurface(onClick = onClick, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-            TvArtwork(item.imageUrl, Modifier.fillMaxSize())
-            progress?.let { TvProgressStrip(it, Modifier.align(Alignment.BottomCenter)) }
+    when {
+        // Mismo alto que la fila: cambiar de temporada no hace saltar la página.
+        state.isLoading && state.episodes.isEmpty() -> Box(
+            contentAlignment = Alignment.CenterStart,
+            modifier = Modifier.height(EpisodesRowHeight).padding(TvRowPadding),
+        ) {
+            Text(stringResource(R.string.state_loading), style = MaterialTheme.typography.titleMedium)
         }
-        Spacer(Modifier.height(10.dp))
-        badge?.let {
-            Text(it, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        state.episodes.isEmpty() -> Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(TvRowPadding),
+        ) {
+            Text(stringResource(R.string.program_empty), style = MaterialTheme.typography.titleMedium)
+            Button(onClick = viewModel::retry, modifier = Modifier.initialFocus()) { Text(stringResource(R.string.action_retry)) }
         }
-        Text(item.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        item.metaLine(context)?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        else -> {
+            val watched = stringResource(R.string.episode_watched)
+            val next = stringResource(R.string.episode_next)
+            TvEpisodesRow(
+                items = state.episodes,
+                onPlay = onPlay,
+                progressOf = { episode -> entriesById[episode.id]?.takeIf { it.inProgress }?.progress },
+                badgeOf = { episode ->
+                    when {
+                        entriesById[episode.id]?.finished == true -> watched
+                        suggestion is PlaySuggestion.Next && suggestion.item.id == episode.id -> next
+                        else -> null
+                    }
+                },
+                hasMore = state.hasMore,
+                isLoadingMore = state.isLoadingMore,
+                onLoadMore = viewModel::loadMore,
+                listState = listState,
+            )
         }
     }
 }
 
-private val EpisodeWidth = 300.dp
+/** Alto de una fila de capítulos (imagen 16:9 de [TvEpisodeWidth] y dos líneas de texto). */
+private val EpisodesRowHeight = 240.dp

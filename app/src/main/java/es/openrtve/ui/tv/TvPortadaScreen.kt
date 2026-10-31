@@ -19,19 +19,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
@@ -40,11 +46,12 @@ import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchEntry
 import es.openrtve.data.WatchHistory
-import es.openrtve.ui.LocalNowMillis
+import es.openrtve.ui.currentNowMillis
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.HomeLink
 import es.openrtve.domain.HomeRow
 import es.openrtve.domain.RowLayout
+import es.openrtve.domain.SEE_ALL_MIN_ITEMS
 import es.openrtve.ui.HomeSection
 import es.openrtve.ui.SectionState
 import es.openrtve.ui.rememberPortadaScreen
@@ -52,7 +59,8 @@ import es.openrtve.ui.text
 
 /**
  * Portada de TV como en JetStream: carrusel destacado arriba y filas horizontales
- * con foco recuperable. El foco inicial va a la primera fila.
+ * con foco recuperable. El foco inicial va a la primera fila con contenido y, al
+ * volver atrás, a la fila en la que estaba el usuario.
  */
 @Composable
 fun TvPortadaScreen(
@@ -61,23 +69,50 @@ fun TvPortadaScreen(
     title: String,
     onOpenItem: (CatalogItem) -> Unit,
     onOpenRow: (HomeRow, String) -> Unit,
-    onError: (String) -> Unit,
     history: WatchHistory? = null,
     onOpenLink: (HomeLink) -> Unit = {},
+    /** "Seguir viendo": continuar al pulsar; con pulsación larga, ficha o quitar. */
+    onResume: (CatalogItem) -> Unit = onOpenItem,
+    onRemoveFromHistory: (CatalogItem) -> Unit = {},
 ) {
-    val screen = rememberPortadaScreen(repository, url, history, onError)
+    val screen = rememberPortadaScreen(repository, url, history)
     val viewModel = screen.viewModel
     val state = screen.state
     val resumable = screen.resumable
-    val firstRowFocus = remember { FocusRequester() }
-    val firstLoadedId = state.sections.firstOrNull { it.state is SectionState.Loaded || it.state is SectionState.Links }?.row?.id
-    LaunchedEffect(firstLoadedId) {
-        if (firstLoadedId != null) runCatching { firstRowFocus.requestFocus() }
+    // Las filas cargan en paralelo: el foco se coloca una sola vez por entrada en la
+    // pantalla (al abrirla o al volver atrás) y nunca se mueve mientras el usuario
+    // ya navega. Vuelve a la tarjeta donde estaba; si ya no existe, a su fila; si
+    // tampoco, a la primera fila con contenido.
+    var focusedRowId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var focusedItemKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var focusPlaced by remember { mutableStateOf(false) }
+    val restoreFocus = remember { FocusRequester() }
+    val focusTarget = focusedRowId?.takeIf { id -> id == CONTINUE_ROW_ID && resumable.isNotEmpty() || state.sections.any { it.row.id == id && it.state.isFocusable } }
+        ?: state.sections.firstOrNull { it.state.isFocusable }?.row?.id
+    val itemTarget = focusedItemKey?.takeIf { key ->
+        focusTarget == focusedRowId && key in focusKeys(focusTarget, state.sections, resumable)
     }
+    LaunchedEffect(focusTarget, itemTarget) {
+        if (focusTarget != null) requestFocusUntilGranted(restoreFocus) { focusPlaced }
+    }
+    fun rowModifier(rowId: Int): Modifier = Modifier
+        .onFocusChanged {
+            if (it.hasFocus) {
+                focusedRowId = rowId
+                focusPlaced = true
+            }
+        }
+        .then(if (rowId == focusTarget && itemTarget == null) Modifier.focusRequester(restoreFocus) else Modifier)
+    fun itemModifier(rowId: Int, key: String): Modifier = Modifier
+        .onFocusChanged { if (it.hasFocus) focusedItemKey = key }
+        .then(if (rowId == focusTarget && key == itemTarget) Modifier.focusRequester(restoreFocus) else Modifier)
 
     when {
         state.isLoading -> TvCenterMessage(stringResource(R.string.state_loading))
-        state.sections.isEmpty() -> TvCenterMessage(stringResource(R.string.state_empty_home), viewModel::refresh)
+        state.sections.isEmpty() -> TvCenterMessage(
+            state.error?.text(LocalContext.current) ?: stringResource(R.string.state_empty_home),
+            viewModel::refresh,
+        )
         else -> LazyColumn(
             contentPadding = PaddingValues(bottom = TvVerticalMargin),
             verticalArrangement = Arrangement.spacedBy(28.dp),
@@ -91,13 +126,14 @@ fun TvPortadaScreen(
             val firstId = state.sections.first().row.id
             items(state.sections, key = { it.row.id }) { section ->
                 if (resumable.isNotEmpty() && section.row.id == firstId && section.row.layout != RowLayout.HERO) {
-                    TvContinueWatching(resumable, onOpenItem)
+                    TvContinueWatching(resumable, onResume, onOpenItem, onRemoveFromHistory, rowModifier(CONTINUE_ROW_ID)) { itemModifier(CONTINUE_ROW_ID, it) }
                     Spacer(Modifier.height(28.dp))
                 }
                 TvSection(
                     section = section,
                     // Como en Findroid: las filas se recolocan con animación si otra cambia de alto.
-                    modifier = Modifier.animateItem().then(if (section.row.id == firstLoadedId) Modifier.focusRequester(firstRowFocus) else Modifier),
+                    modifier = Modifier.animateItem().then(rowModifier(section.row.id)),
+                    itemModifier = { key -> itemModifier(section.row.id, key) },
                     onOpenItem = onOpenItem,
                     onOpenLink = onOpenLink,
                     onSeeAll = { onOpenRow(section.row, section.title) },
@@ -105,7 +141,7 @@ fun TvPortadaScreen(
                 )
                 if (resumable.isNotEmpty() && section.row.id == firstId && section.row.layout == RowLayout.HERO) {
                     Spacer(Modifier.height(28.dp))
-                    TvContinueWatching(resumable, onOpenItem)
+                    TvContinueWatching(resumable, onResume, onOpenItem, onRemoveFromHistory, rowModifier(CONTINUE_ROW_ID)) { itemModifier(CONTINUE_ROW_ID, it) }
                 }
             }
         }
@@ -113,18 +149,67 @@ fun TvPortadaScreen(
 }
 
 @Composable
-private fun TvContinueWatching(entries: List<WatchEntry>, onOpenItem: (CatalogItem) -> Unit) {
+private fun TvContinueWatching(
+    entries: List<WatchEntry>,
+    onResume: (CatalogItem) -> Unit,
+    onOpenDetails: (CatalogItem) -> Unit,
+    onRemove: (CatalogItem) -> Unit,
+    modifier: Modifier,
+    itemModifier: (key: String) -> Modifier,
+) {
+    var options by remember { mutableStateOf<CatalogItem?>(null) }
     Column {
         TvSectionTitle(stringResource(R.string.continue_watching))
         Spacer(Modifier.height(12.dp))
         LazyRow(
             contentPadding = TvRowPadding,
             horizontalArrangement = Arrangement.spacedBy(20.dp),
-            modifier = Modifier.focusRestorer(),
+            modifier = modifier.focusRestorer(),
         ) {
             items(entries, key = { it.item.id }) { entry ->
-                TvItemCard(entry.item, RowLayout.LANDSCAPE, { onOpenItem(entry.item) }, Modifier.width(TvLandscapeWidth), progress = entry.progress)
+                TvItemCard(
+                    entry.item,
+                    RowLayout.LANDSCAPE,
+                    { onResume(entry.item) },
+                    Modifier.width(TvLandscapeWidth).animateItem().then(itemModifier(entry.item.id)),
+                    progress = entry.progress,
+                    onLongClick = { options = entry.item },
+                )
             }
+        }
+    }
+    options?.let { item ->
+        TvContinueWatchingOptions(
+            title = item.title,
+            onResume = { options = null; onResume(item) },
+            onOpenDetails = { options = null; onOpenDetails(item) },
+            onRemove = { options = null; onRemove(item) },
+            onDismiss = { options = null },
+        )
+    }
+}
+
+/** Menú contextual de una tarjeta de "Seguir viendo", como el de Google TV. */
+@Composable
+private fun TvContinueWatchingOptions(
+    title: String,
+    onResume: () -> Unit,
+    onOpenDetails: () -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.surface, TvCardShape)
+                .padding(24.dp)
+                .width(360.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Button(onClick = onResume, modifier = Modifier.fillMaxWidth().initialFocus()) { Text(stringResource(R.string.action_continue)) }
+            Button(onClick = onOpenDetails, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.continue_open_details)) }
+            Button(onClick = onRemove, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.continue_remove)) }
         }
     }
 }
@@ -133,6 +218,8 @@ private fun TvContinueWatching(entries: List<WatchEntry>, onOpenItem: (CatalogIt
 private fun TvSection(
     section: HomeSection,
     modifier: Modifier,
+    /** Recuerda qué tarjeta tiene el foco y la recupera al volver (ver TvPortadaScreen). */
+    itemModifier: (key: String) -> Modifier,
     onOpenItem: (CatalogItem) -> Unit,
     onOpenLink: (HomeLink) -> Unit,
     onSeeAll: () -> Unit,
@@ -174,11 +261,11 @@ private fun TvSection(
                 modifier = modifier.focusRestorer(),
             ) {
                 items(state.links, key = { it.url }) { link ->
-                    TvImageTile(link.title, link.imageUrl, { onOpenLink(link) }, Modifier.width(TvLandscapeWidth))
+                    TvImageTile(link.title, link.imageUrl, { onOpenLink(link) }, Modifier.width(TvLandscapeWidth).then(itemModifier(link.url)))
                 }
             }
             is SectionState.Loaded -> when (layout) {
-                RowLayout.HERO -> TvHeroRow(state.items, onOpenItem, modifier)
+                RowLayout.HERO -> TvHeroRow(state.items, onOpenItem, modifier, itemModifier)
                 RowLayout.FEATURED -> state.items.firstOrNull()?.let { item ->
                     TvFeaturedCard(item, { onOpenItem(item) }, modifier.padding(TvRowPadding))
                 }
@@ -192,11 +279,11 @@ private fun TvSection(
                             item,
                             layout,
                             { onOpenItem(item) },
-                            Modifier.width(layout.cardWidth()),
+                            Modifier.width(layout.cardWidth()).then(itemModifier(item.id)),
                             rank = (index + 1).takeIf { layout == RowLayout.RANKED },
                         )
                     }
-                    item(key = "see-all") { TvSeeAllCard(layout, onSeeAll) }
+                    if (state.items.size >= SEE_ALL_MIN_ITEMS) item(key = "see-all") { TvSeeAllCard(layout, onSeeAll) }
                 }
             }
         }
@@ -252,14 +339,14 @@ private fun TvFeaturedCard(item: CatalogItem, onOpen: () -> Unit, modifier: Modi
  * de SmartTube: sin banner a pantalla completa, así se ven varias filas de golpe.
  */
 @Composable
-private fun TvHeroRow(items: List<CatalogItem>, onOpenItem: (CatalogItem) -> Unit, modifier: Modifier) {
+private fun TvHeroRow(items: List<CatalogItem>, onOpenItem: (CatalogItem) -> Unit, modifier: Modifier, itemModifier: (key: String) -> Modifier) {
     LazyRow(
         contentPadding = TvRowPadding,
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         modifier = modifier.focusRestorer(),
     ) {
         items(items, key = { it.id }) { item ->
-            TvFocusSurface(onClick = { onOpenItem(item) }, modifier = Modifier.width(TvHeroWidth).aspectRatio(16f / 9f)) {
+            TvFocusSurface(onClick = { onOpenItem(item) }, modifier = Modifier.width(TvHeroWidth).aspectRatio(16f / 9f).then(itemModifier(item.id))) {
                 TvArtwork(item.imageUrl, Modifier.fillMaxSize())
                 Box(
                     Modifier
@@ -267,7 +354,7 @@ private fun TvHeroRow(items: List<CatalogItem>, onOpenItem: (CatalogItem) -> Uni
                         .background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.9f))),
                 )
                 item.live?.channelLogoUrl?.let { TvChannelLogo(it, Modifier.align(Alignment.TopStart)) }
-                item.live?.takeIf { it.isOnAir }?.progressAt(LocalNowMillis.current)?.let { TvProgressStrip(it, Modifier.align(Alignment.BottomCenter)) }
+                item.live?.takeIf { it.isOnAir }?.progressAt(currentNowMillis())?.let { TvProgressStrip(it, Modifier.align(Alignment.BottomCenter)) }
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -292,3 +379,21 @@ private fun TvHeroRow(items: List<CatalogItem>, onOpenItem: (CatalogItem) -> Uni
 }
 
 private val TvHeroWidth = 380.dp
+
+/** Claves de las tarjetas de una fila, para saber si la que tenía el foco sigue ahí. */
+private fun focusKeys(rowId: Int?, sections: List<HomeSection>, resumable: List<WatchEntry>): Set<String> = when (rowId) {
+    null -> emptySet()
+    CONTINUE_ROW_ID -> resumable.mapTo(mutableSetOf()) { it.item.id }
+    else -> when (val state = sections.firstOrNull { it.row.id == rowId }?.state) {
+        is SectionState.Loaded -> state.items.mapTo(mutableSetOf()) { it.id }
+        is SectionState.Links -> state.links.mapTo(mutableSetOf()) { it.url }
+        else -> emptySet()
+    }
+}
+
+/** Las filas que ya pintan algo enfocable: sus tarjetas o sus enlaces. */
+private val SectionState.isFocusable: Boolean
+    get() = this is SectionState.Loaded || this is SectionState.Links
+
+/** "Seguir viendo" no es una fila de la portada: id propio fuera del rango de las filas. */
+private const val CONTINUE_ROW_ID = -2

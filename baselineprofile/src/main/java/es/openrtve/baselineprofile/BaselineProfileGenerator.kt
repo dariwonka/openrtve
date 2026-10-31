@@ -63,6 +63,22 @@ class BaselineProfileGenerator {
             "am start -W -a android.intent.action.VIEW -d $PROGRAM_DEEP_LINK $PACKAGE/.ui.mobile.MainActivity",
         )
         device.wait(Until.hasObject(By.textContains("Reproducir")), 15_000)
+        // La ficha carga capítulos, fragmentos/tráilers y detalles por separado.
+        // Recorremos las pestañas para que sus composables y estados paginados
+        // entren en el perfil, no sólo la cabecera y el reproductor.
+        device.wait(Until.hasObject(By.text("Más vídeos")), 15_000)
+        device.findObject(By.text("Más vídeos"))?.click()
+        device.waitForIdle()
+        device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4, device.displayWidth / 2, device.displayHeight / 3, 15)
+        device.findObject(By.text("Detalles"))?.click()
+        device.waitForIdle()
+        device.findObject(By.text("Capítulos"))?.click()
+        device.waitForIdle()
+        repeat(2) {
+            device.swipe(device.displayWidth / 2, device.displayHeight / 3, device.displayWidth / 2, device.displayHeight * 3 / 4, 15)
+            device.waitForIdle()
+        }
+        device.wait(Until.hasObject(By.textContains("Reproducir")), 10_000)
         device.findObject(By.textContains("Reproducir"))?.click()
         device.wait(Until.hasObject(By.res(PACKAGE, "player_settings")), 15_000)
         Thread.sleep(6_000)

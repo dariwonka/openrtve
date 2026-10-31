@@ -17,6 +17,8 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.HomeRow
 import es.openrtve.domain.RowLayout
 import es.openrtve.ui.rememberModuleScreen
+import es.openrtve.ui.text
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun TvModuleScreen(
@@ -34,18 +36,28 @@ fun TvModuleScreen(
         TvScreenTitle(state.title)
         when {
             state.isLoading -> TvCenterMessage(stringResource(R.string.state_loading))
-            state.items.isEmpty() -> TvCenterMessage(stringResource(R.string.state_empty_module), viewModel::refresh)
+            state.items.isEmpty() -> TvCenterMessage(
+                state.failure?.text(LocalContext.current) ?: stringResource(R.string.state_empty_module),
+                viewModel::refresh,
+            )
             else -> TvItemGrid(state.items, row.layout, onOpenItem)
         }
     }
 }
 
 @Composable
-internal fun TvItemGrid(items: List<CatalogItem>, layout: RowLayout, onOpenItem: (CatalogItem) -> Unit) {
+internal fun TvItemGrid(
+    items: List<CatalogItem>,
+    layout: RowLayout,
+    onOpenItem: (CatalogItem) -> Unit,
+    /** Sin foco inicial cuando la pantalla ya lo da a otra cosa (el campo del buscador). */
+    takesInitialFocus: Boolean = true,
+) {
     // En rejilla el hero no tiene sentido: se degrada a apaisada.
     val gridLayout = layout.gridLayout
+    val initialFocus = rememberInitialFocus()
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = gridLayout.cardWidth()),
+        columns = GridCells.Adaptive(minSize = gridLayout.gridCellWidth()),
         contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, bottom = TvVerticalMargin),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -56,7 +68,7 @@ internal fun TvItemGrid(items: List<CatalogItem>, layout: RowLayout, onOpenItem:
                 item,
                 gridLayout,
                 { onOpenItem(item) },
-                if (index == 0) Modifier.initialFocus() else Modifier,
+                if (index == 0 && takesInitialFocus) Modifier.initialFocus(initialFocus) else Modifier,
                 rank = (index + 1).takeIf { gridLayout == RowLayout.RANKED },
             )
         }

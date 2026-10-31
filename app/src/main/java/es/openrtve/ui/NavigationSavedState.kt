@@ -22,6 +22,7 @@ import kotlinx.serialization.json.putJsonArray
 
 private const val SAVED_TAB = "navigation.tab"
 private const val SAVED_GLOBAL = "navigation.global"
+private const val SAVED_GENERATION = "navigation.generation"
 private const val SETTINGS_DESTINATION = "settings"
 private val navigationJson = Json { ignoreUnknownKeys = true }
 
@@ -137,11 +138,12 @@ internal fun SavedStateHandle.restoreNavigationState(): NavigationState {
         get<ArrayList<String>>(savedStack(currentTab)).orEmpty().mapNotNull(::decodeRoute)
     }
     val global = GlobalDestination.Settings.takeIf { get<String>(SAVED_GLOBAL) == SETTINGS_DESTINATION }
-    return NavigationState(tab = tab, stacks = stacks, global = global)
+    return NavigationState(tab = tab, stacks = stacks, global = global, generation = get<Int>(SAVED_GENERATION) ?: 0)
 }
 
 internal fun SavedStateHandle.saveNavigationState(state: NavigationState) {
     this[SAVED_TAB] = state.tab.name
+    this[SAVED_GENERATION] = state.generation
     Tab.entries.forEach { tab ->
         this[savedStack(tab)] = ArrayList(state.stacks.getValue(tab).map(Destination::encodeRoute))
     }

@@ -119,7 +119,7 @@ validadas.
 |---|---|---|---|
 | Colección | `GET collection/{id}.json` | HTTP/APK | El item exterior contiene `collectionItems` |
 | Programa | `GET programas/{id}.json` | HTTP/APK | Referencias a temporadas, vídeos, audios y relacionados |
-| Vídeos de programa | `GET programas/{id}/videos.json` | HTTP/APK | `type`, `page`, `order` |
+| Vídeos de programa | `GET programas/{id}/videos.json` | HTTP/APK | Capítulos: `type=39816`; «Más vídeos»: `type=39978,39980`; ambos con `page` y `order` |
 | Vídeos de temporada | `GET programas/{id}/temporadas/{seasonId}/videos.json` | APK | Contenido completo con `type=39816` |
 | Audios de programa | `GET programas/{id}/audios.json` | HTTP/APK | `type`, `page` |
 | Multimedias de programa | `GET programas/{id}/multimedias.json` | APK | `type=39816`, `page`, `order` |
@@ -142,7 +142,7 @@ Filtros de tipo observados:
 | 39816 | Completo |
 | 39978 | Fragmento |
 | 39979 | Variante de fragmento |
-| 39980 | Variante de fragmento |
+| 39980 | Avance (incluye contenidos con subtipo Tráiler) |
 | 39981 | Variante de fragmento |
 
 No deben convertirse en un enum cerrado: el backend puede añadir IDs.
@@ -440,6 +440,10 @@ Sondeos con `GET` de un byte, sin seguir la redirección ni descargar contenido:
   completar. `temporadas.json` ignora `order`.
 - Un item de colección sin `id` propio y con `lastMultimedia` (visto en
   "Descubre las novedades de la temporada") es ese medio, no un programa.
+- Las fichas mantienen separados los completos (`39816`) en «Capítulos» y los
+  fragmentos/avances (`39978,39980`) en «Más vídeos». El endpoint acepta ambos
+  IDs separados por coma y pagina el conjunto; `relacionados.json` no se usa
+  para esa pestaña porque contiene principalmente otros programas.
 
 ### Radio (verificado el 13-09-2026)
 

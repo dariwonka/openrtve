@@ -87,7 +87,15 @@ class WatchHistory(
         )
     }
 
-    fun remove(itemId: String) = save(mutableEntries.value.filterNot { it.item.id == itemId })
+    /** Quita la entrada y la devuelve, para poder deshacerlo con [restore]. */
+    fun remove(itemId: String): WatchEntry? {
+        val removed = entryFor(itemId) ?: return null
+        save(mutableEntries.value.filterNot { it.item.id == itemId })
+        return removed
+    }
+
+    /** Vuelve a poner una entrada quitada, tal como estaba. */
+    fun restore(entry: WatchEntry) = save(mutableEntries.value.filterNot { it.item.id == entry.item.id } + entry)
 
     /** Solo lo empezado y no terminado, lo más reciente primero. */
     val resumable: List<WatchEntry>
@@ -137,7 +145,6 @@ class WatchHistory(
         item.posterUrl?.let { put("posterUrl", it) }
         put("kind", item.kind.name)
         item.programId?.let { put("programId", it) }
-        item.directQualityUrl?.let { put("directQualityUrl", it) }
         put("drm", item.drm)
         put("paid", item.paid)
         put("positionMs", positionMs)
@@ -159,7 +166,6 @@ class WatchHistory(
             imageUrl = text("imageUrl"),
             kind = runCatching { ContentKind.valueOf(text("kind").orEmpty()) }.getOrDefault(ContentKind.VIDEO),
             posterUrl = text("posterUrl"),
-            directQualityUrl = text("directQualityUrl"),
             allowedInCountry = null,
             loginRequired = false,
             paid = (get("paid") as? JsonPrimitive)?.booleanOrNull ?: false,

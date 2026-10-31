@@ -72,6 +72,29 @@ class NavigationViewModelTest {
     }
 
     @Test
+    fun `a deep link never reuses the saved state of the entry it replaces`() {
+        viewModel.push(Destination.Program(catalogItem("a")))
+        val before = state.currentKey
+        viewModel.openDeepLink(Destination.Program(catalogItem("b")))
+        assertTrue("otra clave: scroll y pestaña empiezan de cero", state.currentKey != before)
+        assertTrue(state.currentKey in state.liveKeys)
+
+        val restored = NavigationViewModel(SavedStateHandle().also { handle ->
+            handle.saveNavigationState(state)
+        })
+        assertEquals("la clave sobrevive a la muerte del proceso", state.currentKey, restored.state.value.currentKey)
+    }
+
+    @Test
+    fun `back at the root of another tab returns home before leaving`() {
+        viewModel.selectTab(Tab.SEARCH)
+        assertTrue(state.canGoBack)
+        viewModel.pop()
+        assertEquals(Tab.HOME, state.tab)
+        assertFalse(state.canGoBack)
+    }
+
+    @Test
     fun `leaving an entry clears its ViewModelStore and the root stores survive`() {
         viewModel.push(Destination.Program(catalogItem("p")))
         val entryStore = viewModel.storeOwner(state.currentKey).viewModelStore
@@ -183,15 +206,15 @@ class NavigationViewModelTest {
             ),
             title = "Ver todo",
         )
-        val audio = Destination.Video(
-            catalogItem("audio", kind = ContentKind.AUDIO, programId = "programa")
-                .copy(imageUrl = "https://img.rtve.es/audio.jpg"),
+        val video = Destination.Video(
+            catalogItem("video", kind = ContentKind.VIDEO, programId = "programa")
+                .copy(imageUrl = "https://img.rtve.es/video.jpg"),
         )
 
         original.push(module)
-        original.push(audio)
+        original.push(video)
 
-        assertEquals(listOf(module, audio), NavigationViewModel(savedState).state.value.stack)
+        assertEquals(listOf(module, video), NavigationViewModel(savedState).state.value.stack)
     }
 
     private class TrackedViewModel : androidx.lifecycle.ViewModel() {
@@ -226,9 +249,9 @@ class NavigationViewModelTest {
         assertEquals("1234", (program as Destination.Program).item.programId)
         assertEquals(ContentKind.PROGRAM, program.item.kind)
 
-        val audio = HomeLink("Audio", null, "https://api.rtve.es/api/audios/99.json", LinkKind.AUDIO).destination()
-        assertEquals(ContentKind.AUDIO, (audio as Destination.Video).item.kind)
-        assertEquals("99", audio.item.playbackId)
+        val video = HomeLink("Vídeo", null, "https://api.rtve.es/api/videos/99.json", LinkKind.VIDEO).destination()
+        assertEquals(ContentKind.VIDEO, (video as Destination.Video).item.kind)
+        assertEquals("99", video.item.playbackId)
 
         // Sin id reconocible no hay destino: el enlace no lleva a ninguna parte en vez de abrir una ficha vacía.
         assertNull(HomeLink("Raro", null, "https://www.rtve.es/play/algo/", LinkKind.VIDEO).destination())

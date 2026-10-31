@@ -115,21 +115,14 @@ class CatalogRepositoryTest {
     }
 
     @Test
-    fun `radio source lookup does not swallow cancellation`() = runBlocking {
-        client.response = {
-            if (client.calls == 1) {
-                """{"title":"Radio","rows":[{"title":"Directos","moduleType":"moduloDirectoRadio","tipo":"moduloDirectoRadio"}]}"""
-            } else {
-                throw CancellationException("cancelled")
-            }
-        }
+    fun `program extras request only fragments and previews`() = runBlocking {
+        client.response = { """{"page":{"number":1,"totalPages":1,"items":[]}}""" }
 
-        try {
-            repository.loadPortada(RtveUrls.TV_HOME)
-            fail("expected cancellation")
-        } catch (cancelled: CancellationException) {
-            assertEquals("cancelled", cancelled.message)
-        }
+        repository.loadProgramExtras("169690")
+
+        assertTrue(client.lastUrl.orEmpty().contains("/programas/169690/videos.json?page=1"))
+        assertTrue(client.lastUrl.orEmpty().contains("type=39978,39980"))
+        assertTrue(client.lastUrl.orEmpty().contains("order=multimedia_date_emission%2Cdesc"))
     }
 
     private fun home(title: String) = """{"title":"$title","rows":[]}"""
@@ -139,9 +132,11 @@ class CatalogRepositoryTest {
         var calls = 0
         var etag: String? = null
         var lastRequestedEtag: String? = null
+        var lastUrl: String? = null
 
         override fun fetch(url: String, etag: String?): TextResponse {
             calls++
+            lastUrl = url
             lastRequestedEtag = etag
             if (etag != null && etag == this.etag) return TextResponse(body = null, etag = etag)
             return TextResponse(body = response(), etag = this.etag)

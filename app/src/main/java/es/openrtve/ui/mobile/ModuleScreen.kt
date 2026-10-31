@@ -19,6 +19,8 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.HomeRow
 import es.openrtve.domain.RowLayout
 import es.openrtve.ui.rememberModuleScreen
+import es.openrtve.ui.text
+import androidx.compose.ui.platform.LocalContext
 
 /** Rejilla completa de una fila ("Ver todo"). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,7 +48,10 @@ fun ModuleScreen(
                 if (state.isStale) StaleBanner()
                 when {
                     state.isLoading -> LoadingPanel()
-                    state.items.isEmpty() -> EmptyPanel(stringResource(R.string.state_empty_module), viewModel::refresh)
+                    state.items.isEmpty() -> EmptyPanel(
+                        state.failure?.text(LocalContext.current) ?: stringResource(R.string.state_empty_module),
+                        viewModel::refresh,
+                    )
                     else -> ItemGrid(state.items, row.layout, onOpenItem)
                 }
             }

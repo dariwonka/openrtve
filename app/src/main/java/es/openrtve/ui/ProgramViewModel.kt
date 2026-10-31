@@ -8,6 +8,7 @@ import es.openrtve.domain.EpisodeOrder
 import es.openrtve.domain.episodeOrder
 import es.openrtve.domain.isFirstSeason
 import es.openrtve.domain.ProgramDetail
+import es.openrtve.domain.RelatedKind
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,10 +25,18 @@ data class ProgramUiState(
     val episodes: List<CatalogItem> = emptyList(),
     val page: Int = 0,
     val totalPages: Int = 0,
-    /** El programa no tiene contenidos completos y se muestran sus fragmentos. */
-    val showingClips: Boolean = false,
+    /** Fragmentos, avances y tráilers; nunca se mezclan con los episodios completos. */
+    val extras: PagedItemsState = PagedItemsState(),
+    /** "Similares" de RTVE (`recomsys`); vacío si no hay o falló: es contenido secundario. */
+    val related: List<CatalogItem> = emptyList(),
     /** Sentido de [episodes]: el de RTVE Play para este programa y temporada. */
     val order: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
+    /**
+     * Primera página de la lista completa ("Todos") y su orden: de ella sale el botón
+     * grande, que no debe cambiar al mirar otra temporada.
+     */
+    val headerEpisodes: List<CatalogItem> = emptyList(),
+    val headerOrder: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
     val isLoading: Boolean = true,
     val isLoadingMore: Boolean = false,
     val isStale: Boolean = false,
@@ -45,12 +54,27 @@ class ProgramViewModel(
     private val mutableUiState = MutableStateFlow(ProgramUiState(programId = programId, title = initialTitle))
     val uiState: StateFlow<ProgramUiState> = mutableUiState.asStateFlow()
     private var episodesJob: Job? = null
+    private var extrasJob: Job? = null
+    /** La ficha vino de la copia local por un fallo de red; se recuerda al recalcular el aviso. */
+    private var detailIsStale = false
 
     init {
+        loadDetailThenEpisodes()
         viewModelScope.launch {
-            // La ficha decide de dónde salen los episodios (radio -> audios.json), así que va primero.
+            val related = loadRelatedOrEmpty(repository, RelatedKind.PROGRAM, programId)
+            mutableUiState.update { it.copy(related = related) }
+        }
+    }
+
+    /** La ficha decide de dónde salen los episodios (radio -> audios.json), así que va primero. */
+    private fun loadDetailThenEpisodes() {
+        episodesJob?.cancel()
+        episodesJob = viewModelScope.launch {
+            mutableUiState.update { it.copy(isLoading = true, error = null) }
+            val programId = mutableUiState.value.programId
             try {
                 val detail = repository.loadProgram(programId)
+                detailIsStale = detail.isStale
                 mutableUiState.update {
                     it.copy(
                         detail = detail.value,
@@ -58,22 +82,16 @@ class ProgramViewModel(
                         isStale = it.isStale || detail.isStale,
                     )
                 }
+                if (detail.value.showFragments) loadFirstExtras()
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                // Sin ficha se intenta igualmente con los vídeos.
+                // Sin ficha se intenta igualmente con los vídeos; el reintento vuelve a pedirla.
             }
             loadFirstPage()
         }
     }
 
-    private val isRadio: Boolean get() = mutableUiState.value.detail?.isRadio == true
-
-    /** De dónde salió la primera página; las siguientes van a la misma fuente aunque el programa sea de radio. */
-    private var episodesFromAudios = false
-
-    private suspend fun loadPage(programId: String, seasonId: String?, page: Int, completeOnly: Boolean, order: EpisodeOrder, fromAudios: Boolean) =
-        if (fromAudios) repository.loadProgramAudios(programId, page) else repository.loadProgramVideos(programId, seasonId, page, completeOnly, order)
 
     /** Sin ficha no hay regla: del más nuevo al más antiguo, como los feeds. */
     private fun orderFor(seasonId: String?): EpisodeOrder =
@@ -91,7 +109,7 @@ class ProgramViewModel(
         episodesJob = viewModelScope.launch {
             mutableUiState.update { it.copy(isLoadingMore = true) }
             try {
-                val result = loadPage(state.programId, state.selectedSeasonId, state.page + 1, completeOnly = !state.showingClips, order = state.order, fromAudios = episodesFromAudios)
+                val result = repository.loadProgramVideos(state.programId, state.selectedSeasonId, state.page + 1, completeOnly = true, order = state.order)
                 mutableUiState.update {
                     it.copy(
                         episodes = (it.episodes + result.value.items).distinctBy(CatalogItem::id),
@@ -111,11 +129,48 @@ class ProgramViewModel(
 
     fun retry() {
         mutableUiState.update { it.copy(error = null) }
-        if (mutableUiState.value.episodes.isEmpty()) loadFirstPage() else loadMore()
+        val state = mutableUiState.value
+        when {
+            // Sin ficha no hay temporadas, sinopsis ni extras: el reintento empieza por ella.
+            state.detail == null -> loadDetailThenEpisodes()
+            state.episodes.isEmpty() -> loadFirstPage()
+            else -> loadMore()
+        }
     }
 
     fun dismissError() {
         mutableUiState.update { it.copy(error = null) }
+    }
+
+    fun loadMoreExtras() {
+        val state = mutableUiState.value
+        if (!state.extras.hasMore || state.extras.isLoadingMore || state.extras.isLoading) return
+        extrasJob = viewModelScope.launch {
+            mutableUiState.update { it.copy(extras = it.extras.copy(isLoadingMore = true, error = null)) }
+            try {
+                val result = repository.loadProgramExtras(state.programId, state.extras.page + 1, EpisodeOrder.NEWEST_FIRST)
+                mutableUiState.update {
+                    it.copy(
+                        extras = it.extras.copy(
+                            items = (it.extras.items + result.value.items).distinctBy(CatalogItem::id),
+                            page = result.value.page,
+                            totalPages = result.value.totalPages,
+                            isLoadingMore = false,
+                            isStale = it.extras.isStale || result.isStale,
+                        ),
+                        isStale = it.isStale || result.isStale,
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                mutableUiState.update { it.copy(extras = it.extras.copy(isLoadingMore = false, error = error.toLoadError())) }
+            }
+        }
+    }
+
+    fun retryExtras() {
+        if (mutableUiState.value.extras.items.isEmpty()) loadFirstExtras() else loadMoreExtras()
     }
 
     private fun loadFirstPage() {
@@ -126,35 +181,50 @@ class ProgramViewModel(
             val seasonId = mutableUiState.value.selectedSeasonId
             val order = orderFor(seasonId)
             try {
-                var showingClips = false
-                var fromAudios = isRadio
-                var result = loadPage(programId, seasonId, page = 1, completeOnly = true, order = order, fromAudios = fromAudios)
-                if (result.value.items.isEmpty() && !isRadio) {
-                    // Programas de clips (titulares, deportes...) no tienen "Completo".
-                    result = repository.loadProgramVideos(programId, seasonId, page = 1, completeOnly = false, order = order)
-                    showingClips = result.value.items.isNotEmpty()
-                }
-                if (result.value.items.isEmpty() && isRadio) {
-                    // Algún programa de radio publica videopódcasts en vez de audios.
-                    result = repository.loadProgramVideos(programId, seasonId, page = 1, completeOnly = false, order = order)
-                    fromAudios = false
-                }
-                episodesFromAudios = fromAudios
+                val result = repository.loadProgramVideos(programId, seasonId, page = 1, completeOnly = true, order = order)
                 mutableUiState.update {
                     it.copy(
                         episodes = result.value.items,
                         page = result.value.page,
                         totalPages = result.value.totalPages,
-                        showingClips = showingClips,
                         order = order,
+                        headerEpisodes = if (seasonId == null) result.value.items else it.headerEpisodes,
+                        headerOrder = if (seasonId == null) order else it.headerOrder,
                         isLoading = false,
-                        isStale = it.isStale || result.isStale,
+                        // Una lista nueva (otra temporada) no hereda el aviso de la anterior.
+                        isStale = detailIsStale || it.extras.isStale || result.isStale,
                     )
                 }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 mutableUiState.update { it.copy(isLoading = false, error = error.toLoadError()) }
+            }
+        }
+    }
+
+    private fun loadFirstExtras() {
+        extrasJob?.cancel()
+        extrasJob = viewModelScope.launch {
+            mutableUiState.update { it.copy(extras = it.extras.copy(isLoading = true, error = null)) }
+            val state = mutableUiState.value
+            try {
+                val result = repository.loadProgramExtras(state.programId, page = 1, order = EpisodeOrder.NEWEST_FIRST)
+                mutableUiState.update {
+                    it.copy(
+                        extras = PagedItemsState(
+                            items = result.value.items,
+                            page = result.value.page,
+                            totalPages = result.value.totalPages,
+                            isStale = result.isStale,
+                        ),
+                        isStale = it.isStale || result.isStale,
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                mutableUiState.update { it.copy(extras = it.extras.copy(isLoading = false, error = error.toLoadError())) }
             }
         }
     }

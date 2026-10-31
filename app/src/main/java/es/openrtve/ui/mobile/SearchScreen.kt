@@ -39,6 +39,11 @@ import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.RowLayout
+import es.openrtve.domain.SearchResults
+import es.openrtve.ui.LoadMoreOnScrollEnd
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
 import es.openrtve.ui.FilterState
 import es.openrtve.ui.rememberSearchScreen
 import es.openrtve.ui.text
@@ -48,9 +53,8 @@ import es.openrtve.ui.text
 fun SearchScreen(
     repository: CatalogRepository,
     onOpenItem: (CatalogItem) -> Unit,
-    onError: (String) -> Unit,
 ) {
-    val screen = rememberSearchScreen(repository, onError)
+    val screen = rememberSearchScreen(repository)
     val viewModel = screen.viewModel
     val state = screen.state
     val context = LocalContext.current
@@ -79,7 +83,15 @@ fun SearchScreen(
         if (state.isSearching) LinearProgressIndicator(Modifier.fillMaxWidth())
 
         if (state.isTextSearch) {
-            SearchResultsView(state.results, onOpenItem)
+            when {
+                state.searchError != null -> EmptyPanel(state.searchError.text(context), viewModel::retrySearch)
+                else -> SearchResultsView(
+                    results = state.results,
+                    isLoadingMore = state.isLoadingMoreVideos,
+                    onLoadMore = viewModel::loadMoreVideos,
+                    onOpenItem = onOpenItem,
+                )
+            }
         } else {
             if (state.filters.isNotEmpty()) {
                 Row(
@@ -112,13 +124,18 @@ fun SearchScreen(
 
 @Composable
 private fun SearchResultsView(
-    results: es.openrtve.domain.SearchResults?,
+    results: SearchResults?,
+    isLoadingMore: Boolean,
+    onLoadMore: () -> Unit,
     onOpenItem: (CatalogItem) -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    LoadMoreOnScrollEnd(listState, threshold = 5, enabled = results?.hasMoreVideos == true, loadMore = onLoadMore)
     when {
         results == null -> Box(Modifier.fillMaxSize())
         results.isEmpty -> EmptyPanel(stringResource(R.string.search_empty))
         else -> LazyColumn(
+            state = listState,
             contentPadding = PaddingValues(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize(),
@@ -140,6 +157,15 @@ private fun SearchResultsView(
                 item(key = "videos-header") { SectionHeader(stringResource(R.string.search_videos)) }
                 items(results.videos, key = { it.id }) { item ->
                     EpisodeRow(item, onClick = { onOpenItem(item) })
+                }
+                if (isLoadingMore) {
+                    item(key = "videos-loading") { LoadingMoreRow() }
+                } else if (results.hasMoreVideos) {
+                    item(key = "videos-more") {
+                        Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                            TextButton(onClick = onLoadMore) { Text(stringResource(R.string.program_load_more)) }
+                        }
+                    }
                 }
             }
         }

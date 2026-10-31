@@ -7,6 +7,7 @@ import es.openrtve.testing.FakeCatalogRepository
 import es.openrtve.testing.MainDispatcherRule
 import es.openrtve.testing.catalogItem
 import es.openrtve.testing.loaded
+import es.openrtve.testing.page
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -24,7 +25,6 @@ class VideoViewModelTest {
 
     private val repository = FakeCatalogRepository().apply {
         video = { id, _ -> loaded(detail(catalogItem(id).copy(drm = true, title = "Ficha $id"))) }
-        audio = { id, _ -> loaded(detail(catalogItem(id, kind = ContentKind.AUDIO))) }
     }
 
     @Test
@@ -41,13 +41,12 @@ class VideoViewModelTest {
     }
 
     @Test
-    fun `programs open their last episode and audios use the audio sheet`() = runTest(mainDispatcher.dispatcher) {
+    fun `programs open their last episode`() = runTest(mainDispatcher.dispatcher) {
         val program = catalogItem("p1", kind = ContentKind.PROGRAM, playbackId = "ep9")
         VideoViewModel(repository, program)
-        VideoViewModel(repository, catalogItem("a1", kind = ContentKind.AUDIO))
         advanceUntilIdle()
 
-        assertEquals(listOf("video(ep9, force=false)", "audio(a1, force=false)"), repository.calls)
+        assertEquals(listOf("video(ep9, force=false)"), repository.calls)
     }
 
     @Test
@@ -64,6 +63,26 @@ class VideoViewModelTest {
         advanceUntilIdle()
         assertNull(viewModel.uiState.value.error)
         assertEquals("1", viewModel.uiState.value.detail!!.item.id)
+    }
+
+    @Test
+    fun `an episode loads its season chapters and program extras independently`() = runTest(mainDispatcher.dispatcher) {
+        val episode = catalogItem("e9", programId = "p1").copy(
+            seasonId = "s5",
+            episode = 9,
+            programShowsFragments = true,
+        )
+        repository.video = { _, _ -> loaded(detail(episode)) }
+        repository.programVideos = { _, _, _, _, _ -> page(listOf(catalogItem("e8"))) }
+        repository.programExtras = { _, _, _ -> page(listOf(catalogItem("clip"))) }
+
+        val viewModel = VideoViewModel(repository, catalogItem("e9"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("e8"), viewModel.uiState.value.chapters.items.map { it.id })
+        assertEquals(listOf("clip"), viewModel.uiState.value.extras.items.map { it.id })
+        assertTrue(repository.calls.any { "programVideos(p1, season=s5" in it })
+        assertTrue(repository.calls.any { it.startsWith("programExtras(p1") })
     }
 
     private fun detail(item: es.openrtve.domain.CatalogItem) = VideoDetail(

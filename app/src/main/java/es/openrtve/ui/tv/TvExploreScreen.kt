@@ -34,6 +34,7 @@ fun TvExploreScreen(
     val viewModel = screen.viewModel
     val state = screen.state
     val context = LocalContext.current
+    val initialFocus = rememberInitialFocus()
 
     Column(Modifier.fillMaxSize()) {
         TvScreenTitle(stringResource(R.string.tab_explore))
@@ -60,7 +61,7 @@ fun TvExploreScreen(
                 }
                 // Una misma portada puede estar en dos grupos (TDP en Temáticas y en Canales).
                 itemsIndexed(group.categories, key = { _, it -> "$groupIndex/${it.contentUrl}" }) { index, category ->
-                    val focus = if (index == 0 && groupIndex == 0) Modifier.initialFocus() else Modifier
+                    val focus = if (index == 0 && groupIndex == 0) Modifier.initialFocus(initialFocus) else Modifier
                     TvImageTile(category.title, category.imageUrl, { onOpenCategory(category) }, focus.fillMaxWidth())
                 }
             }

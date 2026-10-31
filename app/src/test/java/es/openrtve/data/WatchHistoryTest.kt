@@ -56,7 +56,6 @@ class WatchHistoryTest {
         subtitle = null,
         imageUrl = "https://img.rtve.es/v/$id/horizontal2",
         kind = ContentKind.VIDEO,
-        directQualityUrl = null,
         allowedInCountry = null,
         loginRequired = false,
         paid = false,

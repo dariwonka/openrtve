@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -43,6 +44,7 @@ data class PortadaUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val isFeedStale: Boolean = false,
+    /** Fallo que deja la portada sin nada que pintar: se explica en el sitio, con su reintento. */
     val error: LoadError? = null,
 ) {
     val isStale: Boolean
@@ -88,10 +90,6 @@ class PortadaViewModel(
             .forEach { section -> scope.launch { loadSection(section.row, forceRefresh = true) } }
     }
 
-    fun dismissError() {
-        mutableUiState.update { it.copy(error = null) }
-    }
-
     fun retrySection(row: HomeRow) {
         val alreadyLoading = mutableUiState.value.sections
             .any { it.row.id == row.id && it.state is SectionState.Loading }
@@ -110,7 +108,7 @@ class PortadaViewModel(
         feedJob = viewModelScope.launch {
             // Primero la copia local, aunque esté caducada: la portada aparece al
             // instante y la red solo la revalida (con ETag, un 304 si no cambió).
-            if (mutableUiState.value.sections.isEmpty()) showCachedCopy(scope)
+            val cachedModules = if (mutableUiState.value.sections.isEmpty()) showCachedCopy(scope) else emptyList()
             val hadSections = mutableUiState.value.sections.isNotEmpty()
             mutableUiState.update { it.copy(isLoading = !hadSections, isRefreshing = hadSections, error = null) }
             val feed = try {
@@ -127,6 +125,13 @@ class PortadaViewModel(
                         error = if (hadSections) null else error.toLoadError(),
                     )
                 }
+                // Las filas que no tenían copia local se intentan por su cuenta: sin esto
+                // se quedarían para siempre con su hueco de carga. Se espera antes a la
+                // lectura de la caché para no tapar con un error una copia que ya llega.
+                cachedModules.joinAll()
+                mutableUiState.value.sections
+                    .filter { it.state is SectionState.Loading }
+                    .forEach { section -> scope.launch { loadSection(section.row, forceRefresh = false) } }
                 return@launch
             }
 
@@ -148,13 +153,14 @@ class PortadaViewModel(
         }
     }
 
-    private suspend fun showCachedCopy(scope: CoroutineScope) {
+    /** Pinta la copia local y devuelve las lecturas de módulos que lanza, para poder esperarlas. */
+    private suspend fun showCachedCopy(scope: CoroutineScope): List<Job> {
         val cached = try {
             repository.loadPortada(url, cachedOnly = true)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            return
+            return emptyList()
         }
         val rows = cached.value.rows.filter { it.isRenderable }
         mutableUiState.update {
@@ -164,7 +170,7 @@ class PortadaViewModel(
                 isLoading = false,
             )
         }
-        rows.filter { !it.isInline }.forEach { row ->
+        return rows.filter { !it.isInline }.map { row ->
             scope.launch {
                 val module = try {
                     repository.loadModule(row, cachedOnly = true)
@@ -178,6 +184,7 @@ class PortadaViewModel(
                     ui.copy(
                         sections = ui.sections.map { section ->
                             if (section.row.id == row.id && section.state is SectionState.Loading) {
+                                // Sin aviso de "antiguo": la red la revalida enseguida y solo si falla se marca.
                                 section.copy(state = SectionState.Loaded(module.value.items, isStale = false), title = module.value.title.ifBlank { section.title })
                             } else {
                                 section

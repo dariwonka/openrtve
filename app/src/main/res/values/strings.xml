@@ -16,8 +16,6 @@
     <string name="settings_playback">Reproducción</string>
     <string name="settings_pip">Imagen en imagen al salir</string>
     <string name="settings_pip_summary">Si sales del reproductor con un vídeo en marcha, sigue en una ventana flotante</string>
-    <string name="settings_background_audio">Audio en segundo plano</string>
-    <string name="settings_background_audio_summary">Radio y pódcasts siguen sonando al salir del reproductor</string>
     <string name="settings_subtitles">Subtítulos por defecto</string>
     <string name="settings_subtitles_summary">Activa los subtítulos en español cuando existan</string>
     <string name="settings_storage">Almacenamiento</string>
@@ -60,7 +58,6 @@
     <string name="kind_live">Directo</string>
 
     <string name="program_all_seasons">Todos</string>
-    <string name="program_clips_notice">Este programa no tiene emisiones completas; se muestran sus fragmentos</string>
     <string name="program_empty">Este programa no tiene vídeos disponibles</string>
     <string name="program_load_more">Cargar más</string>
     <string name="program_continue_episode">Continuar · %1$s</string>
@@ -68,16 +65,22 @@
     <string name="program_play_episode">Reproducir · %1$s</string>
     <string name="episode_watched">Visto</string>
     <string name="episode_next">Siguiente</string>
-    <string name="tab_episodes">Episodios</string>
-    <string name="tab_more_videos">Más vídeos</string>
+    <string name="tab_episodes">Capítulos</string>
+    <string name="tab_more_videos">Extras</string>
+    <string name="tab_related">Similares</string>
+    <string name="episode_current">Este capítulo</string>
     <string name="tab_details">Detalles</string>
 
     <string name="action_play">Reproducir</string>
     <string name="action_open_program">Programa</string>
+    <string name="action_more_from">Más de %1$s</string>
     <string name="action_share">Compartir</string>
     <string name="action_more">más</string>
     <string name="action_less">menos</string>
     <string name="video_genres">Género</string>
+    <string name="video_year">Año</string>
+    <string name="video_age_rating">Edad</string>
+    <string name="video_country">País</string>
     <string name="video_director">Dirección</string>
     <string name="video_cast">Reparto</string>
     <string name="video_language">Idioma original</string>
@@ -117,6 +120,16 @@
     <string name="player_volume">Volumen %1$d%%</string>
 
     <string name="deeplink_not_found">No se ha podido abrir este enlace de RTVE</string>
+    <string name="deeplink_opening">Abriendo enlace…</string>
+    <string name="continue_more_options">Más opciones</string>
+    <string name="continue_open_details">Ver ficha</string>
+    <string name="continue_remove">Quitar de Seguir viendo</string>
+    <string name="continue_removed">«%1$s» quitado de Seguir viendo</string>
+    <string name="action_undo">Deshacer</string>
+    <plurals name="continue_remaining_minutes">
+        <item quantity="one">Queda %d min</item>
+        <item quantity="other">Quedan %d min</item>
+    </plurals>
     <string name="player_error_connect">No se pudo iniciar el reproductor</string>
     <string name="player_error_nothing">No hay nada en reproducción</string>
     <string name="player_error_geo">Este contenido no está disponible en tu ubicación</string>

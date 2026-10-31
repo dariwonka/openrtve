@@ -13,6 +13,7 @@ import es.openrtve.domain.HomeRow
 import es.openrtve.domain.PreviewSprite
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.QuickFilter
+import es.openrtve.domain.RelatedKind
 import es.openrtve.domain.SearchResults
 import es.openrtve.domain.VideoDetail
 
@@ -31,14 +32,17 @@ open class FakeCatalogRepository : CatalogRepository {
     var quickFilters: suspend () -> CatalogLoad<List<QuickFilter>> = { unsupported() }
     var quickFilterItems: suspend (filter: QuickFilter) -> CatalogLoad<CatalogModule> = { unsupported() }
     var search: suspend (query: String) -> SearchResults = { unsupported() }
+    var searchPage: suspend (relativeQuery: String, page: Int) -> CatalogPage = { _, _ -> unsupported() }
+    /** Sin configurar no hay similares: es contenido secundario y no debe romper otros tests. */
+    var related: suspend (kind: RelatedKind, id: String) -> CatalogLoad<List<CatalogItem>> = { _, _ -> CatalogLoad(emptyList(), false) }
     var program: suspend (programId: String, forceRefresh: Boolean) -> CatalogLoad<ProgramDetail> = { _, _ -> unsupported() }
     var video: suspend (videoId: String, forceRefresh: Boolean) -> CatalogLoad<VideoDetail> = { _, _ -> unsupported() }
-    var audio: suspend (audioId: String, forceRefresh: Boolean) -> CatalogLoad<VideoDetail> = { _, _ -> unsupported() }
-    var programAudios: suspend (programId: String, page: Int, forceRefresh: Boolean) -> CatalogLoad<CatalogPage> = { _, _, _ -> unsupported() }
     var nextVideo: suspend (videoId: String) -> CatalogItem? = { null }
     var previewSprite: suspend (videoId: String) -> PreviewSprite? = { null }
     var programVideos: suspend (programId: String, seasonId: String?, page: Int, completeOnly: Boolean, forceRefresh: Boolean) -> CatalogLoad<CatalogPage> =
         { _, _, _, _, _ -> unsupported() }
+    var programExtras: suspend (programId: String, page: Int, forceRefresh: Boolean) -> CatalogLoad<CatalogPage> =
+        { _, page, _ -> CatalogLoad(CatalogPage(emptyList(), page, page), false) }
 
     override suspend fun loadPortada(url: String, forceRefresh: Boolean, cachedOnly: Boolean): CatalogLoad<HomeFeed> {
         calls += "portada($url, force=$forceRefresh, cached=$cachedOnly)"
@@ -70,6 +74,13 @@ open class FakeCatalogRepository : CatalogRepository {
         return search.invoke(query)
     }
 
+    override suspend fun searchPage(relativeQuery: String, page: Int): CatalogPage {
+        calls += "searchPage($relativeQuery, page=$page)"
+        return searchPage.invoke(relativeQuery, page)
+    }
+
+    override suspend fun loadRelated(kind: RelatedKind, id: String): CatalogLoad<List<CatalogItem>> = related(kind, id)
+
     override suspend fun loadProgram(programId: String, forceRefresh: Boolean): CatalogLoad<ProgramDetail> {
         calls += "program($programId, force=$forceRefresh)"
         return program(programId, forceRefresh)
@@ -78,16 +89,6 @@ open class FakeCatalogRepository : CatalogRepository {
     override suspend fun loadVideo(videoId: String, forceRefresh: Boolean): CatalogLoad<VideoDetail> {
         calls += "video($videoId, force=$forceRefresh)"
         return video(videoId, forceRefresh)
-    }
-
-    override suspend fun loadAudio(audioId: String, forceRefresh: Boolean): CatalogLoad<VideoDetail> {
-        calls += "audio($audioId, force=$forceRefresh)"
-        return audio(audioId, forceRefresh)
-    }
-
-    override suspend fun loadProgramAudios(programId: String, page: Int, forceRefresh: Boolean): CatalogLoad<CatalogPage> {
-        calls += "programAudios($programId, page=$page)"
-        return programAudios(programId, page, forceRefresh)
     }
 
     override suspend fun loadNextVideo(videoId: String): CatalogItem? {
@@ -112,6 +113,16 @@ open class FakeCatalogRepository : CatalogRepository {
         return programVideos(programId, seasonId, page, completeOnly, forceRefresh)
     }
 
+    override suspend fun loadProgramExtras(
+        programId: String,
+        page: Int,
+        order: EpisodeOrder,
+        forceRefresh: Boolean,
+    ): CatalogLoad<CatalogPage> {
+        calls += "programExtras($programId, page=$page, order=${order.name})"
+        return programExtras(programId, page, forceRefresh)
+    }
+
     private fun unsupported(): Nothing = throw UnsupportedOperationException("No configurado en el test")
 }
 
@@ -130,7 +141,6 @@ fun catalogItem(
     subtitle = null,
     imageUrl = null,
     kind = kind,
-    directQualityUrl = null,
     allowedInCountry = null,
     loginRequired = false,
     paid = false,

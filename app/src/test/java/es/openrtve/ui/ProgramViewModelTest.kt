@@ -45,7 +45,6 @@ class ProgramViewModelTest {
         assertEquals(1, state.page)
         assertTrue(state.hasMore)
         assertFalse(state.isLoading)
-        assertFalse(state.showingClips)
         assertEquals(listOf("program(135930, force=false)", "programVideos(135930, season=null, page=1, complete=true, order=NEWEST_FIRST)"), repository.calls)
     }
 
@@ -78,37 +77,16 @@ class ProgramViewModelTest {
     }
 
     @Test
-    fun `programs without complete episodes fall back to clips`() = runTest(mainDispatcher.dispatcher) {
-        repository.programVideos = { _, _, _, completeOnly, _ ->
-            if (completeOnly) page(emptyList()) else page(listOf(catalogItem("clip")))
-        }
+    fun `clips and trailers load separately from complete episodes`() = runTest(mainDispatcher.dispatcher) {
+        repository.program = { id, _ -> loaded(detail(id).copy(showFragments = true)) }
+        repository.programVideos = { _, _, _, _, _ -> page(emptyList()) }
+        repository.programExtras = { _, _, _ -> page(listOf(catalogItem("clip"), catalogItem("trailer"))) }
         val viewModel = ProgramViewModel(repository, "1", "")
         advanceUntilIdle()
 
-        assertEquals(listOf("clip"), viewModel.uiState.value.episodes.map { it.id })
-        assertTrue(viewModel.uiState.value.showingClips)
-    }
-
-    @Test
-    fun `radio programs read audios and fall back to videos when they publish videopodcasts`() = runTest(mainDispatcher.dispatcher) {
-        repository.program = { id, _ -> loaded(detail(id).copy(isRadio = true)) }
-        repository.programAudios = { _, _, _ -> page(listOf(catalogItem("a1"))) }
-        val viewModel = ProgramViewModel(repository, "radio", "")
-        advanceUntilIdle()
-        assertEquals(listOf("a1"), viewModel.uiState.value.episodes.map { it.id })
-        assertTrue(repository.calls.none { it.startsWith("programVideos") })
-
-        repository.programAudios = { _, _, _ -> page(emptyList()) }
-        repository.programVideos = { _, _, pageNumber, _, _ -> page(listOf(catalogItem("vp$pageNumber")), page = pageNumber, totalPages = 2) }
-        val videopodcast = ProgramViewModel(repository, "radio2", "")
-        advanceUntilIdle()
-        assertEquals(listOf("vp1"), videopodcast.uiState.value.episodes.map { it.id })
-        assertFalse(videopodcast.uiState.value.showingClips)
-
-        videopodcast.loadMore()
-        advanceUntilIdle()
-        assertEquals("la segunda página sale de la misma fuente que la primera", listOf("vp1", "vp2"), videopodcast.uiState.value.episodes.map { it.id })
-        assertEquals(listOf("programAudios(radio2, page=1)"), repository.calls.filter { it.startsWith("programAudios(radio2") })
+        assertTrue(viewModel.uiState.value.episodes.isEmpty())
+        assertEquals(listOf("clip", "trailer"), viewModel.uiState.value.extras.items.map { it.id })
+        assertTrue(repository.calls.any { it.startsWith("programExtras(1") })
     }
 
     @Test

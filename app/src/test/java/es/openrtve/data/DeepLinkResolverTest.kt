@@ -17,13 +17,12 @@ class DeepLinkResolverTest {
     private val resolver = DeepLinkResolver(repository)
 
     @Test
-    fun `video and audio ids fetch their sheet`() = runBlocking {
+    fun `video ids fetch their sheet and audios are not ours`() = runBlocking {
         repository.video = { id, _ -> loaded(detail(catalogItem(id))) }
-        repository.audio = { id, _ -> loaded(detail(catalogItem(id, kind = ContentKind.AUDIO))) }
 
         assertEquals("17222216", resolver.resolve("https://play.rtve.es/v/17222216")!!.id)
-        assertEquals(ContentKind.AUDIO, resolver.resolve("https://www.rtve.es/play/audios/el-buscon/17150412/")!!.kind)
-        assertEquals(listOf("video(17222216, force=false)", "audio(17150412, force=false)"), repository.calls)
+        assertNull("los audios son de RTVE Audio", resolver.resolve("https://www.rtve.es/play/audios/el-buscon/17150412/"))
+        assertEquals(listOf("video(17222216, force=false)"), repository.calls)
     }
 
     @Test
@@ -64,7 +63,7 @@ class DeepLinkResolverTest {
         }
 
         assertEquals("2", resolver.resolve("https://www.rtve.es/play/videos/telediario-2/")!!.id)
-        assertNull("un audio no casa con la ruta de vídeos", resolver.resolve("https://www.rtve.es/play/audios/telediario-2/"))
+        assertNull("un audio no es un enlace de OpenRTVE", resolver.resolve("https://www.rtve.es/play/audios/telediario-2/"))
     }
 
     @Test

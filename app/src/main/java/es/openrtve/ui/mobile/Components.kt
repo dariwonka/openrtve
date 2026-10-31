@@ -31,7 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import es.openrtve.ui.LocalNowMillis
+import es.openrtve.ui.currentNowMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -221,7 +221,7 @@ internal fun ItemCard(
  */
 @Composable
 private fun ColumnScope.LiveItemCard(item: CatalogItem, live: LiveInfo, rank: Int?) {
-    val now = LocalNowMillis.current
+    val now = currentNowMillis()
     val context = LocalContext.current
     val upcoming = live.isUpcomingAt(now)
     Artwork(item.imageUrl, 16f / 9f, Modifier.fillMaxWidth()) {
@@ -409,7 +409,9 @@ internal fun HeroPager(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(if (fullBleed) 4f / 3f else 16f / 9f)
+                    // Siempre 16:9, la proporción de la imagen: los carteles de RTVE llevan el
+                    // título dibujado y un recorte más alto se lo comía por los lados.
+                    .aspectRatio(16f / 9f)
                     .clip(RoundedCornerShape(if (fullBleed) 0.dp else 14.dp))
                     .background(MaterialTheme.colorScheme.surface)
                     .clickable { onClick(item) },
@@ -516,8 +518,7 @@ internal fun EpisodeRow(
             .then(if (highlighted) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier)
             .padding(horizontal = ScreenPadding, vertical = 6.dp),
     ) {
-        val square = item.kind == ContentKind.AUDIO
-        Artwork(if (square) item.squareUrl ?: item.imageUrl else item.imageUrl, if (square) 1f else 16f / 9f, Modifier.width(if (square) 88.dp else 140.dp)) {
+        Artwork(item.imageUrl, 16f / 9f, Modifier.width(140.dp)) {
             progress?.let { ProgressStrip(it, Modifier.align(Alignment.BottomCenter)) }
         }
         Column(modifier = Modifier.weight(1f)) {

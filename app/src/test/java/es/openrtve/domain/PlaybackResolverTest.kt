@@ -29,18 +29,6 @@ class PlaybackResolverTest {
     }
 
     @Test
-    fun `audio prefers a public quality url`() {
-        val result = resolver.resolve(
-            item(kind = ContentKind.AUDIO).copy(
-                directQualityUrl = "https://ztnr.rtve.es/ztnr/100.mp3",
-            ),
-        ) as PlaybackDecision.Ready
-
-        assertEquals("https://ztnr.rtve.es/ztnr/100.mp3", result.uri)
-        assertTrue(result.isAudioOnly)
-    }
-
-    @Test
     fun `rights are checked before constructing a stream`() {
         assertEquals(
             PlaybackDecision.Blocked(BlockReason.GEO_RESTRICTED),
@@ -82,23 +70,6 @@ class PlaybackResolverTest {
         assertEquals(PlaybackDecision.Blocked(BlockReason.NO_SOURCE), result)
     }
 
-    @Test
-    fun `foreign and placeholder audio urls are ignored`() {
-        val foreign = resolver.resolve(
-            item(kind = ContentKind.AUDIO).copy(
-                directQualityUrl = "https://example.org/audio.mp3",
-            ),
-        ) as PlaybackDecision.Ready
-        val placeholder = resolver.resolve(
-            item(kind = ContentKind.AUDIO).copy(
-                directQualityUrl = "https://ztnr.rtve.es/res/_TOKEN_",
-            ),
-        ) as PlaybackDecision.Ready
-
-        assertEquals("https://ztnr.rtve.es/ztnr/100.mp3", foreign.uri)
-        assertEquals("https://ztnr.rtve.es/ztnr/100.mp3", placeholder.uri)
-    }
-
     private fun item(kind: ContentKind) = CatalogItem(
         id = "item-1",
         playbackId = "100",
@@ -107,7 +78,6 @@ class PlaybackResolverTest {
         subtitle = null,
         imageUrl = null,
         kind = kind,
-        directQualityUrl = null,
         allowedInCountry = true,
         loginRequired = false,
         paid = false,

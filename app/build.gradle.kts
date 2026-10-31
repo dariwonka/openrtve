@@ -51,6 +51,8 @@ android {
 
     buildFeatures {
         compose = true
+        // VERSION_NAME para el User-Agent.
+        buildConfig = true
     }
 
     compileOptions {
@@ -90,6 +92,7 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.datasource.okhttp)
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)

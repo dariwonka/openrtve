@@ -15,14 +15,13 @@ class DeepLinkResolver(
         val link = parseDeepLink(url) ?: return null
         return when (link) {
             is DeepLink.Video -> repository.loadVideo(link.id).value.item
-            is DeepLink.Audio -> repository.loadAudio(link.id).value.item
             is DeepLink.Program -> repository.loadProgram(link.id).value.let { detail ->
                 referenceItem(detail.id, ContentKind.PROGRAM, detail.title, detail.imageUrl)
             }
             is DeepLink.Live -> repository.loadModule(liveRow("$LIVES_BASE/${link.assetId}.json")).value.items
                 .firstOrNull { it.kind == ContentKind.LIVE }
             is DeepLink.ProgramPermalink -> {
-                val marker = "/play/${if (link.isAudio) "audios" else "videos"}/${link.permalink}/"
+                val marker = "/play/videos/${link.permalink}/"
                 repository.search(link.permalink.replace('-', ' ')).programs
                     .firstOrNull { it.webUrl?.endsWith(marker) == true }
             }

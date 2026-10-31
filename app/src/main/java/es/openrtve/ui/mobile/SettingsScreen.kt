@@ -1,6 +1,8 @@
 package es.openrtve.ui.mobile
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -12,6 +14,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -59,16 +63,12 @@ fun SettingsScreen(
                 checked = settings.pictureInPictureOnLeave,
             ) { value -> viewModel.update { it.copy(pictureInPictureOnLeave = value) } }
             SwitchRow(
-                title = stringResource(R.string.settings_background_audio),
-                summary = stringResource(R.string.settings_background_audio_summary),
-                checked = settings.backgroundAudio,
-            ) { value -> viewModel.update { it.copy(backgroundAudio = value) } }
-            SwitchRow(
                 title = stringResource(R.string.settings_autoplay),
                 summary = stringResource(R.string.settings_autoplay_summary),
                 checked = settings.autoplayNext,
             ) { value -> viewModel.update { it.copy(autoplayNext = value) } }
             ListItem(
+                colors = settingsItemColors(),
                 headlineContent = { Text(stringResource(R.string.settings_max_quality)) },
                 supportingContent = { Text(stringResource(R.string.settings_max_quality_summary)) },
             )
@@ -95,19 +95,18 @@ fun SettingsScreen(
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SectionLabel(stringResource(R.string.settings_storage))
             ListItem(
+                colors = settingsItemColors(),
                 headlineContent = { Text(stringResource(R.string.settings_clear_cache)) },
                 supportingContent = {
                     Text(stringResource(R.string.settings_cache_size, cacheBytes?.let(::formatBytes) ?: "…"))
                 },
-                modifier = Modifier.clickable {
-                    viewModel.clearCache()
-                    onMessage(cleared)
-                },
+                modifier = Modifier.clickable { viewModel.clearCache { onMessage(cleared) } },
             )
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SectionLabel(stringResource(R.string.settings_about))
             ListItem(
+                colors = settingsItemColors(),
                 headlineContent = { Text(stringResource(R.string.settings_version, versionName)) },
                 supportingContent = { Text(stringResource(R.string.settings_about_summary)) },
             )
@@ -128,13 +127,19 @@ private fun SectionLabel(text: String) {
 
 @Composable
 private fun SwitchRow(title: String, summary: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    // Toda la fila es el interruptor: un solo objetivo táctil y TalkBack lo anuncia una vez, como interruptor.
     ListItem(
+        colors = settingsItemColors(),
         headlineContent = { Text(title) },
         supportingContent = { Text(summary) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onChange) },
-        modifier = Modifier.clickable { onChange(!checked) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
+        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
     )
 }
 
 
 private val QUALITY_CHOICES = listOf(0, 1080, 720, 576, 360)
+
+/** Filas sobre el fondo de la pantalla: sin franjas de otro color entre secciones y chips. */
+@Composable
+private fun settingsItemColors() = ListItemDefaults.colors(containerColor = Color.Transparent)

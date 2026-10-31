@@ -2,6 +2,7 @@ package es.openrtve.data
 
 import androidx.core.util.AtomicFile
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import java.security.MessageDigest
 
 data class CachedDocument(
@@ -11,7 +12,18 @@ data class CachedDocument(
     val etag: String?,
 )
 
-class RawDocumentCache(private val directory: File) {
+/**
+ * Copia local de los documentos del catálogo. Cada programa, temporada y página
+ * visitados dejan su fichero: al pasar de [maxBytes] se borran los más antiguos
+ * (por fecha de descarga o de revalidación) hasta quedar en tres cuartos del límite.
+ */
+class RawDocumentCache(
+    private val directory: File,
+    private val maxBytes: Long = DEFAULT_MAX_BYTES,
+) {
+    /** Se poda una vez por proceso, con la primera escritura: basta para que no crezca sin fin. */
+    private val pruned = AtomicBoolean(false)
+
     fun read(key: String): CachedDocument? = runCatching {
         val file = fileFor(key)
         if (!file.isFile) return null
@@ -34,7 +46,24 @@ class RawDocumentCache(private val directory: File) {
         }
         val etagFile = etagFileFor(key)
         if (etag != null) etagFile.writeText(etag, Charsets.UTF_8) else etagFile.delete()
+        if (pruned.compareAndSet(false, true)) prune()
     }
+
+    /** Borra los documentos más antiguos, con su ETag, hasta bajar de tres cuartos de [maxBytes]. */
+    fun prune() {
+        val documents = directory.listFiles { file -> file.extension == "json" }.orEmpty()
+        var total = documents.sumOf { it.length() + etagFor(it).length() }
+        if (total <= maxBytes) return
+        for (document in documents.sortedBy(File::lastModified)) {
+            if (total <= maxBytes * 3 / 4) break
+            val etag = etagFor(document)
+            total -= document.length() + etag.length()
+            document.delete()
+            etag.delete()
+        }
+    }
+
+    private fun etagFor(document: File) = File(document.parentFile, "${document.nameWithoutExtension}.etag")
 
     /** Un 304 confirma que la copia sigue vigente: solo se renueva su fecha. */
     fun touch(key: String, savedAtMillis: Long) {
@@ -50,6 +79,10 @@ class RawDocumentCache(private val directory: File) {
     private fun fileFor(key: String): File = File(directory, "${digest(key)}.json")
 
     private fun etagFileFor(key: String): File = File(directory, "${digest(key)}.etag")
+
+    private companion object {
+        const val DEFAULT_MAX_BYTES = 32L * 1024 * 1024
+    }
 
     private fun digest(key: String): String = MessageDigest.getInstance("SHA-256")
         .digest(key.toByteArray(Charsets.UTF_8))

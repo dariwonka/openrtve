@@ -199,7 +199,9 @@ canales. Los listados usados son:
 - `/api/videos/{id}/next.json`.
 
 El filtro `type=39816` significa contenido completo. También se observaron
-39978, 39979, 39980 y 39981 para variantes de fragmento. La aplicación oficial
+39978 (fragmento), 39980 (avance, incluidos tráilers) y otras variantes 39979 y
+39981. El endpoint acepta listas como `type=39978,39980`, que OpenRTVE usa para
+mantener «Más vídeos» separado de «Capítulos». La aplicación oficial
 encadena hasta tres llamadas a `next.json`; la implementación nueva debe
 modelarlo como paginación o cola incremental, sin ese límite arbitrario.
 

@@ -29,7 +29,8 @@ class SettingsViewModel(
 
     fun update(transform: (Settings) -> Settings) = appSettings.update(transform)
 
-    fun clearCache() {
+    /** Borra catálogo e imágenes y avisa con [onCleared] cuando de verdad ha terminado. */
+    fun clearCache(onCleared: () -> Unit) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 documentCache.clear()
@@ -39,6 +40,7 @@ class SettingsViewModel(
                 }
             }
             refreshCacheSize()
+            onCleared()
         }
     }
 

@@ -141,11 +141,19 @@ y el siguiente episodio de `videos/{id}/next.json`, con aviso en los últimos
 
 Ciclo de vida, según la guía de Android para reproductores de vídeo: al salir
 de la pantalla (`onStop`) el vídeo se pausa salvo en PiP, y al cerrarla (atrás
-o cerrar la ventana PiP) se detiene y vacía la sesión. Radio y pódcasts siguen
-sonando en segundo plano con su notificación, porque eso es lo estándar en
-apps de audio; es desactivable en ajustes.
+o cerrar la ventana PiP) se detiene y vacía la sesión. En el móvil el
+reproductor se abre apaisado (en tablets y plegables Android ignora la
+orientación pedida). La pantalla solo se mantiene encendida mientras se
+reproduce.
 
 ## Red y datos
+
+Los streams y las licencias Widevine usan el mismo OkHttp (pool HTTP/2 y
+User-Agent) sin la allowlist: `ztnr` redirige a un CDN y la licencia la sirve
+Axinom, fuera de rtve.es; el texto plano lo prohíbe `network_security_config`.
+Las imágenes de `img.rtve.es/p|v` se piden al tamaño en que se pintan
+(`RtveImageSizing`), y la caché de documentos se poda por antigüedad al pasar
+de 32 MB.
 
 `RtveHostPolicy` (dominio) es la única allowlist: solo HTTPS, puerto estándar,
 sin credenciales embebidas y host `rtve.es` o subdominio real. La aplican el

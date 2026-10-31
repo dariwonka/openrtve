@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -22,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -53,6 +58,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -61,6 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import es.openrtve.R
+import es.openrtve.domain.CatalogItem
 import es.openrtve.ui.ProgramTab
 
 /**
@@ -354,12 +361,38 @@ internal fun FichaTabs(tabs: List<ProgramTab>, current: ProgramTab?, onSelect: (
     }
 }
 
-/** La pestaña elegida, recordada por posición y acotada a las que existan ahora. */
+/** La pestaña elegida, recordada por identidad aunque otras aparezcan al terminar de cargar. */
 @Composable
 internal fun rememberSelectedTab(tabs: List<ProgramTab>): Pair<ProgramTab?, (ProgramTab) -> Unit> {
-    var selected by rememberSaveable { mutableIntStateOf(0) }
-    val current = tabs.getOrNull(selected) ?: tabs.firstOrNull()
-    return current to { tab -> selected = tabs.indexOf(tab) }
+    var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
+    val current = selectedName
+        ?.let { name -> tabs.firstOrNull { it.name == name } }
+        ?: tabs.firstOrNull()
+    return current to { tab -> selectedName = tab.name }
+}
+
+/**
+ * "Similares" como rejilla de pósters dentro de la lista de la ficha: filas de
+ * [columns] tarjetas a ancho igual, para no anidar una rejilla perezosa en otra lista.
+ */
+internal fun LazyListScope.relatedGrid(items: List<CatalogItem>, columns: Int, onOpen: (CatalogItem) -> Unit) {
+    items(items.chunked(columns), key = { row -> "related-${row.first().id}" }) { row ->
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 8.dp),
+        ) {
+            row.forEach { item -> PosterCard(item, { onOpen(item) }, Modifier.weight(1f)) }
+            // La última fila conserva el ancho de columna aunque venga incompleta.
+            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+        }
+    }
+}
+
+/** Columnas de la rejilla de similares: pósters de unos 120 dp, tres como mínimo. */
+@Composable
+internal fun relatedColumns(): Int {
+    val widthDp = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    return ((widthDp - ScreenPadding * 2) / 120.dp).toInt().coerceAtLeast(3)
 }
 
 @Composable
@@ -367,6 +400,7 @@ internal fun ProgramTab.label(): String = stringResource(
     when (this) {
         ProgramTab.EPISODES -> R.string.tab_episodes
         ProgramTab.MORE_VIDEOS -> R.string.tab_more_videos
+        ProgramTab.RELATED -> R.string.tab_related
         ProgramTab.DETAILS -> R.string.tab_details
     },
 )
@@ -377,7 +411,8 @@ internal fun ExpandableText(text: String) = ExpandableText(AnnotatedString(text)
 
 @Composable
 internal fun ExpandableText(text: AnnotatedString) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by rememberSaveable(text.text) { mutableStateOf(false) }
+    var hasOverflow by remember(text) { mutableStateOf(false) }
     Column {
         Text(
             text = text,
@@ -385,14 +420,20 @@ internal fun ExpandableText(text: AnnotatedString) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = if (expanded) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis,
+            onTextLayout = { result -> if (!expanded) hasOverflow = result.hasVisualOverflow },
         )
-        // Sin relleno horizontal: el botón tiene el suyo y el texto quedaba sangrado
-        // respecto al párrafo. El área táctil de 48dp la garantiza Material 3.
-        TextButton(
-            onClick = { expanded = !expanded },
-            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp),
-        ) {
-            Text(stringResource(if (expanded) R.string.action_less else R.string.action_more))
+        // Texto pulsable y no TextButton: el botón centra su texto en un ancho mínimo
+        // y "más" quedaba sangrado respecto al párrafo. El alto de 48 dp se mantiene.
+        if (hasOverflow || expanded) {
+            Text(
+                text = stringResource(if (expanded) R.string.action_less else R.string.action_more),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clickable(role = Role.Button) { expanded = !expanded }
+                    .wrapContentHeight(Alignment.CenterVertically),
+            )
         }
     }
 }

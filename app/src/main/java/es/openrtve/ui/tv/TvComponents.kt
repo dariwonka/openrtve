@@ -19,15 +19,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.platform.LocalContext
-import es.openrtve.ui.LocalNowMillis
+import es.openrtve.ui.currentNowMillis
 import androidx.compose.ui.text.TextStyle
 import es.openrtve.ui.scheduleLabel
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,15 +62,50 @@ import es.openrtve.domain.RowLayout
 import es.openrtve.domain.imageFor
 
 /**
+ * Foco inicial de una pantalla: se concede una sola vez cada vez que la pantalla
+ * entra en composición. Se crea a nivel de pantalla, no dentro de un ítem de una
+ * lista perezosa: así un ítem que sale y vuelve al hacer scroll no roba el foco.
+ */
+@Stable
+internal class InitialFocus {
+    val requester = FocusRequester()
+    var granted by mutableStateOf(false)
+}
+
+@Composable
+internal fun rememberInitialFocus(): InitialFocus = remember { InitialFocus() }
+
+/**
  * Pide el foco al entrar en la pantalla. Sin esto, al abrir un destino desde el
- * drawer el foco se queda en el drawer y la pantalla parece "muerta".
+ * drawer el foco se queda en el drawer y la pantalla parece "muerta". Con
+ * [enabled] a `false` (un botón aún deshabilitado) espera a que se pueda enfocar.
  */
 @Composable
-internal fun Modifier.initialFocus(): Modifier {
-    val requester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { requester.requestFocus() } }
-    return focusRequester(requester)
+internal fun Modifier.initialFocus(focus: InitialFocus = rememberInitialFocus(), enabled: Boolean = true): Modifier {
+    LaunchedEffect(focus, enabled) {
+        if (enabled) requestFocusUntilGranted(focus.requester) { focus.granted }
+    }
+    return onFocusChanged { if (it.hasFocus) focus.granted = true }.focusRequester(focus.requester)
 }
+
+/**
+ * Pide el foco hasta que llega, durante un instante. Al abrir la app, Android da su
+ * foco inicial (al menú lateral) cuando la ventana gana el foco, después de la
+ * primera composición: una sola petición se perdía. [granted] lo confirma quien
+ * observa el foco de verdad, no el que la petición no lance excepción.
+ */
+internal suspend fun requestFocusUntilGranted(requester: FocusRequester, granted: () -> Boolean) {
+    repeat(FOCUS_ATTEMPTS) {
+        if (granted()) return
+        // El destino puede ser un ítem perezoso: se espera a que esté compuesto y medido.
+        withFrameNanos { }
+        runCatching { requester.requestFocus() }
+        delay(FOCUS_RETRY_MS)
+    }
+}
+
+private const val FOCUS_ATTEMPTS = 20
+private const val FOCUS_RETRY_MS = 60L
 
 /* Guía de diseño de TV: márgenes de overscan de 48 dp en horizontal y 27 dp en vertical. */
 internal val TvHorizontalMargin = 48.dp
@@ -75,6 +117,17 @@ internal val TvLandscapeWidth = 260.dp
 private val TvTitleScrim = Brush.verticalGradient(0.3f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.85f))
 internal val TvPosterWidth = 150.dp
 internal val TvSquareWidth = 180.dp
+
+/**
+ * Ancho mínimo de celda en las rejillas de TV. Más estrecho que en las filas: con
+ * el menú lateral y los márgenes quedan unos 780 dp útiles y 260 dp solo daban
+ * para dos tarjetas enormes; así salen tres apaisadas o cinco pósters.
+ */
+internal fun RowLayout.gridCellWidth(): Dp = when (this) {
+    RowLayout.HERO, RowLayout.FEATURED, RowLayout.LANDSCAPE, RowLayout.RANKED -> 220.dp
+    RowLayout.POSTER, RowLayout.POSTER_TALL -> 130.dp
+    RowLayout.SQUARE -> 160.dp
+}
 
 internal fun RowLayout.cardWidth(): Dp = when (this) {
     RowLayout.HERO, RowLayout.FEATURED, RowLayout.LANDSCAPE, RowLayout.RANKED -> TvLandscapeWidth
@@ -91,10 +144,13 @@ internal fun TvFocusSurface(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     shape: RoundedCornerShape = TvCardShape,
+    /** Pulsación larga del botón central del mando: el menú contextual de Google TV. */
+    onLongClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Surface(
         onClick = onClick,
+        onLongClick = onLongClick,
         shape = ClickableSurfaceDefaults.shape(shape = shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -205,11 +261,12 @@ internal fun TvItemCard(
     progress: Float? = null,
     /** Posición en un ranking ("Lo más visto"); se pinta grande sobre la imagen. */
     rank: Int? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val live = item.live
     Column(modifier) {
         if (live == null) {
-            TvFocusSurface(onClick = onClick, modifier = Modifier.fillMaxWidth().aspectRatio(layout.aspectRatio)) {
+            TvFocusSurface(onClick = onClick, modifier = Modifier.fillMaxWidth().aspectRatio(layout.aspectRatio), onLongClick = onLongClick) {
                 TvArtwork(item.imageFor(layout), Modifier.fillMaxSize())
                 rank?.let { TvRankBadge(it, Modifier.align(Alignment.BottomStart)) }
                 progress?.let { TvProgressStrip(it, Modifier.align(Alignment.BottomCenter)) }
@@ -229,7 +286,7 @@ internal fun TvItemCard(
  */
 @Composable
 private fun ColumnScope.TvLiveItemCard(item: CatalogItem, live: LiveInfo, layout: RowLayout, onClick: () -> Unit, rank: Int?) {
-    val now = LocalNowMillis.current
+    val now = currentNowMillis()
     val context = LocalContext.current
     val upcoming = live.isUpcomingAt(now)
     TvFocusSurface(onClick = onClick, modifier = Modifier.fillMaxWidth().aspectRatio(layout.aspectRatio)) {
@@ -370,7 +427,8 @@ internal fun TvCenterMessage(message: String, onRetry: (() -> Unit)? = null) {
         Spacer(Modifier.weight(1f))
         Text(message, style = MaterialTheme.typography.titleLarge)
         if (onRetry != null) {
-            Button(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
+            // Con el mando, un aviso sin foco obliga a buscar el botón a ciegas.
+            Button(onClick = onRetry, modifier = Modifier.initialFocus()) { Text(stringResource(R.string.action_retry)) }
         }
         Spacer(Modifier.weight(1f))
     }

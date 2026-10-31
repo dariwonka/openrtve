@@ -86,10 +86,4 @@ class WatchHistoryLimitsTest {
         assertEquals(listOf("ok"), recovered.map { it.item.id })
         assertEquals("un tipo desconocido se lee como vídeo", ContentKind.VIDEO, recovered.single().item.kind)
     }
-
-    @Test
-    fun `audio entries keep their kind so the player reopens them as audio`() {
-        history.register(catalogItem("a1", kind = ContentKind.AUDIO))
-        assertEquals(ContentKind.AUDIO, WatchHistory(file, ioDispatcher = Dispatchers.Unconfined).entryFor("a1")!!.item.kind)
-    }
 }

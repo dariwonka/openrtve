@@ -60,9 +60,6 @@ fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit) {
         TvSwitchRow(stringResource(R.string.settings_pip), stringResource(R.string.settings_pip_summary), settings.pictureInPictureOnLeave, Modifier.initialFocus()) { v ->
             viewModel.update { it.copy(pictureInPictureOnLeave = v) }
         }
-        TvSwitchRow(stringResource(R.string.settings_background_audio), stringResource(R.string.settings_background_audio_summary), settings.backgroundAudio) { v ->
-            viewModel.update { it.copy(backgroundAudio = v) }
-        }
         TvSwitchRow(stringResource(R.string.settings_autoplay), stringResource(R.string.settings_autoplay_summary), settings.autoplayNext) { v ->
             viewModel.update { it.copy(autoplayNext = v) }
         }
@@ -81,7 +78,7 @@ fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit) {
         Spacer(Modifier.height(8.dp))
         TvSettingsLabel(stringResource(R.string.settings_storage))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(onClick = { viewModel.clearCache(); onMessage(cleared) }) { Text(stringResource(R.string.settings_clear_cache)) }
+            Button(onClick = { viewModel.clearCache { onMessage(cleared) } }) { Text(stringResource(R.string.settings_clear_cache)) }
             Text(stringResource(R.string.settings_cache_size, cacheBytes?.let(::formatBytes) ?: "…"), style = MaterialTheme.typography.bodyLarge)
         }
         Spacer(Modifier.height(8.dp))

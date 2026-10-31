@@ -61,11 +61,8 @@ class CatalogModelsTest {
         val row = HomeRow(id = 0, title = "", order = 0, moduleType = null, presentation = null, contentUrl = null)
         assertFalse(row.isLive)
         assertTrue(row.copy(presentation = "DirectosTV").isLive)
-        assertTrue(row.copy(presentation = "directosRadio").isLive)
         assertTrue(row.copy(moduleType = "LivesCollection").isLive)
-        assertTrue(row.copy(moduleType = "moduloDirectoRadio").isRadioLivesModule)
-        assertTrue(row.copy(presentation = "ModuloDirectoRadio").isLive)
-        assertFalse(row.copy(presentation = "ColeccionPoster").isRadioLivesModule)
+        assertFalse(row.copy(presentation = "ColeccionPoster").isLive)
     }
 
     @Test

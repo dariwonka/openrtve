@@ -7,6 +7,7 @@ import es.openrtve.domain.ExploreCategory
 import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.liveRow
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -35,8 +36,11 @@ class ExploreViewModel(
 
     fun retry() = load()
 
+    private var job: Job? = null
+
     private fun load() {
-        viewModelScope.launch {
+        job?.cancel()
+        job = viewModelScope.launch {
             mutableUiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val groups = repository.loadExplore().value

@@ -53,7 +53,6 @@ class PlaySuggestionTest {
         subtitle = null,
         imageUrl = null,
         kind = ContentKind.VIDEO,
-        directQualityUrl = null,
         allowedInCountry = null,
         loginRequired = false,
         paid = false,

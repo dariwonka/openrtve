@@ -29,6 +29,18 @@ class RawDocumentCacheTest {
     }
 
     @Test
+    fun `pruning drops the oldest documents and their etags first`() {
+        val small = RawDocumentCache(File(directory, "small"), maxBytes = 400)
+        (1..5).forEach { small.write("k$it", "x".repeat(100), savedAtMillis = it * 1_000L, etag = "e$it") }
+        small.prune()
+
+        assertNull("el más antiguo se va", small.read("k1"))
+        assertEquals("el más reciente se queda con su ETag", "e5", small.read("k5")!!.etag)
+        assertTrue(small.sizeBytes() <= 300)
+        assertTrue(File(directory, "small").listFiles()!!.none { it.name.endsWith(".etag") && !File(it.path.removeSuffix(".etag") + ".json").exists() })
+    }
+
+    @Test
     fun `rewriting without etag forgets the old one`() {
         cache.write(KEY, "v1", 1, etag = "W/\"1\"")
         cache.write(KEY, "v2", 2, etag = null)

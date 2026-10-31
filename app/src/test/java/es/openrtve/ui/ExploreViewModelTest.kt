@@ -70,7 +70,6 @@ class ExploreViewModelTest {
         subtitle = null,
         imageUrl = imageUrl,
         kind = ContentKind.LIVE,
-        directQualityUrl = null,
         allowedInCountry = null,
         loginRequired = false,
         paid = false,

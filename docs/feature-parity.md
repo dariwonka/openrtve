@@ -197,9 +197,9 @@ y Canarias y otro conjunto de `canalestematicos`. OpenRTVE usa hoy
 El árbol `radio` solo existe en `estructura2.json` y RTVE Play no lo pinta en
 ninguna versión: el catálogo de audio vive en la app RTVE Audio
 (`es.rtve.playradio`), y el menú de Play solo ofrece "Ir a RNE Audio". Desde
-septiembre de 2026 Explorar tampoco lo muestra; la portada de radio sigue en
-el código (`RtveUrls.RADIO_HOME`) sin punto de entrada hasta decidir si se
-expone y dónde.
+septiembre de 2026 Explorar tampoco lo muestra. Decisión del 31-10-2026: OpenRTVE es solo vídeo y no
+incluye radio ni pódcasts (portada, emisoras, fichas de audio, MP3 ni audio en
+segundo plano); si se aborda, será una app aparte que comparta el núcleo.
 
 Menú de RTVE Play 8.8.1 verificado en `MenuFragment`: pestaña "Menú" de la
 barra inferior, lista plana en el orden del JSON y sin cabeceras; cada

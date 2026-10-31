@@ -9,6 +9,8 @@ import android.view.View
 import android.view.Window
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.media3.ui.PlayerView
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -72,10 +74,11 @@ class PlayerGestures(
             override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
                 if (isLocked() || e1 == null) return false
                 if (swipe == null) {
-                    // Solo gestos claramente verticales, y no desde el borde superior/inferior.
+                    // Solo gestos claramente verticales, y no desde el borde superior/inferior:
+                    // ahí empiezan la cortina de notificaciones y el gesto de inicio del sistema.
                     val dx = abs(e2.x - e1.x)
                     val dy = abs(e2.y - e1.y)
-                    if (dy < touchSlop * 2 || dx > dy) return false
+                    if (dy < touchSlop * 2 || dx > dy || startsInSystemGestureArea(e1)) return false
                     swipe = if (e1.x < playerView.width / 2f) Swipe.BRIGHTNESS else Swipe.VOLUME
                     swipeStartValue = when (swipe) {
                         Swipe.BRIGHTNESS -> currentBrightness()
@@ -112,6 +115,17 @@ class PlayerGestures(
         return true
     }
 
+    private fun startsInSystemGestureArea(event: MotionEvent): Boolean {
+        val insets = ViewCompat.getRootWindowInsets(playerView)?.getInsets(WindowInsetsCompat.Type.systemGestures())
+        val edge = edgePx
+        val top = maxOf(insets?.top ?: 0, edge)
+        val bottom = maxOf(insets?.bottom ?: 0, edge)
+        return event.y < top || event.y > playerView.height - bottom
+    }
+
+    /** Margen mínimo si el sistema no declara zonas de gesto (navegación por botones). */
+    private val edgePx = (EDGE_DP * playerView.resources.displayMetrics.density).toInt()
+
     private fun currentBrightness(): Float {
         val value = window.attributes.screenBrightness
         if (value in 0f..1f) return value
@@ -123,3 +137,5 @@ class PlayerGestures(
     }
 
 }
+
+private const val EDGE_DP = 32
