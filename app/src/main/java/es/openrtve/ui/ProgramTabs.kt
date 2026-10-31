@@ -87,21 +87,21 @@ data class FichaFacts(
     }
 }
 
-/** Año y edad ya van en la línea de datos de la cabecera ([metaLine]): aquí no se repiten. */
+/** Año, edad y géneros ya van en la línea de datos de la cabecera ([metaLine]): aquí no se repiten. */
 val VideoDetail.facts: FichaFacts
     get() = FichaFacts(
-        genres = genres,
+        genres = genres.takeIf { it.size > 2 }.orEmpty(),
         director = director,
         cast = cast,
         originalLanguage = originalLanguage,
         expirationDate = expirationDate,
     )
 
+/** Año, edad y géneros van en la línea de datos de la cabecera: aquí no se repiten. */
 val ProgramDetail.facts: FichaFacts
     get() = FichaFacts(
-        year = year,
-        ageRating = ageRating,
-        genres = genres,
+        // Más de dos géneros no caben en la cabecera: la lista completa va aquí.
+        genres = genres.takeIf { it.size > 2 }.orEmpty(),
         director = director,
         cast = cast,
         originalLanguage = originalLanguage,

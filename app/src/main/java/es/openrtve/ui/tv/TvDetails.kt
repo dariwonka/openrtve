@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -94,11 +93,12 @@ internal fun TvDetailsScaffold(
                 .fillMaxSize()
                 .background(background.copy(alpha = dim)),
         )
-        LazyColumn(
+        // Más margen que en la portada: sobre los capítulos van el título y las pestañas.
+        ProvideTvVerticalScroll(top = 132.dp) { LazyColumn(
             state = listState,
             contentPadding = PaddingValues(bottom = TvVerticalMargin),
             verticalArrangement = Arrangement.spacedBy(32.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().tvTopFade(),
         ) {
             item(key = "header") {
                 Column(
@@ -115,7 +115,7 @@ internal fun TvDetailsScaffold(
                 )
             }
             sections()
-        }
+        } }
     }
 }
 
@@ -142,7 +142,7 @@ internal fun TvEpisodesRow(
     onLoadMore: () -> Unit = {},
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
 ) {
-    LazyRow(
+    TvLazyRow(
         state = listState,
         contentPadding = TvRowPadding,
         horizontalArrangement = Arrangement.spacedBy(20.dp),
@@ -174,7 +174,7 @@ internal fun TvEpisodesRow(
 /** Fila de similares: pósters que abren su ficha. */
 @Composable
 internal fun TvRelatedRow(items: List<CatalogItem>, onOpen: (CatalogItem) -> Unit) {
-    LazyRow(
+    TvLazyRow(
         contentPadding = TvRowPadding,
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.focusRestorer(),

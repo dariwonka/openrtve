@@ -128,13 +128,17 @@ class RtveJsonParser(
     fun parseExplore(raw: String): List<ExploreGroup> {
         val root = json.parseToJsonElement(raw).jsonObject
         // "CLAN" es un enlace a la app de Clan; su portada es la infantil de la propia configuración.
+        val blocks = root.obj("television")?.array("menuBloques").orEmpty().mapNotNull { it as? JsonObject }
         val clanPortada = root.obj("television")?.obj("secciones")?.obj("portadaInfantil")
             ?.text("urlContent")?.let(hostPolicy::sanitize)
-        return root.obj("television")?.array("menuBloques")
-            .orEmpty()
-            .mapNotNull { it as? JsonObject }
-            .flatMap { block -> exploreGroups(block.flag("infantil") == true, block.array("menuItems"), clanPortada) }
+        return blocks.flatMap { block -> exploreGroups(block.flag("infantil") == true, block.array("menuItems"), clanPortada) }
     }
+
+    /** Imagen de cada portada del menú, por su URL; sirve de reserva para la otra configuración. */
+    fun parseExploreImages(raw: String): Map<String, String> = parseExplore(raw)
+        .flatMap { it.categories }
+        .mapNotNull { category -> category.imageUrl?.let { category.contentUrl to it } }
+        .toMap()
 
     /**
      * Las portadas directas de un bloque forman un grupo sin título (el nombre del
@@ -150,7 +154,9 @@ class RtveJsonParser(
             .mapNotNull { submenu ->
                 val title = submenu.text("title")?.takeIf(String::isNotBlank) ?: return@mapNotNull null
                 val children = submenu.array("menuItems").orEmpty().mapNotNull { it as? JsonObject }
-                val categories = exploreCategories(children, clanPortada)
+                // Dentro de un submenú ("Otras apps" en la configuración de TV) el enlace a la
+                // app de Clan sobra: Clan ya tiene su bloque y saldría como "APP CLAN".
+                val categories = exploreCategories(children, clanPortada = null)
                 if (categories.isEmpty()) null else ExploreGroup(sentenceCase(title), categories)
             }
         return listOfNotNull(direct.takeIf { it.isNotEmpty() }?.let { ExploreGroup(title = null, categories = it, isKids = isKids) }) + submenus

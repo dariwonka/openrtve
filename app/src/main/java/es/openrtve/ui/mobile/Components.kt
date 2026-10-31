@@ -51,6 +51,7 @@ import es.openrtve.domain.ContentKind
 import es.openrtve.domain.LiveInfo
 import es.openrtve.domain.RowLayout
 import es.openrtve.domain.imageFor
+import es.openrtve.ui.CategoryArtwork
 import es.openrtve.ui.metaLine
 import androidx.compose.ui.text.TextStyle
 import es.openrtve.ui.scheduleLabel
@@ -283,14 +284,20 @@ internal fun RankBadge(rank: Int, modifier: Modifier = Modifier) {
 
 /** Tarjeta 16:9 con el título sobre la imagen: categorías de Explorar y enlaces de portada. */
 @Composable
-internal fun ImageTile(title: String, imageUrl: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Artwork(
-        url = imageUrl,
-        aspectRatio = 16f / 9f,
+internal fun ImageTile(
+    title: String,
+    imageUrl: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    fallbackImageUrl: String? = null,
+) {
+    Box(
         modifier = modifier
+            .aspectRatio(16f / 9f)
             .clip(CardShape)
             .clickable(onClick = onClick),
     ) {
+        CategoryArtwork(imageUrl, fallbackImageUrl, MaterialTheme.colorScheme.primary, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(TitleScrim))
         Text(
             text = title,

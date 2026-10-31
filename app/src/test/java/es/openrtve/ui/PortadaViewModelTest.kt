@@ -209,7 +209,7 @@ class PortadaViewModelTest {
 
         override suspend fun loadModule(row: HomeRow, forceRefresh: Boolean, cachedOnly: Boolean): CatalogLoad<CatalogModule> =
             if (cachedOnly) cachedModules[row.id] ?: throw NotCachedException() else modules.getValue(row.id).await()
-        override suspend fun loadExplore(forceRefresh: Boolean): CatalogLoad<List<ExploreGroup>> = throw UnsupportedOperationException()
+        override suspend fun loadExplore(forceRefresh: Boolean, tv: Boolean): CatalogLoad<List<ExploreGroup>> = throw UnsupportedOperationException()
         override suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>> = throw UnsupportedOperationException()
         override suspend fun loadQuickFilterItems(filter: QuickFilter): CatalogLoad<CatalogModule> = throw UnsupportedOperationException()
         override suspend fun search(query: String): SearchResults = throw UnsupportedOperationException()

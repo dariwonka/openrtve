@@ -29,7 +29,8 @@ interface CatalogRepository {
     /** Con [cachedOnly], devuelve la copia local de cualquier antigüedad sin tocar la red, o lanza [NotCachedException]. */
     suspend fun loadPortada(url: String, forceRefresh: Boolean = false, cachedOnly: Boolean = false): CatalogLoad<HomeFeed>
     suspend fun loadModule(row: HomeRow, forceRefresh: Boolean = false, cachedOnly: Boolean = false): CatalogLoad<CatalogModule>
-    suspend fun loadExplore(forceRefresh: Boolean = false): CatalogLoad<List<ExploreGroup>>
+    /** Menú de Explorar de la configuración de móvil o, con [tv], de la de Android TV. */
+    suspend fun loadExplore(forceRefresh: Boolean = false, tv: Boolean = false): CatalogLoad<List<ExploreGroup>>
     suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>>
     suspend fun loadQuickFilterItems(filter: QuickFilter): CatalogLoad<CatalogModule>
     suspend fun search(query: String): SearchResults
@@ -90,13 +91,39 @@ class DefaultCatalogRepository(
         parse = parser::parseHome,
     )
 
-    override suspend fun loadExplore(forceRefresh: Boolean): CatalogLoad<List<ExploreGroup>> = loadDocument(
-        url = RtveUrls.REMOTE_CONFIG,
-        forceRefresh = forceRefresh,
-        freshForMillis = CONFIG_FRESH_MS,
-        staleForMillis = CONFIG_STALE_MS,
-        parse = parser::parseExplore,
-    )
+    override suspend fun loadExplore(forceRefresh: Boolean, tv: Boolean): CatalogLoad<List<ExploreGroup>> {
+        val (primary, secondary) = if (tv) RtveUrls.REMOTE_CONFIG_TV to RtveUrls.REMOTE_CONFIG else RtveUrls.REMOTE_CONFIG to RtveUrls.REMOTE_CONFIG_TV
+        val groups = loadDocument(
+            url = primary,
+            forceRefresh = forceRefresh,
+            freshForMillis = CONFIG_FRESH_MS,
+            staleForMillis = CONFIG_STALE_MS,
+            parse = parser::parseExplore,
+        )
+        // Imágenes de reserva de la otra configuración; si no llega, el menú sigue igual.
+        val fallbacks = try {
+            loadDocument(
+                url = secondary,
+                forceRefresh = false,
+                freshForMillis = CONFIG_FRESH_MS,
+                staleForMillis = CONFIG_STALE_MS,
+                parse = parser::parseExploreImages,
+            ).value
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyMap()
+        }
+        return groups.copy(
+            value = groups.value.map { group ->
+                group.copy(
+                    categories = group.categories.map { category ->
+                        category.copy(fallbackImageUrl = fallbacks[category.contentUrl]?.takeIf { it != category.imageUrl })
+                    },
+                )
+            },
+        )
+    }
 
     override suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>> = loadDocument(
         url = RtveUrls.QUICK_SEARCHES,

@@ -36,6 +36,7 @@ import es.openrtve.ui.ProgramBody
 import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.ProgramUiState
 import es.openrtve.ui.facts
+import es.openrtve.ui.metaLine
 import es.openrtve.ui.programBody
 import es.openrtve.ui.programTabs
 import es.openrtve.ui.rememberProgramScreen
@@ -90,7 +91,8 @@ fun ProgramScreen(
                 backdropUrl = detail?.imageUrl ?: program.imageUrl,
                 title = state.title,
                 scrollOffset = scrollOffset,
-                meta = detail?.emission,
+                meta = detail?.metaLine(),
+                claim = detail?.emission,
                 synopsis = detail?.description?.let { html -> remember(html) { AnnotatedString.fromHtml(html) } },
                 progress = (suggestion as? PlaySuggestion.Continue)?.entry?.progress,
                 actions = suggestion?.let { target ->

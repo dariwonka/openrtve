@@ -56,12 +56,12 @@ internal fun TvItemGrid(
     // En rejilla el hero no tiene sentido: se degrada a apaisada.
     val gridLayout = layout.gridLayout
     val initialFocus = rememberInitialFocus()
-    LazyVerticalGrid(
+    ProvideTvVerticalScroll(top = TvFocusScaleRoom) { LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = gridLayout.gridCellWidth()),
-        contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, bottom = TvVerticalMargin),
+        contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, top = TvFocusScaleRoom, bottom = TvVerticalMargin),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().tvTopFade(TvFocusScaleRoom),
     ) {
         itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
             TvItemCard(
@@ -72,5 +72,5 @@ internal fun TvItemGrid(
                 rank = (index + 1).takeIf { gridLayout == RowLayout.RANKED },
             )
         }
-    }
+    } }
 }

@@ -35,6 +35,7 @@ import es.openrtve.ui.PlaySuggestion
 import es.openrtve.ui.ProgramUiState
 import es.openrtve.ui.ProgramViewModel
 import es.openrtve.ui.facts
+import es.openrtve.ui.metaLine
 import es.openrtve.ui.rememberProgramScreen
 
 /**
@@ -70,8 +71,12 @@ fun TvProgramScreen(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            state.detail?.emission?.let {
+            state.detail?.metaLine()?.let {
                 Spacer(Modifier.height(8.dp))
+                Text(text = it, style = MaterialTheme.typography.bodyLarge)
+            }
+            state.detail?.emission?.let {
+                Spacer(Modifier.height(4.dp))
                 Text(text = it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             }
             state.detail?.description?.let {
@@ -144,6 +149,7 @@ private fun SeasonTabs(state: ProgramUiState, viewModel: ProgramViewModel) {
     // Al entrar en la fila (desde el botón o desde los capítulos) el foco va a la
     // temporada elegida: si cayera en la más cercana, la activaría sin querer.
     val selectedTab = remember { FocusRequester() }
+    WithTvRowScroll {
     TabRow(
         selectedTabIndex = selected,
         modifier = Modifier
@@ -166,6 +172,7 @@ private fun SeasonTabs(state: ProgramUiState, viewModel: ProgramViewModel) {
                 )
             }
         }
+    }
     }
 }
 

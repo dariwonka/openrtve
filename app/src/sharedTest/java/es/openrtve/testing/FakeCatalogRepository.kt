@@ -54,7 +54,7 @@ open class FakeCatalogRepository : CatalogRepository {
         return module(row, forceRefresh, cachedOnly)
     }
 
-    override suspend fun loadExplore(forceRefresh: Boolean): CatalogLoad<List<ExploreGroup>> {
+    override suspend fun loadExplore(forceRefresh: Boolean, tv: Boolean): CatalogLoad<List<ExploreGroup>> {
         calls += "explore(force=$forceRefresh)"
         return explore(forceRefresh)
     }

@@ -183,8 +183,8 @@ fun rememberSearchScreen(repository: CatalogRepository): SearchScreenState {
 class ExploreScreenState(val viewModel: ExploreViewModel, val state: ExploreUiState)
 
 @Composable
-fun rememberExploreScreen(repository: CatalogRepository): ExploreScreenState {
-    val viewModel: ExploreViewModel = viewModel(factory = viewModelFactory { initializer { ExploreViewModel(repository) } })
+fun rememberExploreScreen(repository: CatalogRepository, tv: Boolean = false): ExploreScreenState {
+    val viewModel: ExploreViewModel = viewModel(factory = viewModelFactory { initializer { ExploreViewModel(repository, tv) } })
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     return ExploreScreenState(viewModel, state)
 }

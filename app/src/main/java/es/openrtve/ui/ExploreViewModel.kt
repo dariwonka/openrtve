@@ -26,6 +26,8 @@ data class ExploreUiState(
 /** Categorías del menú de la app oficial, leídas de la configuración remota. */
 class ExploreViewModel(
     private val repository: CatalogRepository,
+    /** La TV usa el menú de la app oficial de Android TV. */
+    private val tv: Boolean = false,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ExploreUiState())
     val uiState: StateFlow<ExploreUiState> = mutableUiState.asStateFlow()
@@ -43,7 +45,7 @@ class ExploreViewModel(
         job = viewModelScope.launch {
             mutableUiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val groups = repository.loadExplore().value
+                val groups = repository.loadExplore(tv = tv).value
                 mutableUiState.update { it.copy(groups = groups, isLoading = false) }
                 // Fuera de `update`: la red no puede ir dentro de un bucle compare-and-set.
                 val enriched = withLiveImages(groups)

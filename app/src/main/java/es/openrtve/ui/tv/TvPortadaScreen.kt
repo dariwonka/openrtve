@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
@@ -113,10 +112,10 @@ fun TvPortadaScreen(
             state.error?.text(LocalContext.current) ?: stringResource(R.string.state_empty_home),
             viewModel::refresh,
         )
-        else -> LazyColumn(
+        else -> ProvideTvVerticalScroll { LazyColumn(
             contentPadding = PaddingValues(bottom = TvVerticalMargin),
             verticalArrangement = Arrangement.spacedBy(28.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().tvTopFade(),
         ) {
             if (title.isNotBlank()) {
                 item(key = "title") { TvScreenTitle(title) }
@@ -144,7 +143,7 @@ fun TvPortadaScreen(
                     TvContinueWatching(resumable, onResume, onOpenItem, onRemoveFromHistory, rowModifier(CONTINUE_ROW_ID)) { itemModifier(CONTINUE_ROW_ID, it) }
                 }
             }
-        }
+        } }
     }
 }
 
@@ -161,7 +160,7 @@ private fun TvContinueWatching(
     Column {
         TvSectionTitle(stringResource(R.string.continue_watching))
         Spacer(Modifier.height(12.dp))
-        LazyRow(
+        TvLazyRow(
             contentPadding = TvRowPadding,
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             modifier = modifier.focusRestorer(),
@@ -255,7 +254,7 @@ private fun TvSection(
                 Button(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
             }
             // Los enlaces ya están todos en la fila: sin "ver todo".
-            is SectionState.Links -> LazyRow(
+            is SectionState.Links -> TvLazyRow(
                 contentPadding = TvRowPadding,
                 horizontalArrangement = Arrangement.spacedBy(20.dp),
                 modifier = modifier.focusRestorer(),
@@ -269,7 +268,7 @@ private fun TvSection(
                 RowLayout.FEATURED -> state.items.firstOrNull()?.let { item ->
                     TvFeaturedCard(item, { onOpenItem(item) }, modifier.padding(TvRowPadding))
                 }
-                else -> LazyRow(
+                else -> TvLazyRow(
                     contentPadding = TvRowPadding,
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
                     modifier = modifier.focusRestorer(),
@@ -340,7 +339,7 @@ private fun TvFeaturedCard(item: CatalogItem, onOpen: () -> Unit, modifier: Modi
  */
 @Composable
 private fun TvHeroRow(items: List<CatalogItem>, onOpenItem: (CatalogItem) -> Unit, modifier: Modifier, itemModifier: (key: String) -> Modifier) {
-    LazyRow(
+    TvLazyRow(
         contentPadding = TvRowPadding,
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         modifier = modifier.focusRestorer(),

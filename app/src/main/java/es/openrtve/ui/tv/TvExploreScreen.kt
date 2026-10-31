@@ -30,7 +30,7 @@ fun TvExploreScreen(
     repository: CatalogRepository,
     onOpenCategory: (ExploreCategory) -> Unit,
 ) {
-    val screen = rememberExploreScreen(repository)
+    val screen = rememberExploreScreen(repository, tv = true)
     val viewModel = screen.viewModel
     val state = screen.state
     val context = LocalContext.current
@@ -41,12 +41,12 @@ fun TvExploreScreen(
         when {
         state.isLoading -> TvCenterMessage(stringResource(R.string.state_loading))
         state.groups.isEmpty() && state.error != null -> TvCenterMessage(state.error.text(context), viewModel::retry)
-        else -> LazyVerticalGrid(
+        else -> ProvideTvVerticalScroll(top = 56.dp) { LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 180.dp),
-            contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, bottom = TvVerticalMargin),
+            contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, top = TvFocusScaleRoom, bottom = TvVerticalMargin),
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().tvTopFade(TvFocusScaleRoom),
         ) {
             state.groups.forEachIndexed { groupIndex, group ->
                 group.header(context)?.let { title ->
@@ -62,10 +62,10 @@ fun TvExploreScreen(
                 // Una misma portada puede estar en dos grupos (TDP en Temáticas y en Canales).
                 itemsIndexed(group.categories, key = { _, it -> "$groupIndex/${it.contentUrl}" }) { index, category ->
                     val focus = if (index == 0 && groupIndex == 0) Modifier.initialFocus(initialFocus) else Modifier
-                    TvImageTile(category.title, category.imageUrl, { onOpenCategory(category) }, focus.fillMaxWidth())
+                    TvImageTile(category.title, category.imageUrl, { onOpenCategory(category) }, focus.fillMaxWidth(), category.fallbackImageUrl)
                 }
             }
-        }
+        } }
         }
     }
 }

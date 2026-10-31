@@ -85,7 +85,7 @@ fun ExploreScreen(
                     }
                     // Una misma portada puede estar en dos grupos (TDP en Temáticas y en Canales).
                     items(group.categories, key = { "$groupIndex/${it.contentUrl}" }) { category ->
-                        ImageTile(category.title, category.imageUrl, { onOpenCategory(category) }, Modifier.fillMaxWidth())
+                        ImageTile(category.title, category.imageUrl, { onOpenCategory(category) }, Modifier.fillMaxWidth(), category.fallbackImageUrl)
                     }
                 }
             }

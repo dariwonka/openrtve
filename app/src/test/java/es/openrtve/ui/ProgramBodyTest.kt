@@ -54,7 +54,7 @@ class ProgramBodyTest {
     @Test
     fun `las pestañas aparecen solo cuando su contenido existe`() {
         val extras = PagedItemsState(items = listOf(item("clip")), page = 1, totalPages = 1)
-        val detail = ProgramDetail("p1", "Programa", null, null, null, emptyList(), genres = listOf("Drama"))
+        val detail = ProgramDetail("p1", "Programa", null, null, null, emptyList(), director = "Directora")
         val programState = state(episodes = listOf(item("v1"))).copy(extras = extras, detail = detail)
         assertEquals(
             listOf(ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS, ProgramTab.DETAILS),

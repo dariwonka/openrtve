@@ -3,6 +3,9 @@ package es.openrtve.ui.tv
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.tv.material3.Button
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -24,6 +26,17 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -64,20 +77,188 @@ fun TvSearchScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
-    Column(Modifier.fillMaxSize()) {
-        TvScreenTitle(stringResource(R.string.tab_search))
+    // Una sola página con scroll, como en Google TV: título, campo, filtros y
+    // resultados. Al bajar a los resultados el campo sube con todo lo demás y
+    // nunca tapa las carátulas ni su foco.
+    val results = state.results
+    ProvideTvVerticalScroll {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(GRID_COLUMNS),
+            contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, bottom = TvVerticalMargin),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            modifier = Modifier.fillMaxSize().tvTopFade(),
+        ) {
+            fullWidth("title") {
+                // Como TvScreenTitle, sin su margen lateral: aquí lo pone la rejilla.
+                Text(
+                    text = stringResource(R.string.tab_search),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = TvVerticalMargin),
+                )
+            }
+            fullWidth("field") {
+                TvSearchBar(
+                    query = state.query,
+                    onQueryChange = viewModel::setQuery,
+                    // "Buscar" en el teclado lleva a los resultados, como abajo en el mando.
+                    onSearch = { focusManager.moveFocus(FocusDirection.Down) },
+                )
+            }
+            if (!state.isTextSearch && state.filters.isNotEmpty()) {
+                fullWidth("filters") {
+                    // Fila desplazable: un Row normal aplastaba el último filtro a una letra por línea.
+                    TvLazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.focusRestorer(),
+                    ) {
+                        items(state.filters, key = { it.contentUrl }) { filter ->
+                            TvChoiceButton(filter.title, filter == state.selectedFilter) { viewModel.selectFilter(filter) }
+                        }
+                    }
+                }
+            }
+            when {
+                !state.isTextSearch -> when (val filter = state.filter) {
+                    FilterState.Loading -> fullWidth("status") { TvInlineMessage(stringResource(R.string.state_loading)) }
+                    is FilterState.Failed -> fullWidth("status") { TvInlineMessage(filter.error.text(context), viewModel::retryFilter) }
+                    is FilterState.Loaded -> if (filter.items.isEmpty()) {
+                        fullWidth("status") { TvInlineMessage(stringResource(R.string.state_empty_module), viewModel::retryFilter) }
+                    } else {
+                        items(filter.items, key = { "f-${it.id}" }, span = { GridItemSpan(POSTER_SPAN) }) { item ->
+                            TvItemCard(item, RowLayout.POSTER, { onOpenItem(item) })
+                        }
+                    }
+                }
+                state.searchError != null -> fullWidth("status") { TvInlineMessage(state.searchError.text(context), viewModel::retrySearch) }
+                results == null -> Unit
+                results.isEmpty -> fullWidth("status") { TvInlineMessage(stringResource(R.string.search_empty)) }
+                else -> {
+                    if (results.programs.isNotEmpty()) {
+                        fullWidth("programs") {
+                            Column {
+                                Text(stringResource(R.string.search_programs), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(14.dp))
+                                // Programas como pósters en una fila, como en el móvil; los vídeos, en rejilla.
+                                TvLazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                                    modifier = Modifier.focusRestorer(),
+                                ) {
+                                    items(results.programs, key = { "p-${it.id}" }) { item ->
+                                        TvItemCard(item, RowLayout.POSTER, { onOpenItem(item) }, Modifier.width(TvPosterWidth))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (results.videos.isNotEmpty()) {
+                        fullWidth("videos") {
+                            Text(stringResource(R.string.search_videos), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        }
+                        items(results.videos, key = { "v-${it.id}" }, span = { GridItemSpan(LANDSCAPE_SPAN) }) { item ->
+                            TvItemCard(item, RowLayout.LANDSCAPE, { onOpenItem(item) })
+                        }
+                        if (results.hasMoreVideos) {
+                            item(key = "more-videos", span = { GridItemSpan(LANDSCAPE_SPAN) }) {
+                                TvFocusSurface(onClick = viewModel::loadMoreVideos, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+                                    Text(
+                                        stringResource(if (state.isLoadingMoreVideos) R.string.state_loading else R.string.program_load_more),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.align(Alignment.Center),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun LazyGridScope.fullWidth(key: String, content: @Composable () -> Unit) {
+    item(key = key, span = { GridItemSpan(maxLineSpan) }) { content() }
+}
+
+/** Aviso dentro de la página (cargando, vacío, error con reintento), sin ocupar toda la pantalla. */
+@Composable
+private fun TvInlineMessage(message: String, onRetry: (() -> Unit)? = null) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 24.dp),
+    ) {
+        Text(message, style = MaterialTheme.typography.titleMedium)
+        if (onRetry != null) Button(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
+    }
+}
+
+/** Seis columnas: un póster ocupa una y una tarjeta apaisada dos (cinco y tres por fila). */
+private const val GRID_COLUMNS = 6
+private const val POSTER_SPAN = 1
+private const val LANDSCAPE_SPAN = 2
+
+/**
+ * Barra de búsqueda de TV, como la de Google TV: un botón enfocable que muestra lo
+ * escrito y que solo al pulsarlo abre el campo y el teclado. Un campo de texto
+ * enfocado sin más abría el teclado de la TV al entrar en Buscar y se quedaba
+ * con todas las flechas del mando.
+ */
+@Composable
+private fun TvSearchBar(query: String, onQueryChange: (String) -> Unit, onSearch: () -> Unit) {
+    var editing by remember { mutableStateOf(false) }
+    /** Al cerrar el campo: `null` si no se ha editado aún, si no, si hay que bajar a los resultados. */
+    var closedGoingDown by remember { mutableStateOf<Boolean?>(null) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val field = remember { FocusRequester() }
+    val bar = remember { FocusRequester() }
+    val hint = stringResource(R.string.search_hint)
+    if (!editing) {
+        TvFocusSurface(
+            onClick = { editing = true },
+            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier
+                .fillMaxWidth(0.6f)
+                .height(56.dp)
+                .focusRequester(bar)
+                .initialFocus(),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+            ) {
+                Icon(Icons.Filled.Search, contentDescription = null)
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    text = query.ifEmpty { hint },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (query.isEmpty()) 0.6f else 1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    } else {
+        // Al terminar (Buscar en el teclado, atrás o abajo) vuelve a ser la barra.
+        var fieldFocused by remember { mutableStateOf(false) }
+        fun finish(moveDown: Boolean) {
+            if (!editing) return
+            keyboard?.hide()
+            closedGoingDown = moveDown
+            editing = false
+        }
         OutlinedTextField(
-            value = state.query,
-            onValueChange = viewModel::setQuery,
+            value = query,
+            onValueChange = onQueryChange,
             singleLine = true,
-            placeholder = { androidx.compose.material3.Text(stringResource(R.string.search_hint)) },
+            placeholder = { androidx.compose.material3.Text(hint) },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            // "Buscar" en el teclado lleva a los resultados, como abajo en el mando.
-            keyboardActions = KeyboardActions(onSearch = {
-                keyboard?.hide()
-                focusManager.moveFocus(FocusDirection.Down)
-            }),
+            keyboardActions = KeyboardActions(onSearch = { finish(moveDown = true) }),
+            shape = RoundedCornerShape(28.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.onBackground,
                 unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
@@ -87,90 +268,33 @@ fun TvSearchScreen(
             ),
             modifier = Modifier
                 .fillMaxWidth(0.6f)
-                .padding(start = TvHorizontalMargin)
-                // Un campo de texto se queda las flechas para mover el cursor: abajo no
-                // salía nunca de él y los resultados eran inalcanzables con el mando.
+                .height(56.dp)
+                .focusRequester(field)
+                // Se cierra al perder el foco que ya tenía (atrás, o el foco se fue a otra parte).
+                .onFocusChanged {
+                    if (it.isFocused) fieldFocused = true else if (fieldFocused) finish(moveDown = false)
+                }
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
-                        keyboard?.hide()
-                        focusManager.moveFocus(FocusDirection.Down)
+                        finish(moveDown = true)
+                        true
                     } else {
                         false
                     }
-                }
-                .initialFocus(),
+                },
         )
-        Spacer(Modifier.height(16.dp))
-        if (!state.isTextSearch && state.filters.isNotEmpty()) {
-            // Fila desplazable: un Row normal aplastaba el último filtro a una letra por línea.
-            LazyRow(
-                contentPadding = TvRowPadding,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.focusRestorer(),
-            ) {
-                items(state.filters, key = { it.contentUrl }) { filter ->
-                    TvChoiceButton(filter.title, filter == state.selectedFilter) { viewModel.selectFilter(filter) }
-                }
-            }
-            Spacer(Modifier.height(16.dp))
+        LaunchedEffect(Unit) {
+            field.requestFocus()
+            keyboard?.show()
         }
-        val results = state.results
-        when {
-            !state.isTextSearch -> when (val filter = state.filter) {
-                FilterState.Loading -> TvCenterMessage(stringResource(R.string.state_loading))
-                is FilterState.Failed -> TvCenterMessage(filter.error.text(context), viewModel::retryFilter)
-                is FilterState.Loaded -> if (filter.items.isEmpty()) {
-                    TvCenterMessage(stringResource(R.string.state_empty_module), viewModel::retryFilter)
-                } else {
-                    TvItemGrid(filter.items, RowLayout.POSTER, onOpenItem, takesInitialFocus = false)
-                }
-            }
-            state.searchError != null -> TvCenterMessage(state.searchError.text(context), viewModel::retrySearch)
-            results == null -> Box(Modifier.fillMaxSize())
-            results.isEmpty -> TvCenterMessage(stringResource(R.string.search_empty))
-            else -> LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = RowLayout.LANDSCAPE.gridCellWidth()),
-                contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, bottom = TvVerticalMargin),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                if (results.programs.isNotEmpty()) {
-                    item(key = "programs", span = { GridItemSpan(maxLineSpan) }) {
-                        Text(stringResource(R.string.search_programs), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    }
-                    // Programas como pósters en una fila, como en el móvil; los vídeos, en rejilla.
-                    item(key = "programs-row", span = { GridItemSpan(maxLineSpan) }) {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(20.dp),
-                            modifier = Modifier.focusRestorer(),
-                        ) {
-                            items(results.programs, key = { "p-${it.id}" }) { item ->
-                                TvItemCard(item, RowLayout.POSTER, { onOpenItem(item) }, Modifier.width(TvPosterWidth))
-                            }
-                        }
-                    }
-                }
-                if (results.videos.isNotEmpty()) {
-                    item(key = "videos", span = { GridItemSpan(maxLineSpan) }) {
-                        Text(stringResource(R.string.search_videos), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    }
-                    items(results.videos, key = { "v-${it.id}" }) { item ->
-                        TvItemCard(item, RowLayout.LANDSCAPE, { onOpenItem(item) })
-                    }
-                    if (results.hasMoreVideos) {
-                        item(key = "more-videos") {
-                            TvFocusSurface(onClick = viewModel::loadMoreVideos, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-                                Text(
-                                    stringResource(if (state.isLoadingMoreVideos) R.string.state_loading else R.string.program_load_more),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    modifier = Modifier.align(Alignment.Center),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    }
+    // Al cerrar el campo el foco vuelve a la barra y, si se buscó, baja a los resultados.
+    LaunchedEffect(editing) {
+        val goDown = closedGoingDown ?: return@LaunchedEffect
+        if (editing) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { bar.requestFocus() }
+        if (goDown) onSearch()
+        closedGoingDown = null
     }
 }

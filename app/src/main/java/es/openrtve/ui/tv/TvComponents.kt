@@ -60,6 +60,7 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.LiveInfo
 import es.openrtve.domain.RowLayout
 import es.openrtve.domain.imageFor
+import es.openrtve.ui.CategoryArtwork
 
 /**
  * Foco inicial de una pantalla: se concede una sola vez cada vez que la pantalla
@@ -362,9 +363,15 @@ internal fun TvSeeAllCard(layout: RowLayout, onClick: () -> Unit) {
 }
 
 @Composable
-internal fun TvImageTile(title: String, imageUrl: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TvImageTile(
+    title: String,
+    imageUrl: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    fallbackImageUrl: String? = null,
+) {
     TvFocusSurface(onClick = onClick, modifier = modifier.aspectRatio(16f / 9f)) {
-        TvArtwork(imageUrl, Modifier.fillMaxSize())
+        CategoryArtwork(imageUrl, fallbackImageUrl, MaterialTheme.colorScheme.primary, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(TvTitleScrim))
         Text(
             text = title,
