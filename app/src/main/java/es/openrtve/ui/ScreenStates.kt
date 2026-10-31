@@ -121,7 +121,9 @@ fun rememberProgramScreen(
     val entriesById = remember(historyEntries) { historyEntries.associateBy { it.item.id } }
     // De la lista completa, no de la temporada que se esté mirando: el botón grande es estable.
     val suggestion = remember(historyEntries, state.headerEpisodes, state.headerOrder, state.contents) {
-        if (state.contents.isCollection) null else suggestPlay(history, program.id, state.headerEpisodes, state.headerOrder)
+        if (state.contents.isCollection) null else suggestPlay(history, program.id, state.headerEpisodes, state.headerOrder) {
+            it.contentTab(state.contents) == ProgramTab.EPISODES
+        }
     }
     ErrorEffect(state.error, onError, viewModel::dismissError)
     return ProgramScreenState(viewModel, state, entriesById, suggestion)
@@ -133,8 +135,8 @@ fun rememberProgramScreen(
  * página corta que no saca al usuario de la zona final encadena la siguiente.
  */
 @Composable
-fun LoadMoreOnScrollEnd(listState: LazyListState, threshold: Int, enabled: Boolean = true, loadMore: () -> Unit) {
-    LaunchedEffect(listState, enabled) {
+fun LoadMoreOnScrollEnd(listState: LazyListState, threshold: Int, enabled: Boolean = true, contentKey: Any? = null, loadMore: () -> Unit) {
+    LaunchedEffect(listState, enabled, contentKey) {
         if (!enabled) return@LaunchedEffect
         snapshotFlow {
             val info = listState.layoutInfo

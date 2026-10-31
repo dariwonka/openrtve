@@ -315,6 +315,8 @@ class RtveJsonParser(
         val editorialType = media.text("tipo") ?: item.text("tipo")
         val type = media.obj("type") ?: item.obj("type")
         val subtype = media.obj("subType") ?: item.obj("subType")
+        val typeValue = media.text("type") ?: item.text("type")
+        val subtypeValue = media.text("subType") ?: item.text("subType")
         val programInfo = media.obj("programInfo") ?: item.obj("programInfo")
         val assetId = media.text("idAsset") ?: item.text("idAsset")
         val kind = contentKind(contentType, editorialType, nestedMedia != null, assetId)
@@ -339,11 +341,13 @@ class RtveJsonParser(
             tallPosterUrl = if (kind == ContentKind.PROGRAM) derivedImage("p", id, "imgCol", POSTER_WIDTH) else null,
             programId = if (kind == ContentKind.PROGRAM) id else programInfo?.text("id"),
             seasonId = media.text("temporadaId") ?: item.text("temporadaId"),
-            mediaTypeId = type?.text("id"),
-            mediaTypeName = type?.text("name"),
-            mediaSubtypeName = subtype?.text("name"),
-            mediaSubtypeId = subtype?.text("id"),
+            mediaTypeId = type?.text("id") ?: typeValue?.takeIf { it.all(Char::isDigit) },
+            mediaTypeName = type?.text("name") ?: typeValue?.takeUnless { it.all(Char::isDigit) },
+            mediaSubtypeName = subtype?.text("name") ?: subtypeValue?.takeUnless { it.all(Char::isDigit) },
+            mediaSubtypeId = subtype?.text("id") ?: subtypeValue?.takeIf { it.all(Char::isDigit) },
             programShowsFragments = programInfo?.flag("showFragments"),
+            programTypeId = programInfo?.text("programTypeId", "programTypeID"),
+            programType = programInfo?.text("programType"),
             allowedInCountry = media.flag("allowedInCountry")
                 ?: item.flag("allowedInCountry"),
             loginRequired = media.flag("requireLogged")

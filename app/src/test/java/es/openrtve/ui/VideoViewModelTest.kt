@@ -99,6 +99,46 @@ class VideoViewModelTest {
         assertFalse(repository.calls.any { it.startsWith("programVideos(") || it.startsWith("programExtras(") })
     }
 
+    @Test
+    fun `a film mixed into a broadcast feed has its own section in the video sheet`() = runTest(mainDispatcher.dispatcher) {
+        val broadcast = catalogItem("broadcast", programId = "p1").copy(programType = "Entrevistas")
+        val film = catalogItem("film", programId = "p1").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")
+        repository.video = { _, _ -> loaded(detail(broadcast).copy(programType = "Entrevistas")) }
+        repository.programVideos = { _, _, _, _, _ -> page(listOf(broadcast, film)) }
+
+        val viewModel = VideoViewModel(repository, broadcast)
+        advanceUntilIdle()
+        val state = viewModel.uiState.value
+        assertEquals(listOf(ProgramTab.EPISODES, ProgramTab.MOVIES), state.contentSections.map { it.tab })
+        assertEquals(listOf("film"), state.contentSections.last().page.items.map { it.id })
+        assertTrue(film.opensDetailsIn(state.contents))
+    }
+
+    @Test
+    fun `a container ID prevents chapter loading even when its name is missing and a season is present`() = runTest(mainDispatcher.dispatcher) {
+        val video = catalogItem("video", programId = "cycle").copy(programTypeId = "137310", seasonId = "editorial-season")
+        repository.video = { _, _ -> loaded(detail(video)) }
+        VideoViewModel(repository, video)
+        advanceUntilIdle()
+        assertFalse(repository.calls.any { it.startsWith("programVideos(") })
+    }
+
+    @Test
+    fun `recommendations use subtype IDs and an advance never gets film recommendations`() = runTest(mainDispatcher.dispatcher) {
+        val kinds = mutableListOf<es.openrtve.domain.RelatedKind>()
+        repository.related = { kind, _ -> kinds += kind; loaded(emptyList()) }
+        val film = catalogItem("film").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")
+        repository.video = { _, _ -> loaded(detail(film)) }
+        VideoViewModel(repository, film)
+        advanceUntilIdle()
+        assertEquals(listOf(es.openrtve.domain.RelatedKind.FILM), kinds)
+
+        repository.video = { _, _ -> loaded(detail(film.copy(id = "trailer", mediaTypeId = "39980"))) }
+        VideoViewModel(repository, film.copy(id = "trailer"))
+        advanceUntilIdle()
+        assertEquals(1, kinds.size)
+    }
+
     private fun detail(item: es.openrtve.domain.CatalogItem) = VideoDetail(
         item = item, backdropUrl = null, description = null, promo = null, subtypeName = null, programTitle = null,
         year = null, ageRating = null, genres = emptyList(), director = null, cast = emptyList(), originalLanguage = null,

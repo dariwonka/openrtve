@@ -21,6 +21,9 @@ import es.openrtve.domain.VideoDetail
  */
 enum class ProgramTab {
     EPISODES,
+    MOVIES,
+    DOCUMENTARIES,
+    VIDEOS,
     MORE_VIDEOS,
     /** "Similares" de RTVE (`recomsys`): otros programas o vídeos que ver después. */
     RELATED,
@@ -44,23 +47,19 @@ data class PagedItemsState(
 
 /** Pestañas de la ficha de un programa, según los datos que realmente existen. */
 fun programTabs(body: ProgramBody, state: ProgramUiState): List<ProgramTab> = buildList {
-    add(ProgramTab.EPISODES)
-    if (state.extras.isAvailable) add(ProgramTab.MORE_VIDEOS)
+    addAll(state.contentSections.map { it.tab })
     if (!state.contents.isCollection) {
         if (state.related.isNotEmpty()) add(ProgramTab.RELATED)
         if (state.detail?.facts?.hasDetails == true) add(ProgramTab.DETAILS)
     }
-}.take(MAX_TABS)
+}
 
 /** Pestañas de la ficha de un vídeo: capítulos, extras, similares y ficha técnica, si los hay. */
 fun videoTabs(state: VideoUiState): List<ProgramTab> = buildList {
     if (state.detail?.facts?.hasDetails == true) add(ProgramTab.DETAILS)
-    if (state.chapters.isAvailable) add(ProgramTab.EPISODES)
-    if (state.extras.isAvailable) add(ProgramTab.MORE_VIDEOS)
+    addAll(state.contentSections.map { it.tab })
     if (state.related.isNotEmpty()) add(ProgramTab.RELATED)
-}.take(MAX_TABS)
-
-internal const val MAX_TABS = 4
+}
 
 /** Ficha técnica de un vídeo, en filas etiqueta/valor; la sinopsis va aparte, en la cabecera. */
 data class FichaFacts(

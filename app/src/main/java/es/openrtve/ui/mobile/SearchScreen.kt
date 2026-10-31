@@ -40,6 +40,8 @@ import es.openrtve.data.CatalogRepository
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.RowLayout
 import es.openrtve.domain.SearchResults
+import es.openrtve.domain.MediaForm
+import es.openrtve.domain.mediaForm
 import es.openrtve.ui.LoadMoreOnScrollEnd
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.TextButton
@@ -156,7 +158,10 @@ private fun SearchResultsView(
             if (results.videos.isNotEmpty()) {
                 item(key = "videos-header") { SectionHeader(stringResource(R.string.search_videos)) }
                 items(results.videos, key = { it.id }) { item ->
-                    EpisodeRow(item, onClick = { onOpenItem(item) })
+                    EpisodeRow(
+                        item, onClick = { onOpenItem(item) },
+                        badge = if (item.mediaForm == MediaForm.EXTRA) item.mediaTypeName else item.mediaSubtypeName,
+                    )
                 }
                 if (isLoadingMore) {
                     item(key = "videos-loading") { LoadingMoreRow() }

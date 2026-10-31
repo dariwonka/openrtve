@@ -35,6 +35,24 @@ class PlaySuggestionTest {
     }
 
     @Test
+    fun `the program action ignores films and extras in both the page and watch history`() {
+        val film = episode("film").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")
+        val trailer = episode("trailer").copy(mediaTypeId = "39978", mediaSubtypeId = "130734")
+        history.register(episodes[2])
+        history.updateProgress(episodes[2].id, 600_000, 3_000_000)
+        history.register(film)
+        history.updateProgress(film.id, 600_000, 3_000_000)
+        history.register(trailer)
+        history.updateProgress(trailer.id, 60_000, 180_000)
+
+        val suggestion = suggestPlay(history, "p", listOf(film, trailer) + episodes) {
+            it.contentTab(ProgramContents.EPISODES) == ProgramTab.EPISODES
+        }
+        assertTrue(suggestion is PlaySuggestion.Continue)
+        assertEquals(episodes[2].id, suggestion!!.item.id)
+    }
+
+    @Test
     fun `a finished episode suggests the following one, or the newest when it was the last`() {
         history.register(episodes[2])
         history.updateProgress("902", 3_000_000, 3_000_000)

@@ -10,6 +10,10 @@ import es.openrtve.domain.belongsToEpisodicProgram
 import es.openrtve.domain.episodeOrder
 import es.openrtve.domain.isFirstSeason
 import es.openrtve.domain.VideoDetail
+import es.openrtve.domain.MediaForm
+import es.openrtve.domain.MediaSubject
+import es.openrtve.domain.mediaForm
+import es.openrtve.domain.mediaSubject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,6 +64,16 @@ class VideoViewModel(
 
     fun retryExtras() = loadExtras(firstPage = mutableUiState.value.extras.items.isEmpty())
 
+    fun loadMore(section: ContentSection) {
+        if (section.loadsComplete) loadMoreChapters()
+        if (section.loadsExtras) loadMoreExtras()
+    }
+
+    fun retry(section: ContentSection) {
+        if (section.loadsComplete) retryChapters()
+        if (section.loadsExtras) retryExtras()
+    }
+
     private fun load() {
         val id = mutableUiState.value.item.playbackId ?: mutableUiState.value.item.id
         job?.cancel()
@@ -79,7 +93,7 @@ class VideoViewModel(
                 if (detail.belongsToEpisodicProgram && media.programShowsFragments == true) {
                     loadExtras(firstPage = true)
                 }
-                relatedKind(detail.subtypeName)?.let { kind ->
+                relatedKind(media)?.let { kind ->
                     val related = loadRelatedOrEmpty(repository, kind, media.id)
                     mutableUiState.update { it.copy(related = related) }
                 }
@@ -184,9 +198,10 @@ class VideoViewModel(
 }
 
 /** Qué recomendaciones tiene una ficha de vídeo: solo películas y documentales tienen modelo propio. */
-private fun relatedKind(subtypeName: String?): RelatedKind? = when (subtypeName?.lowercase()) {
-    "película" -> RelatedKind.FILM
-    "documental" -> RelatedKind.DOCUMENTARY
+private fun relatedKind(item: CatalogItem): RelatedKind? = when {
+    item.mediaForm == MediaForm.EXTRA -> null
+    item.mediaSubject == MediaSubject.MOVIE -> RelatedKind.FILM
+    item.mediaSubject == MediaSubject.DOCUMENTARY -> RelatedKind.DOCUMENTARY
     else -> null
 }
 

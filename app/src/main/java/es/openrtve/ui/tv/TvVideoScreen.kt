@@ -23,6 +23,10 @@ import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
 import es.openrtve.ui.facts
+import es.openrtve.ui.contentSections
+import es.openrtve.ui.contents
+import es.openrtve.ui.opensDetailsIn
+import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.metaLine
 import es.openrtve.ui.rememberVideoScreen
 import es.openrtve.ui.text
@@ -105,27 +109,16 @@ fun TvVideoScreen(
         detail?.facts?.takeIf { it.hasDetails }?.let { facts ->
             tvDetailsSection("details", { stringResource(R.string.tab_details) }) { TvFactsPanel(facts) }
         }
-        // Con un solo capítulo (el propio vídeo) la fila no aporta nada.
-        if (state.chapters.items.size > 1) {
-            tvDetailsSection("chapters", { stringResource(R.string.tab_episodes) }) {
-                TvEpisodesRow(
-                    items = state.chapters.items,
-                    onPlay = { onPlay(it, false) },
-                    badgeOf = { chapter -> stringResource(R.string.episode_current).takeIf { chapter.id == state.item.id } },
-                    hasMore = state.chapters.hasMore,
-                    isLoadingMore = state.chapters.isLoadingMore,
-                    onLoadMore = viewModel::loadMoreChapters,
-                )
-            }
-        }
-        if (state.extras.items.isNotEmpty()) {
-            tvDetailsSection("extras", { stringResource(R.string.tab_more_videos) }) {
-                TvEpisodesRow(
-                    items = state.extras.items,
-                    onPlay = { onPlay(it, false) },
-                    hasMore = state.extras.hasMore,
-                    isLoadingMore = state.extras.isLoadingMore,
-                    onLoadMore = viewModel::loadMoreExtras,
+        state.contentSections.forEach { section ->
+            tvDetailsSection(section.tab.name, { section.tab.sectionTitle() }) {
+                TvContentSection(
+                    section,
+                    onSelect = { video ->
+                        if (section.tab != ProgramTab.MORE_VIDEOS && video.opensDetailsIn(state.contents)) onOpenItem(video) else onPlay(video, false)
+                    },
+                    onLoadMore = { viewModel.loadMore(section) },
+                    onRetry = { viewModel.retry(section) },
+                    currentItemId = state.item.id,
                 )
             }
         }

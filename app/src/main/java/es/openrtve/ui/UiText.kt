@@ -8,6 +8,7 @@ import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.LiveInfo
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.VideoDetail
+import es.openrtve.domain.canHaveNextEpisode
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -79,9 +80,9 @@ fun UiMessage.text(context: Context): String = when (this) {
  * "Temporada 1 · E3 · 12/09/2026 · 52 min", omitiendo lo que falte. El número de
  * episodio no se repite si el título ya lo dice ("Episodio 512").
  */
-fun CatalogItem.metaLine(context: Context): String? = listOfNotNull(
-    seasonTitle,
-    episode?.takeUnless { Regex("\\b$it\\b").containsMatchIn(title) }?.let { context.getString(R.string.meta_episode, it) },
+fun CatalogItem.metaLine(context: Context, episodic: Boolean = canHaveNextEpisode): String? = listOfNotNull(
+    seasonTitle.takeIf { episodic },
+    episode?.takeIf { episodic }?.takeUnless { Regex("\\b$it\\b").containsMatchIn(title) }?.let { context.getString(R.string.meta_episode, it) },
     publicationDate?.feedDateToDisplay(),
     durationMs?.let { minutesLabel(context, it) },
 ).takeIf { it.isNotEmpty() }?.joinToString(" · ")

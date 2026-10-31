@@ -91,6 +91,47 @@ class ProgramScreenTest {
     }
 
     @Test
+    fun aMixedContainerSeparatesItsFourKindsAndOnlyExtrasPlayDirectly() {
+        val film = catalogItem("film", title = "Una película").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")
+        val documentary = catalogItem("doc", title = "Un documental").copy(mediaTypeId = "39816", mediaSubtypeId = "130735")
+        val video = catalogItem("video", title = "Vídeo sin subtipo").copy(mediaTypeId = "39816")
+        val trailer = catalogItem("trailer", title = "Avance de cine").copy(mediaTypeId = "39980", mediaSubtypeId = "130734")
+        repository.program = { id, _ -> loaded(ProgramDetail(id, "Somos cine", null, null, null, emptyList(), programTypeId = "137310", showFragments = true)) }
+        repository.programVideos = { _, _, _, _, _ -> page(listOf(film, documentary, video)) }
+        repository.programExtras = { _, _, _ -> page(listOf(trailer)) }
+        setContent()
+
+        compose.onNodeWithText(context.getString(R.string.tab_movies)).assertIsSelected()
+        compose.onNodeWithText("Una película").performScrollTo().performClick()
+        compose.onNodeWithText(context.getString(R.string.tab_documentaries)).performScrollTo().performClick()
+        compose.onNodeWithText("Un documental").performScrollTo().performClick()
+        compose.onNodeWithText(context.getString(R.string.tab_videos)).performScrollTo().performClick()
+        compose.onNodeWithText("Vídeo sin subtipo").performScrollTo().performClick()
+        compose.onNodeWithText(context.getString(R.string.tab_more_videos)).performScrollTo().performClick()
+        compose.onNodeWithText("Avance de cine").performScrollTo().performClick()
+
+        assertEquals(listOf("film", "doc", "video"), detailsOpened.map { it.id })
+        assertEquals(listOf("trailer"), opened.map { it.id })
+    }
+
+    @Test
+    fun pagesWithoutFilmsDoNotStopTheFilmCatalogPagination() {
+        repository.program = { id, _ -> loaded(ProgramDetail(id, "Somos cine", null, null, null, emptyList(), programTypeId = "137310")) }
+        repository.programVideos = { _, _, pageNumber, _, _ ->
+            page(listOf(when (pageNumber) {
+                1 -> catalogItem("video", title = "Otro vídeo").copy(mediaTypeId = "39816")
+                2 -> catalogItem("doc", title = "Otro documental").copy(mediaTypeId = "39816", mediaSubtypeId = "130735")
+                else -> catalogItem("film", title = "Película de la tercera página").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")
+            }), pageNumber, 3)
+        }
+        setContent()
+
+        compose.waitUntil(timeoutMillis = 5_000) { repository.calls.count { it.startsWith("programVideos(") } == 3 }
+        compose.onNodeWithText("Película de la tercera página").performScrollTo().assertIsDisplayed()
+        assertEquals(3, repository.calls.count { it.startsWith("programVideos(") })
+    }
+
+    @Test
     fun withoutHistoryTheNewestEpisodeIsOfferedAndTheListPaginates() {
         setContent()
 

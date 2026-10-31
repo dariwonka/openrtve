@@ -1,8 +1,5 @@
 package es.openrtve.ui.tv
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -11,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.FocusRequester
@@ -33,12 +29,13 @@ import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
-import es.openrtve.ui.LoadMoreOnScrollEnd
 import es.openrtve.ui.PlaySuggestion
 import es.openrtve.ui.ProgramUiState
 import es.openrtve.ui.ProgramViewModel
 import es.openrtve.ui.facts
 import es.openrtve.ui.contents
+import es.openrtve.ui.contentSections
+import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.opensItemDetails
 import es.openrtve.ui.metaLine
 import es.openrtve.ui.rememberProgramScreen
@@ -65,12 +62,12 @@ fun TvProgramScreen(
     val state = screen.state
     val suggestion = screen.suggestion
     val contents = state.contents
+    val sections = state.contentSections
     val firstContent = remember { FocusRequester() }
     val detailsState = rememberLazyListState()
+    val firstRowState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
-    val episodesState = rememberLazyListState()
-    LoadMoreOnScrollEnd(episodesState, threshold = 3, loadMore = viewModel::loadMore)
 
     TvDetailsScaffold(
         backdropUrl = state.detail?.imageUrl ?: program.imageUrl,
@@ -109,13 +106,13 @@ fun TvProgramScreen(
                         focusManager.clearFocus()
                         scope.launch {
                             detailsState.scrollToItem(1)
-                            episodesState.scrollToItem(0)
+                            firstRowState.scrollToItem(0)
                             withFrameNanos { }
                             firstContent.requestFocus()
                         }
                     },
-                    enabled = state.episodes.isNotEmpty(),
-                    modifier = Modifier.initialFocus(enabled = state.episodes.isNotEmpty()),
+                    enabled = sections.firstOrNull()?.page?.let { it.items.isNotEmpty() || it.hasMore } == true,
+                    modifier = Modifier.initialFocus(enabled = sections.firstOrNull()?.page?.let { it.items.isNotEmpty() || it.hasMore } == true),
                 ) {
                     Text(stringResource(contents.browseLabel))
                 }
@@ -138,32 +135,20 @@ fun TvProgramScreen(
             }
         },
     ) {
-        tvDetailsSection("episodes", { stringResource(contents.label) }) {
-            if (contents.isCollection && state.episodes.isNotEmpty()) {
-                TvRelatedRow(
-                    items = state.episodes,
-                    onOpen = onOpenRelated,
-                    hasMore = state.hasMore,
-                    isLoadingMore = state.isLoadingMore,
-                    onLoadMore = viewModel::loadMore,
-                    listState = episodesState,
-                    firstItemFocus = firstContent,
-                )
-            } else {
-                if (!contents.isCollection) SeasonTabs(state, viewModel)
-                EpisodesBody(state, viewModel, screen.entriesById, suggestion, episodesState) { item ->
-                    if (state.opensItemDetails(item)) onOpenRelated(item) else onOpenItem(item)
-                }
-            }
-        }
-        if (state.extras.items.isNotEmpty()) {
-            tvDetailsSection("extras", { stringResource(R.string.tab_more_videos) }) {
-                TvEpisodesRow(
-                    items = state.extras.items,
-                    onPlay = onOpenItem,
-                    hasMore = state.extras.hasMore,
-                    isLoadingMore = state.extras.isLoadingMore,
-                    onLoadMore = viewModel::loadMoreExtras,
+        sections.forEachIndexed { index, section ->
+            tvDetailsSection(section.tab.name, { section.tab.sectionTitle() }) {
+                if (section.tab == ProgramTab.EPISODES) SeasonTabs(state, viewModel)
+                TvContentSection(
+                    section,
+                    onSelect = { item ->
+                        if (section.tab != ProgramTab.MORE_VIDEOS && state.opensItemDetails(item)) onOpenRelated(item) else onOpenItem(item)
+                    },
+                    onLoadMore = { viewModel.loadMore(section) },
+                    onRetry = { viewModel.retry(section) },
+                    firstItemFocus = firstContent.takeIf { contents.isCollection && index == 0 },
+                    entriesById = screen.entriesById,
+                    suggestion = suggestion,
+                    listState = if (index == 0) firstRowState else rememberLazyListState(),
                 )
             }
         }
@@ -220,54 +205,3 @@ private fun SeasonTabs(state: ProgramUiState, viewModel: ProgramViewModel) {
     }
     }
 }
-
-@Composable
-private fun EpisodesBody(
-    state: ProgramUiState,
-    viewModel: ProgramViewModel,
-    entriesById: Map<String, es.openrtve.data.WatchEntry>,
-    suggestion: PlaySuggestion?,
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    onPlay: (CatalogItem) -> Unit,
-) {
-    when {
-        // Mismo alto que la fila: cambiar de temporada no hace saltar la página.
-        state.isLoading && state.episodes.isEmpty() -> Box(
-            contentAlignment = Alignment.CenterStart,
-            modifier = Modifier.height(EpisodesRowHeight).padding(TvRowPadding),
-        ) {
-            Text(stringResource(R.string.state_loading), style = MaterialTheme.typography.titleMedium)
-        }
-        state.episodes.isEmpty() -> Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(TvRowPadding),
-        ) {
-            Text(stringResource(R.string.program_empty), style = MaterialTheme.typography.titleMedium)
-            Button(onClick = viewModel::retry, modifier = Modifier.initialFocus()) { Text(stringResource(R.string.action_retry)) }
-        }
-        else -> {
-            val watched = stringResource(R.string.episode_watched)
-            val next = stringResource(R.string.episode_next)
-            TvEpisodesRow(
-                items = state.episodes,
-                onPlay = onPlay,
-                progressOf = { episode -> entriesById[episode.id]?.takeIf { it.inProgress }?.progress },
-                badgeOf = { episode ->
-                    when {
-                        entriesById[episode.id]?.finished == true -> watched
-                        suggestion is PlaySuggestion.Next && suggestion.item.id == episode.id -> next
-                        else -> null
-                    }
-                },
-                hasMore = state.hasMore,
-                isLoadingMore = state.isLoadingMore,
-                onLoadMore = viewModel::loadMore,
-                listState = listState,
-            )
-        }
-    }
-}
-
-/** Alto de una fila de capítulos (imagen 16:9 de [TvEpisodeWidth] y dos líneas de texto). */
-private val EpisodesRowHeight = 240.dp

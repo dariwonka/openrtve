@@ -213,6 +213,9 @@ data class CatalogItem(
     val webUrl: String? = null,
     /** `subType.id` del medio; `130734` identifica una película. */
     val mediaSubtypeId: String? = null,
+    /** Tipo del programa padre, según `programInfo`; no se deduce del título. */
+    val programTypeId: String? = null,
+    val programType: String? = null,
 ) {
     val needsAccount: Boolean get() = loginRequired || paid || drm
 }
@@ -357,13 +360,12 @@ data class ExploreGroup(
  * vídeo no traiga temporada ni número de episodio.
  */
 val VideoDetail.belongsToEpisodicProgram: Boolean
-    get() = item.programId != null && !item.isMovie &&
-        programType?.contains("contenedor", ignoreCase = true) != true &&
-        (item.seasonId != null || item.episode != null || programType?.contains("contenedor", ignoreCase = true) == false)
-
-val CatalogItem.isMovie: Boolean
-    get() = mediaSubtypeId == "130734" || mediaSubtypeName.equals("Película", ignoreCase = true) ||
-        mediaSubtypeName.equals("Pelicula", ignoreCase = true)
+    get() {
+        val parentType = programType ?: item.programType
+        return item.programId != null && !item.isFullMovie && item.programTypeId != "137310" &&
+            parentType?.startsWith("Contenedor ", ignoreCase = true) != true &&
+            (item.seasonId != null || item.episode != null || parentType != null)
+    }
 
 data class VideoDetail(
     val item: CatalogItem,

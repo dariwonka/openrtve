@@ -79,7 +79,7 @@ class ProgramBodyTest {
 
     @Test
     fun `containers show their catalog and extras without technical details or similar programs`() {
-        val state = state(episodes = listOf(item("film"))).copy(
+        val state = state(episodes = listOf(item("film").copy(mediaSubtypeId = "130734"))).copy(
             detail = ProgramDetail(
                 "cycle", "Ciclo", null, null, null, emptyList(),
                 programTypeId = "137310", genres = listOf("Cine"), director = "No es una obra",
@@ -87,6 +87,6 @@ class ProgramBodyTest {
             related = listOf(item("other-program")),
             extras = PagedItemsState(items = listOf(item("clip"))),
         )
-        assertEquals(listOf(ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS), programTabs(ProgramBody.Episodes, state))
+        assertEquals(listOf(ProgramTab.MOVIES, ProgramTab.MORE_VIDEOS), programTabs(ProgramBody.Episodes, state))
     }
 }

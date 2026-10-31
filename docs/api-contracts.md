@@ -248,6 +248,32 @@ motor de búsqueda.
 
 ## Contrato remoto heterogéneo
 
+### Tres capas para organizar el catálogo
+
+La estructura de una ficha depende de `programTypeId`/`programType`: un
+`Contenedor Películas` (`137310`) muestra un catálogo; un programa conserva sus
+emisiones y temporadas. Cada vídeo se clasifica después por `type` y `subType`,
+sin usar su título para asignarle una categoría:
+
+| Capa | Valores | Uso |
+|---|---|---|
+| Forma (`type`) | `39816` completo; `39978` fragmento; `39980` avance | Separar completos de «Más vídeos» |
+| Subtipo (`subType`) | `130734` película; `130735` documental; ausente u otro | Separar las piezas completas de un catálogo |
+| Programa padre | Contenedor o programa con emisiones/temporadas | Mantener los capítulos de una serie documental como capítulos |
+
+Un completo no implica una película: la primera página de Somos cine contiene
+también un documental y un vídeo sin subtipo (verificado el 31-10-2026). Las
+películas tienen sección y ficha propias incluso dentro de un programa como
+Historia de nuestro cine. Los extras conservan su forma aunque su subtipo sea
+película; no reciben capítulos ni recomendaciones de películas por ese motivo.
+Un título que diga «Tráiler» no basta para reclasificarlo.
+
+Las secciones comparten las páginas originales de completos y extras. Una página
+sin películas no termina el catálogo de películas: el scroll se reevalúa al
+avanzar la página, aunque no haya aumentado el número de tarjetas de esa sección.
+
+### Variantes de campos
+
 Campos observados en los items se agrupan así:
 
 | Grupo | Campos representativos |

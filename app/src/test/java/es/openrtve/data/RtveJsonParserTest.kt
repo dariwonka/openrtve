@@ -6,6 +6,8 @@ import es.openrtve.domain.PlaybackDecision
 import es.openrtve.domain.PlaybackResolver
 import es.openrtve.domain.RowLayout
 import es.openrtve.domain.isMovie
+import es.openrtve.domain.MediaForm
+import es.openrtve.domain.mediaForm
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -316,7 +318,7 @@ class RtveJsonParserTest {
               "id":"17222216","title":"Telediario - 21 horas","contentType":"video",
               "duration":3103400,"publicationDate":"11-09-2026 21:00:00","episode":3,"temporada":"Temporada 1","temporadaId":1028870,
               "type":{"id":39816,"name":"Completo"},"subType":{"id":1,"name":"Tráiler"},
-              "programInfo":{"id":"169690","title":"La Promesa","showFragments":true},
+              "programInfo":{"id":"169690","title":"La Promesa","showFragments":true,"programTypeId":136519,"programType":"Series Prime Time"},
               "requireLogged":false,"hasDRM":true,"allowedInCountry":true
             }]}}
             """.trimIndent(),
@@ -336,6 +338,8 @@ class RtveJsonParserTest {
             assertEquals("Completo", mediaTypeName)
             assertEquals("Tráiler", mediaSubtypeName)
             assertTrue(programShowsFragments == true)
+            assertEquals("136519", programTypeId)
+            assertEquals("Series Prime Time", programType)
             assertTrue(needsAccount)
         }
     }
@@ -410,6 +414,20 @@ class RtveJsonParserTest {
 
         assertEquals("130734", item.mediaSubtypeId)
         assertTrue(item.isMovie)
+    }
+
+    @Test
+    fun `type and subtype may be API objects numeric strings or names`() {
+        val representations = listOf(
+            """"type":{"id":39980,"name":"Avance"},"subType":{"id":130734,"name":"Película"}""",
+            """"type":"39980","subType":"130734"""",
+            """"type":"Fragmento","subType":"Película"""",
+        )
+        for (fields in representations) {
+            val item = parser.parseVideoPage("""{"page":{"items":[{"id":"extra","title":"Vídeo","contentType":"video",$fields}]}}""").items.single()
+            assertEquals(MediaForm.EXTRA, item.mediaForm)
+            assertTrue(item.isMovie)
+        }
     }
 
     @Test

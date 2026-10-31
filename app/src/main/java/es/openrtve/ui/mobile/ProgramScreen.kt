@@ -3,24 +3,23 @@ package es.openrtve.ui.mobile
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -33,18 +32,17 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.ui.LoadMoreOnScrollEnd
 import es.openrtve.ui.FichaFacts
 import es.openrtve.ui.PlaySuggestion
-import es.openrtve.ui.ProgramBody
 import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.ProgramUiState
 import es.openrtve.ui.facts
 import es.openrtve.ui.contents
+import es.openrtve.ui.contentSections
+import es.openrtve.ui.primaryTab
 import es.openrtve.ui.opensItemDetails
 import es.openrtve.ui.metaLine
-import es.openrtve.ui.programBody
 import es.openrtve.ui.programTabs
 import es.openrtve.ui.rememberProgramScreen
 import es.openrtve.ui.shareLink
-import es.openrtve.ui.text
 
 /**
  * Ficha de programa: cabecera con imagen, botón grande (Reproducir, Continuar o
@@ -71,18 +69,18 @@ fun ProgramScreen(
     val context = LocalContext.current
     val detail = state.detail
     val contents = state.contents
-    val body = programBody(state)
-    val tabs = remember(body, state.extras, state.related, detail) { programTabs(body, state) }
+    val sections = state.contentSections
+    val tabs = programTabs(es.openrtve.ui.programBody(state), state)
     val columns = relatedColumns()
     val (current, selectTab) = rememberSelectedTab(tabs)
     val listState = rememberLazyListState()
-    // Paginación infinita: pide la siguiente página al acercarse al final.
-    LoadMoreOnScrollEnd(listState, threshold = 4, enabled = current == ProgramTab.EPISODES && state.hasMore, loadMore = viewModel::loadMore)
+    val activeSection = sections.firstOrNull { it.tab == current }
     LoadMoreOnScrollEnd(
         listState,
         threshold = 4,
-        enabled = current == ProgramTab.MORE_VIDEOS && state.extras.hasMore,
-        loadMore = viewModel::loadMoreExtras,
+        enabled = activeSection?.page?.hasMore == true && activeSection.page.error == null,
+        contentKey = activeSection?.page?.page,
+        loadMore = { activeSection?.let(viewModel::loadMore) },
     )
 
     FichaLayout(
@@ -101,7 +99,7 @@ fun ProgramScreen(
                 progress = (suggestion as? PlaySuggestion.Continue)?.entry?.progress,
                 actions = if (contents.isCollection) {
                     {
-                        Button(onClick = { selectTab(ProgramTab.EPISODES) }) {
+                        Button(onClick = { selectTab(sections.firstOrNull()?.tab ?: contents.primaryTab) }) {
                             Text(stringResource(contents.browseLabel))
                         }
                     }
@@ -117,82 +115,29 @@ fun ProgramScreen(
             )
         },
         tabs = if (tabs.size > 1) {
-            { FichaTabs(tabs, current, selectTab, contents.label) }
+            { FichaTabs(tabs, current, selectTab) }
         } else {
             null
         },
     ) {
         when (current) {
-            ProgramTab.EPISODES -> {
-                // Las temporadas se quedan mientras carga la elegida: si desaparecieran,
-                // la lista encogería y la fila de chips perdería su desplazamiento.
-                if (!contents.isCollection && detail?.seasons?.isNotEmpty() == true) {
-                    item(key = "seasons") { SeasonChips(state, onSelect = viewModel::selectSeason) }
-                }
-                if (body == ProgramBody.Loading) {
-                    item(key = "loading") { LoadingMoreRow() }
-                    return@FichaLayout
-                }
-                if (contents.isCollection) {
-                    relatedGrid(state.episodes, columns, onOpenRelated)
-                } else items(state.episodes, key = { it.id }) { episode ->
-                    val entry = screen.entriesById[episode.id]
-                    EpisodeRow(
-                        item = episode,
-                        onClick = { if (state.opensItemDetails(episode)) onOpenRelated(episode) else onOpenItem(episode) },
-                        progress = entry?.takeIf { it.inProgress }?.progress,
-                        badge = when {
-                            entry?.finished == true -> stringResource(R.string.episode_watched)
-                            suggestion is PlaySuggestion.Next && suggestion.item.id == episode.id -> stringResource(R.string.episode_next)
-                            else -> null
-                        },
-                        highlighted = suggestion?.item?.id == episode.id,
-                    )
-                }
-                // El hueco se explica: o falló la petición, o el programa no tiene
-                // vídeos. Nunca una pantalla vacía sin decir por qué.
-                if (body is ProgramBody.NoEpisodes) {
-                    item(key = "no-episodes") {
-                        EmptyPanel(
-                            message = body.error?.text(context) ?: stringResource(R.string.program_empty),
-                            onRetry = viewModel::retry,
-                        )
-                    }
-                }
-                if (state.isLoadingMore) {
-                    item(key = "loading-more") { LoadingMoreRow() }
-                } else if (state.hasMore && body is ProgramBody.Episodes) {
-                    item(key = "load-more") {
-                        Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
-                            TextButton(onClick = viewModel::loadMore) { Text(stringResource(R.string.program_load_more)) }
-                        }
-                    }
-                }
-            }
-
-            ProgramTab.MORE_VIDEOS -> {
-                items(state.extras.items, key = { "extra-${it.id}" }) { extra ->
-                    EpisodeRow(item = extra, onClick = { onOpenItem(extra) })
-                }
-                if (state.extras.items.isEmpty() && state.extras.error != null) {
-                    item(key = "extras-error") {
-                        EmptyPanel(message = state.extras.error.text(context), onRetry = viewModel::retryExtras)
-                    }
-                }
-                if (state.extras.isLoading || state.extras.isLoadingMore) {
-                    item(key = "extras-loading") { LoadingMoreRow() }
-                } else if (state.extras.hasMore) {
-                    item(key = "extras-more") {
-                        Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
-                            TextButton(onClick = viewModel::loadMoreExtras) { Text(stringResource(R.string.program_load_more)) }
-                        }
-                    }
-                }
-            }
-
             ProgramTab.RELATED -> relatedGrid(state.related, columns, onOpenRelated)
             ProgramTab.DETAILS -> item(key = "details") { FichaFactsPanel(detail?.facts ?: FichaFacts()) }
-            null -> Unit
+            else -> activeSection?.let { section ->
+                if (section.tab == ProgramTab.EPISODES && detail?.seasons?.isNotEmpty() == true) {
+                    item(key = "seasons") { SeasonChips(state, onSelect = viewModel::selectSeason) }
+                }
+                fichaContentSection(
+                    section, columns,
+                    onSelect = { item ->
+                        if (section.tab != ProgramTab.MORE_VIDEOS && state.opensItemDetails(item)) onOpenRelated(item) else onOpenItem(item)
+                    },
+                    onLoadMore = { viewModel.loadMore(section) },
+                    onRetry = { viewModel.retry(section) },
+                    entriesById = screen.entriesById,
+                    suggestion = suggestion,
+                )
+            }
         }
     }
 }

@@ -213,6 +213,27 @@ class ProgramViewModelTest {
         assertEquals(EpisodeOrder.NEWEST_FIRST, unknown.uiState.value.order)
     }
 
+    @Test
+    fun `chapters beyond the first mixed page become available to the main action and survive season selection`() = runTest(mainDispatcher.dispatcher) {
+        val film = catalogItem("film").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")
+        val episode = catalogItem("episode").copy(mediaTypeId = "39816")
+        repository.program = { id, _ -> loaded(detail(id).copy(programType = "Entrevistas")) }
+        repository.programVideos = { _, season, number, _, _ ->
+            if (season != null) page(listOf(catalogItem("season-episode"))) else page(listOf(if (number == 1) film else episode), number, 2)
+        }
+        val viewModel = ProgramViewModel(repository, "program", "")
+        advanceUntilIdle()
+        val chapters = viewModel.uiState.value.contentSections.first { it.tab == ProgramTab.EPISODES }
+        assertTrue(chapters.page.items.isEmpty())
+        viewModel.loadMore(chapters)
+        advanceUntilIdle()
+        val state = viewModel.uiState.value
+        assertEquals(listOf("episode"), state.headerEpisodes.filter { it.contentTab(state.contents) == ProgramTab.EPISODES }.map { it.id })
+        viewModel.selectSeason("t1")
+        advanceUntilIdle()
+        assertEquals(listOf("film", "episode"), viewModel.uiState.value.headerEpisodes.map { it.id })
+    }
+
     private fun detail(id: String) = ProgramDetail(
         id = id,
         title = "Telediario",

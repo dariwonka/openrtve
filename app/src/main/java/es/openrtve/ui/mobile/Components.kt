@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import es.openrtve.R
 import es.openrtve.domain.CatalogItem
+import es.openrtve.domain.canHaveNextEpisode
 import es.openrtve.domain.ContentKind
 import es.openrtve.domain.LiveInfo
 import es.openrtve.domain.RowLayout
@@ -514,6 +515,7 @@ internal fun EpisodeRow(
     progress: Float? = null,
     badge: String? = null,
     highlighted: Boolean = false,
+    episodic: Boolean = item.canHaveNextEpisode,
 ) {
     val context = LocalContext.current
     Row(
@@ -544,7 +546,7 @@ internal fun EpisodeRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            item.metaLine(context)?.let {
+            item.metaLine(context, episodic)?.let {
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = it,

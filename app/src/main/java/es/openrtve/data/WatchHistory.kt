@@ -145,6 +145,15 @@ class WatchHistory(
         item.posterUrl?.let { put("posterUrl", it) }
         put("kind", item.kind.name)
         item.programId?.let { put("programId", it) }
+        item.programTypeId?.let { put("programTypeId", it) }
+        item.programType?.let { put("programType", it) }
+        item.mediaTypeId?.let { put("mediaTypeId", it) }
+        item.mediaTypeName?.let { put("mediaTypeName", it) }
+        item.mediaSubtypeId?.let { put("mediaSubtypeId", it) }
+        item.mediaSubtypeName?.let { put("mediaSubtypeName", it) }
+        item.seasonId?.let { put("seasonId", it) }
+        item.seasonTitle?.let { put("seasonTitle", it) }
+        item.episode?.let { put("episode", it) }
         put("drm", item.drm)
         put("paid", item.paid)
         put("positionMs", positionMs)
@@ -171,6 +180,15 @@ class WatchHistory(
             paid = (get("paid") as? JsonPrimitive)?.booleanOrNull ?: false,
             drm = (get("drm") as? JsonPrimitive)?.booleanOrNull ?: false,
             programId = text("programId"),
+            programTypeId = text("programTypeId"),
+            programType = text("programType"),
+            mediaTypeId = text("mediaTypeId"),
+            mediaTypeName = text("mediaTypeName"),
+            mediaSubtypeId = text("mediaSubtypeId"),
+            mediaSubtypeName = text("mediaSubtypeName"),
+            seasonId = text("seasonId"),
+            seasonTitle = text("seasonTitle"),
+            episode = long("episode")?.toInt(),
         )
         return WatchEntry(
             item,

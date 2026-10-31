@@ -143,6 +143,8 @@ internal fun TvEpisodesRow(
     isLoadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    firstItemFocus: FocusRequester? = null,
+    episodic: Boolean = true,
 ) {
     TvLazyRow(
         state = listState,
@@ -154,14 +156,22 @@ internal fun TvEpisodesRow(
             TvEpisodeCard(
                 item = item,
                 onClick = { onPlay(item) },
-                modifier = Modifier.width(TvEpisodeWidth),
+                modifier = Modifier.width(TvEpisodeWidth).then(
+                    if (item.id == items.first().id && firstItemFocus != null) Modifier.focusRequester(firstItemFocus) else Modifier,
+                ),
                 progress = progressOf(item),
                 badge = badgeOf(item),
+                episodic = episodic,
             )
         }
         if (hasMore) {
             item(key = "more") {
-                TvFocusSurface(onClick = onLoadMore, modifier = Modifier.width(TvEpisodeWidth).aspectRatio(16f / 9f)) {
+                TvFocusSurface(
+                    onClick = onLoadMore,
+                    modifier = Modifier.width(TvEpisodeWidth).aspectRatio(16f / 9f).then(
+                        if (items.isEmpty() && firstItemFocus != null) Modifier.focusRequester(firstItemFocus) else Modifier,
+                    ),
+                ) {
                     Text(
                         stringResource(if (isLoadingMore) R.string.state_loading else R.string.program_load_more),
                         style = MaterialTheme.typography.titleMedium,
@@ -200,7 +210,12 @@ internal fun TvRelatedRow(
         }
         if (hasMore) {
             item(key = "more") {
-                TvFocusSurface(onClick = onLoadMore, modifier = Modifier.width(TvPosterWidth).aspectRatio(2f / 3f)) {
+                TvFocusSurface(
+                    onClick = onLoadMore,
+                    modifier = Modifier.width(TvPosterWidth).aspectRatio(2f / 3f).then(
+                        if (items.isEmpty() && firstItemFocus != null) Modifier.focusRequester(firstItemFocus) else Modifier,
+                    ),
+                ) {
                     Text(
                         stringResource(if (isLoadingMore) R.string.state_loading else R.string.program_load_more),
                         style = MaterialTheme.typography.titleMedium,
@@ -244,6 +259,7 @@ private fun TvEpisodeCard(
     modifier: Modifier,
     progress: Float? = null,
     badge: String? = null,
+    episodic: Boolean = true,
 ) {
     val context = LocalContext.current
     Column(modifier) {
@@ -256,7 +272,7 @@ private fun TvEpisodeCard(
             Text(it, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         }
         Text(item.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        item.metaLine(context)?.let {
+        item.metaLine(context, episodic)?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }

@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -350,10 +351,7 @@ internal fun FichaTabs(
     onSelect: (ProgramTab) -> Unit,
     contentsLabel: Int = R.string.tab_episodes,
 ) {
-    PrimaryTabRow(
-        selectedTabIndex = tabs.indexOf(current).coerceAtLeast(0),
-        containerColor = MaterialTheme.colorScheme.background,
-    ) {
+    val content: @Composable () -> Unit = {
         tabs.forEach { tab ->
             Tab(
                 selected = tab == current,
@@ -363,6 +361,20 @@ internal fun FichaTabs(
                 text = { Text(text = tab.label(contentsLabel), maxLines = 1, overflow = TextOverflow.Ellipsis) },
             )
         }
+    }
+    if (tabs.size > 3) {
+        PrimaryScrollableTabRow(
+            selectedTabIndex = tabs.indexOf(current).coerceAtLeast(0),
+            containerColor = MaterialTheme.colorScheme.background,
+            edgePadding = 0.dp,
+            tabs = content,
+        )
+    } else {
+        PrimaryTabRow(
+            selectedTabIndex = tabs.indexOf(current).coerceAtLeast(0),
+            containerColor = MaterialTheme.colorScheme.background,
+            tabs = content,
+        )
     }
 }
 
@@ -404,6 +416,9 @@ internal fun relatedColumns(): Int {
 internal fun ProgramTab.label(contentsLabel: Int = R.string.tab_episodes): String = stringResource(
     when (this) {
         ProgramTab.EPISODES -> contentsLabel
+        ProgramTab.MOVIES -> R.string.tab_movies
+        ProgramTab.DOCUMENTARIES -> R.string.tab_documentaries
+        ProgramTab.VIDEOS -> R.string.tab_videos
         ProgramTab.MORE_VIDEOS -> R.string.tab_more_videos
         ProgramTab.RELATED -> R.string.tab_related
         ProgramTab.DETAILS -> R.string.tab_details

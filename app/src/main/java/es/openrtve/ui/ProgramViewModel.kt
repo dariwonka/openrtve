@@ -32,8 +32,8 @@ data class ProgramUiState(
     /** Sentido de [episodes]: el de RTVE Play para este programa y temporada. */
     val order: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
     /**
-     * Primera página de la lista completa ("Todos") y su orden: de ella sale el botón
-     * grande, que no debe cambiar al mirar otra temporada.
+     * Páginas cargadas de la lista completa ("Todos") y su orden: de ellas sale el
+     * botón grande, que no debe cambiar al mirar otra temporada.
      */
     val headerEpisodes: List<CatalogItem> = emptyList(),
     val headerOrder: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
@@ -115,6 +115,9 @@ class ProgramViewModel(
                 mutableUiState.update {
                     it.copy(
                         episodes = (it.episodes + result.value.items).distinctBy(CatalogItem::id),
+                        headerEpisodes = if (state.selectedSeasonId == null) {
+                            (it.headerEpisodes + result.value.items).distinctBy(CatalogItem::id)
+                        } else it.headerEpisodes,
                         page = result.value.page,
                         totalPages = result.value.totalPages,
                         isLoadingMore = false,
@@ -142,6 +145,16 @@ class ProgramViewModel(
 
     fun dismissError() {
         mutableUiState.update { it.copy(error = null) }
+    }
+
+    fun loadMore(section: ContentSection) {
+        if (section.loadsComplete) loadMore()
+        if (section.loadsExtras) loadMoreExtras()
+    }
+
+    fun retry(section: ContentSection) {
+        if (section.loadsComplete) retry()
+        if (section.loadsExtras) retryExtras()
     }
 
     fun loadMoreExtras() {

@@ -25,18 +25,22 @@ fun suggestPlay(
     programId: String,
     episodes: List<CatalogItem>,
     order: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
+    accepts: (CatalogItem) -> Boolean = { true },
 ): PlaySuggestion? {
-    val last = history.lastWatchedOf(programId)
-    val start = episodes.firstOrNull()
+    val eligible = episodes.filter(accepts)
+    val last = history.entries.value
+        .filter { it.item.programId == programId && (it.inProgress || it.finished) && accepts(it.item) }
+        .maxByOrNull { it.updatedAtMillis }
+    val start = eligible.firstOrNull()
     val newestFirst = order == EpisodeOrder.NEWEST_FIRST
     return when {
         last == null -> start?.let { PlaySuggestion.Play(it) }
         last.inProgress -> PlaySuggestion.Continue(last.item, last)
         else -> {
-            val index = episodes.indexOfFirst { it.id == last.item.id }
+            val index = eligible.indexOfFirst { it.id == last.item.id }
             val following = if (index < 0) -1 else if (newestFirst) index - 1 else index + 1
             when {
-                following in episodes.indices -> PlaySuggestion.Next(episodes[following])
+                following in eligible.indices -> PlaySuggestion.Next(eligible[following])
                 newestFirst && start != null && start.id != last.item.id -> PlaySuggestion.Next(start)
                 else -> start?.let { PlaySuggestion.Play(it) }
             }

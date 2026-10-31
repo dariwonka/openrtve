@@ -63,6 +63,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.DefaultTimeBar
 import androidx.media3.ui.TimeBar
 import es.openrtve.domain.CatalogItem
+import es.openrtve.domain.canHaveNextEpisode
 import es.openrtve.domain.PreviewSprite
 import androidx.media3.ui.PlayerView
 import android.content.res.Configuration
@@ -437,8 +438,13 @@ class PlayerActivity : ComponentActivity() {
                 }
             }
             launch {
+                val current = container.watchHistory.entryFor(videoId)?.item
                 nextItem = try {
-                    container.catalogRepository.loadNextVideo(videoId)
+                    if (current?.canHaveNextEpisode == false) null else container.catalogRepository.loadNextVideo(videoId)
+                        ?.takeIf { next ->
+                            next.canHaveNextEpisode &&
+                                (current?.programId == null || next.programId == null || current.programId == next.programId)
+                        }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
