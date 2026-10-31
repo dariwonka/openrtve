@@ -156,9 +156,10 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
                                 onOpenLink = actions.openLink,
                                 onResume = actions.playItem,
                                 onRemoveFromHistory = actions.removeFromHistory,
+                                reselectRequest = nav.rootRequests.getValue(Tab.HOME),
                             )
-                            Tab.SEARCH -> TvSearchScreen(repository, actions.openItem)
-                            Tab.EXPLORE -> TvExploreScreen(repository, actions.openCategory)
+                            Tab.SEARCH -> TvSearchScreen(repository, actions.openItem, reselectRequest = nav.rootRequests.getValue(Tab.SEARCH))
+                            Tab.EXPLORE -> TvExploreScreen(repository, actions.openCategory, reselectRequest = nav.rootRequests.getValue(Tab.EXPLORE))
                         }
                     }
                 }

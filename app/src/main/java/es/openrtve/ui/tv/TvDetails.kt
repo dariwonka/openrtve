@@ -26,8 +26,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,10 +57,10 @@ import es.openrtve.ui.metaLine
 internal fun TvDetailsScaffold(
     backdropUrl: String?,
     header: @Composable ColumnScope.() -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     sections: LazyListScope.() -> Unit,
 ) {
     val background = MaterialTheme.colorScheme.background
+    val listState = rememberLazyListState()
     // Al bajar a las filas el fondo se oscurece: entonces lo importante es el contenido.
     val scrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
     val dim by animateFloatAsState(if (scrolled) 0.75f else 0f, label = "tv-details-dim")
@@ -143,7 +141,6 @@ internal fun TvEpisodesRow(
     isLoadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
-    firstItemFocus: FocusRequester? = null,
     episodic: Boolean = true,
 ) {
     TvLazyRow(
@@ -156,9 +153,7 @@ internal fun TvEpisodesRow(
             TvEpisodeCard(
                 item = item,
                 onClick = { onPlay(item) },
-                modifier = Modifier.width(TvEpisodeWidth).then(
-                    if (item.id == items.first().id && firstItemFocus != null) Modifier.focusRequester(firstItemFocus) else Modifier,
-                ),
+                modifier = Modifier.width(TvEpisodeWidth),
                 progress = progressOf(item),
                 badge = badgeOf(item),
                 episodic = episodic,
@@ -168,9 +163,7 @@ internal fun TvEpisodesRow(
             item(key = "more") {
                 TvFocusSurface(
                     onClick = onLoadMore,
-                    modifier = Modifier.width(TvEpisodeWidth).aspectRatio(16f / 9f).then(
-                        if (items.isEmpty() && firstItemFocus != null) Modifier.focusRequester(firstItemFocus) else Modifier,
-                    ),
+                    modifier = Modifier.width(TvEpisodeWidth).aspectRatio(16f / 9f),
                 ) {
                     Text(
                         stringResource(if (isLoadingMore) R.string.state_loading else R.string.program_load_more),
@@ -192,7 +185,6 @@ internal fun TvRelatedRow(
     isLoadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
-    firstItemFocus: FocusRequester? = null,
 ) {
     TvLazyRow(
         state = listState,
@@ -203,18 +195,14 @@ internal fun TvRelatedRow(
         items(items, key = { it.id }) { item ->
             TvItemCard(
                 item, RowLayout.POSTER, { onOpen(item) },
-                Modifier.width(TvPosterWidth).then(
-                    if (item.id == items.first().id && firstItemFocus != null) Modifier.focusRequester(firstItemFocus) else Modifier,
-                ),
+                Modifier.width(TvPosterWidth),
             )
         }
         if (hasMore) {
             item(key = "more") {
                 TvFocusSurface(
                     onClick = onLoadMore,
-                    modifier = Modifier.width(TvPosterWidth).aspectRatio(2f / 3f).then(
-                        if (items.isEmpty() && firstItemFocus != null) Modifier.focusRequester(firstItemFocus) else Modifier,
-                    ),
+                    modifier = Modifier.width(TvPosterWidth).aspectRatio(2f / 3f),
                 ) {
                     Text(
                         stringResource(if (isLoadingMore) R.string.state_loading else R.string.program_load_more),

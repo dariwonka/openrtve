@@ -5,6 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -183,6 +187,19 @@ fun rememberSearchScreen(repository: CatalogRepository): SearchScreenState {
 }
 
 class ExploreScreenState(val viewModel: ExploreViewModel, val state: ExploreUiState)
+
+/** Se consume una sola vez por raíz, conservando su scroll al cambiar de sección. */
+@Composable
+fun RootReselectionEffect(request: Int, onReselect: suspend () -> Unit) {
+    var handled by rememberSaveable { mutableIntStateOf(0) }
+    val action by rememberUpdatedState(onReselect)
+    LaunchedEffect(request) {
+        if (request > handled) {
+            handled = request
+            action()
+        }
+    }
+}
 
 @Composable
 fun rememberExploreScreen(repository: CatalogRepository, tv: Boolean = false): ExploreScreenState {

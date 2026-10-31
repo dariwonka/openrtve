@@ -27,6 +27,7 @@ private const val SETTINGS_DESTINATION = "settings"
 private val navigationJson = Json { ignoreUnknownKeys = true }
 
 private fun savedStack(tab: Tab) = "navigation.stack.${tab.name.lowercase()}"
+private fun savedRootRequest(tab: Tab) = "navigation.rootRequest.${tab.name.lowercase()}"
 
 /**
  * Guarda solo la ruta necesaria para reconstruir cada pantalla. El contenido
@@ -138,7 +139,10 @@ internal fun SavedStateHandle.restoreNavigationState(): NavigationState {
         get<ArrayList<String>>(savedStack(currentTab)).orEmpty().mapNotNull(::decodeRoute)
     }
     val global = GlobalDestination.Settings.takeIf { get<String>(SAVED_GLOBAL) == SETTINGS_DESTINATION }
-    return NavigationState(tab = tab, stacks = stacks, global = global, generation = get<Int>(SAVED_GENERATION) ?: 0)
+    return NavigationState(
+        tab = tab, stacks = stacks, global = global, generation = get<Int>(SAVED_GENERATION) ?: 0,
+        rootRequests = Tab.entries.associateWith { get<Int>(savedRootRequest(it)) ?: 0 },
+    )
 }
 
 internal fun SavedStateHandle.saveNavigationState(state: NavigationState) {
@@ -146,6 +150,7 @@ internal fun SavedStateHandle.saveNavigationState(state: NavigationState) {
     this[SAVED_GENERATION] = state.generation
     Tab.entries.forEach { tab ->
         this[savedStack(tab)] = ArrayList(state.stacks.getValue(tab).map(Destination::encodeRoute))
+        this[savedRootRequest(tab)] = state.rootRequests.getValue(tab)
     }
     if (state.global == GlobalDestination.Settings) {
         this[SAVED_GLOBAL] = SETTINGS_DESTINATION

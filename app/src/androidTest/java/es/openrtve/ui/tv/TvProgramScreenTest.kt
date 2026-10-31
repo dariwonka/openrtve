@@ -1,8 +1,8 @@
 package es.openrtve.ui.tv
 
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.isFocused
-import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.hasAnySibling
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -35,7 +35,7 @@ class TvProgramScreenTest {
     val compose = createComposeRule()
 
     @Test
-    fun browsingAFilmCycleFocusesThePosterAndOpensItsSheet() {
+    fun aFilmCycleHasNoBrowseButtonAndTheRemoteReachesItsPoster() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val film = catalogItem("film", title = "Akelarre").copy(mediaSubtypeName = "Película")
         val repository = FakeCatalogRepository().apply {
@@ -59,11 +59,11 @@ class TvProgramScreenTest {
             }
         }
 
-        val browseLabel = context.getString(R.string.action_browse_movies)
+        compose.onAllNodes(hasText("Ver películas")).assertCountEquals(0)
         compose.waitUntil(timeoutMillis = 5_000) {
-            compose.onAllNodes(hasText(browseLabel) and isEnabled() and isFocused()).fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodes(hasText("Somos cine") and isFocused()).fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText(browseLabel).performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onNodeWithText("Somos cine").performKeyInput { pressKey(Key.DirectionDown) }
         compose.waitUntil(timeoutMillis = 5_000) {
             compose.onAllNodes(hasClickAction() and hasAnySibling(hasText("Akelarre")) and isFocused())
                 .fetchSemanticsNodes().isNotEmpty()

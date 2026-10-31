@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
@@ -54,6 +55,7 @@ import es.openrtve.domain.SEE_ALL_MIN_ITEMS
 import es.openrtve.ui.HomeSection
 import es.openrtve.ui.SectionState
 import es.openrtve.ui.rememberPortadaScreen
+import es.openrtve.ui.RootReselectionEffect
 import es.openrtve.ui.text
 
 /**
@@ -73,6 +75,7 @@ fun TvPortadaScreen(
     /** "Seguir viendo": continuar al pulsar; con pulsación larga, ficha o quitar. */
     onResume: (CatalogItem) -> Unit = onOpenItem,
     onRemoveFromHistory: (CatalogItem) -> Unit = {},
+    reselectRequest: Int = 0,
 ) {
     val screen = rememberPortadaScreen(repository, url, history)
     val viewModel = screen.viewModel
@@ -86,6 +89,7 @@ fun TvPortadaScreen(
     var focusedItemKey by rememberSaveable { mutableStateOf<String?>(null) }
     var focusPlaced by remember { mutableStateOf(false) }
     val restoreFocus = remember { FocusRequester() }
+    val listState = rememberLazyListState()
     val focusTarget = focusedRowId?.takeIf { id -> id == CONTINUE_ROW_ID && resumable.isNotEmpty() || state.sections.any { it.row.id == id && it.state.isFocusable } }
         ?: state.sections.firstOrNull { it.state.isFocusable }?.row?.id
     val itemTarget = focusedItemKey?.takeIf { key ->
@@ -106,6 +110,15 @@ fun TvPortadaScreen(
         .onFocusChanged { if (it.hasFocus) focusedItemKey = key }
         .then(if (rowId == focusTarget && key == itemTarget) Modifier.focusRequester(restoreFocus) else Modifier)
 
+    RootReselectionEffect(reselectRequest) {
+        focusedRowId = null
+        focusedItemKey = null
+        focusPlaced = false
+        listState.scrollToItem(0)
+        if (state.sections.any { it.state.isFocusable }) {
+            requestFocusUntilGranted(restoreFocus) { focusPlaced }
+        }
+    }
     when {
         state.isLoading -> TvCenterMessage(stringResource(R.string.state_loading))
         state.sections.isEmpty() -> TvCenterMessage(
@@ -113,6 +126,7 @@ fun TvPortadaScreen(
             viewModel::refresh,
         )
         else -> ProvideTvVerticalScroll { LazyColumn(
+            state = listState,
             contentPadding = PaddingValues(bottom = TvVerticalMargin),
             verticalArrangement = Arrangement.spacedBy(28.dp),
             modifier = Modifier.fillMaxSize().tvTopFade(),

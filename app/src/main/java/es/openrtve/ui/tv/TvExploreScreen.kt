@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -21,6 +22,7 @@ import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.domain.ExploreCategory
 import es.openrtve.ui.header
+import es.openrtve.ui.RootReselectionEffect
 import es.openrtve.ui.rememberExploreScreen
 import es.openrtve.ui.text
 import androidx.compose.ui.res.stringResource
@@ -29,12 +31,21 @@ import androidx.compose.ui.res.stringResource
 fun TvExploreScreen(
     repository: CatalogRepository,
     onOpenCategory: (ExploreCategory) -> Unit,
+    reselectRequest: Int = 0,
 ) {
     val screen = rememberExploreScreen(repository, tv = true)
     val viewModel = screen.viewModel
     val state = screen.state
     val context = LocalContext.current
     val initialFocus = rememberInitialFocus()
+    val gridState = rememberLazyGridState()
+    RootReselectionEffect(reselectRequest) {
+        initialFocus.granted = false
+        gridState.scrollToItem(0)
+        if (state.groups.any { it.categories.isNotEmpty() }) {
+            requestFocusUntilGranted(initialFocus.requester) { initialFocus.granted }
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         TvScreenTitle(stringResource(R.string.tab_explore))
@@ -42,6 +53,7 @@ fun TvExploreScreen(
         state.isLoading -> TvCenterMessage(stringResource(R.string.state_loading))
         state.groups.isEmpty() && state.error != null -> TvCenterMessage(state.error.text(context), viewModel::retry)
         else -> ProvideTvVerticalScroll(top = 56.dp) { LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Adaptive(minSize = 180.dp),
             contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, top = TvFocusScaleRoom, bottom = TvVerticalMargin),
             horizontalArrangement = Arrangement.spacedBy(20.dp),

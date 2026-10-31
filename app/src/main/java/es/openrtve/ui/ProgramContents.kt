@@ -1,6 +1,5 @@
 package es.openrtve.ui
 
-import es.openrtve.R
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ContentKind
 import es.openrtve.domain.MediaForm
@@ -11,11 +10,8 @@ import es.openrtve.domain.isContainer
 import es.openrtve.domain.isMovieContainer
 
 /** La API llama programas tanto a las series como a los ciclos de piezas independientes. */
-enum class ProgramContents(val label: Int, val browseLabel: Int) {
-    EPISODES(R.string.tab_episodes, R.string.action_browse_videos),
-    MOVIES(R.string.tab_movies, R.string.action_browse_movies),
-    DOCUMENTARIES(R.string.tab_documentaries, R.string.action_browse_documentaries),
-    VIDEOS(R.string.tab_videos, R.string.action_browse_videos);
+enum class ProgramContents {
+    EPISODES, MOVIES, DOCUMENTARIES, VIDEOS;
 
     val isCollection: Boolean get() = this != EPISODES
 }

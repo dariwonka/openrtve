@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -35,9 +34,7 @@ import es.openrtve.ui.PlaySuggestion
 import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.ProgramUiState
 import es.openrtve.ui.facts
-import es.openrtve.ui.contents
 import es.openrtve.ui.contentSections
-import es.openrtve.ui.primaryTab
 import es.openrtve.ui.opensItemDetails
 import es.openrtve.ui.metaLine
 import es.openrtve.ui.programTabs
@@ -68,9 +65,8 @@ fun ProgramScreen(
     val suggestion = screen.suggestion
     val context = LocalContext.current
     val detail = state.detail
-    val contents = state.contents
     val sections = state.contentSections
-    val tabs = programTabs(es.openrtve.ui.programBody(state), state)
+    val tabs = programTabs(state)
     val columns = relatedColumns()
     val (current, selectTab) = rememberSelectedTab(tabs)
     val listState = rememberLazyListState()
@@ -97,13 +93,7 @@ fun ProgramScreen(
                 claim = detail?.emission,
                 synopsis = detail?.description?.let { html -> remember(html) { AnnotatedString.fromHtml(html) } },
                 progress = (suggestion as? PlaySuggestion.Continue)?.entry?.progress,
-                actions = if (contents.isCollection) {
-                    {
-                        Button(onClick = { selectTab(sections.firstOrNull()?.tab ?: contents.primaryTab) }) {
-                            Text(stringResource(contents.browseLabel))
-                        }
-                    }
-                } else suggestion?.let { target ->
+                actions = suggestion?.let { target ->
                     {
                         PrimaryPlayButton(
                             suggestion = target,

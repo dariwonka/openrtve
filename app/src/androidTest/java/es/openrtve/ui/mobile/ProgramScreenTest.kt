@@ -25,6 +25,7 @@ import es.openrtve.testing.loaded
 import es.openrtve.testing.page
 import es.openrtve.ui.theme.OpenRtveTheme
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -67,7 +68,7 @@ class ProgramScreenTest {
         compose.onAllNodes(hasText(context.getString(R.string.tab_related))).assertCountEquals(0)
         compose.onAllNodes(hasText(context.getString(R.string.tab_episodes))).assertCountEquals(0)
         compose.onAllNodes(hasText(context.getString(R.string.program_play_episode, "Akelarre"))).assertCountEquals(0)
-        compose.onNodeWithText(context.getString(R.string.action_browse_movies)).performScrollTo().performClick()
+        compose.onAllNodes(hasText("Ver películas")).assertCountEquals(0)
         compose.onNodeWithText("Akelarre").performScrollTo().performClick()
 
         assertEquals(listOf("film"), detailsOpened.map { it.id })
@@ -88,6 +89,25 @@ class ProgramScreenTest {
         compose.onAllNodes(hasText(context.getString(R.string.tab_movies))).assertCountEquals(0)
         compose.onNodeWithText("Episodio 3").performScrollTo().performClick()
         assertEquals(listOf("e3"), opened.map { it.id })
+    }
+
+    @Test
+    fun aLateTabDoesNotBlockTheContentOrChangeTheSelectedSection() {
+        val relatedReady = CompletableDeferred<Unit>()
+        repository.program = { id, _ -> loaded(ProgramDetail(
+            id, "Programa", null, null, null, emptyList(), director = "Directora",
+        )) }
+        repository.related = { _, _ -> relatedReady.await(); loaded(listOf(catalogItem("related"))) }
+        setContent()
+
+        compose.onNodeWithText("Episodio 3").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.tab_details)).performScrollTo().performClick()
+        compose.onNodeWithText(context.getString(R.string.tab_details)).assertIsSelected()
+        compose.onAllNodes(hasText(context.getString(R.string.tab_related))).assertCountEquals(0)
+        relatedReady.complete(Unit)
+        compose.onNodeWithText(context.getString(R.string.tab_related)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.tab_details)).assertIsSelected()
+        compose.onNodeWithText("Directora").assertIsDisplayed()
     }
 
     @Test

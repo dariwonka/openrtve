@@ -103,7 +103,7 @@ class ContentSectionsTest {
         )
         assertEquals(
             listOf(ProgramTab.EPISODES, ProgramTab.MOVIES, ProgramTab.MORE_VIDEOS, ProgramTab.RELATED, ProgramTab.DETAILS),
-            programTabs(ProgramBody.Episodes, state),
+            programTabs(state),
         )
     }
 }

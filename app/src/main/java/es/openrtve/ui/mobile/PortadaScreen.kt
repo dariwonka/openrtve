@@ -60,6 +60,7 @@ import es.openrtve.domain.SEE_ALL_MIN_ITEMS
 import es.openrtve.ui.HomeSection
 import es.openrtve.ui.SectionState
 import es.openrtve.ui.rememberPortadaScreen
+import es.openrtve.ui.RootReselectionEffect
 import es.openrtve.ui.text
 
 /**
@@ -82,6 +83,7 @@ fun PortadaScreen(
     /** "Seguir viendo": continuar al tocar y quitar desde el menú de la tarjeta. */
     onResume: (CatalogItem) -> Unit = onOpenItem,
     onRemoveFromHistory: (CatalogItem) -> Unit = {},
+    reselectRequest: Int = 0,
 ) {
     val screen = rememberPortadaScreen(repository, url, history)
     val viewModel = screen.viewModel
@@ -100,6 +102,7 @@ fun PortadaScreen(
         ) {
             val startsWithHero = state.sections.firstOrNull()?.row?.layout == RowLayout.HERO
             val listState = rememberLazyListState()
+            RootReselectionEffect(reselectRequest) { listState.animateScrollToItem(0) }
             // La marca flota sobre el hero; en cuanto se hace scroll desaparece para no tapar tarjetas.
             val showBrand by remember {
                 derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 200 }

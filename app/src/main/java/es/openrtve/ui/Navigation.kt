@@ -90,6 +90,8 @@ data class NavigationState(
     val message: UiMessage? = null,
     /** Cuántas veces un enlace externo ha sustituido las pilas (ver [entryKey]). */
     val generation: Int = 0,
+    /** Peticiones a la raíz al volver a pulsar su sección activa. */
+    val rootRequests: Map<Tab, Int> = Tab.entries.associateWith { 0 },
 ) {
     val stack: List<Destination> get() = stacks.getValue(tab)
     val current: AppDestination? get() = global ?: stack.lastOrNull()
@@ -146,8 +148,11 @@ class NavigationViewModel(private val savedStateHandle: SavedStateHandle) : View
             navigate(current.copy(tab = tab))
             return
         }
-        // Repetir la pestaña activa vuelve a su raíz, como en las apps M3.
-        navigate(current.copy(stacks = current.stacks + (tab to emptyList())))
+        // Repetir la sección activa vuelve a la raíz y solicita su acción (subir o buscar).
+        navigate(current.copy(
+            stacks = current.stacks + (tab to emptyList()),
+            rootRequests = current.rootRequests + (tab to current.rootRequests.getValue(tab) + 1),
+        ))
         current.stack.indices.forEach { release(entryKey(tab, it, current.generation)) }
     }
 

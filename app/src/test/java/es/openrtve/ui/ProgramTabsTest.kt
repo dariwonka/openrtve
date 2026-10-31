@@ -9,33 +9,17 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Qué enseña el cuerpo de la ficha y qué pestañas lleva: decisiones puras, sin Compose. */
-class ProgramBodyTest {
+/** Navegación de las fichas según el contenido disponible, sin Compose. */
+class ProgramTabsTest {
     private fun item(id: String) = referenceItem(id, ContentKind.VIDEO, "Vídeo $id")
 
-    private fun state(episodes: List<CatalogItem> = emptyList(), isLoading: Boolean = false, error: LoadError? = null) =
-        ProgramUiState(programId = "p1", title = "Programa", episodes = episodes, isLoading = isLoading, error = error)
-
-    @Test
-    fun `mientras no se saben los capitulos el cuerpo carga, con la cabecera ya pintada`() {
-        assertEquals(ProgramBody.Loading, programBody(state(isLoading = true)))
-    }
-
-    @Test
-    fun `con capitulos se enseña la lista`() {
-        assertEquals(ProgramBody.Episodes, programBody(state(episodes = listOf(item("v1")))))
-    }
-
-    @Test
-    fun `sin capitulos se explica el hueco, con el error si lo hubo`() {
-        assertEquals(ProgramBody.NoEpisodes(null), programBody(state()))
-        assertEquals(ProgramBody.NoEpisodes(LoadError.Offline), programBody(state(error = LoadError.Offline)))
-    }
+    private fun state(episodes: List<CatalogItem> = emptyList()) =
+        ProgramUiState(programId = "p1", title = "Programa", episodes = episodes, isLoading = false)
 
     @Test
     fun `la ficha de programa solo tiene capitulos, asi que no enseña fila de pestañas`() {
         val state = state(episodes = listOf(item("v1")))
-        assertEquals(listOf(ProgramTab.EPISODES), programTabs(ProgramBody.Episodes, state))
+        assertEquals(listOf(ProgramTab.EPISODES), programTabs(state))
     }
 
     @Test
@@ -58,7 +42,7 @@ class ProgramBodyTest {
         val programState = state(episodes = listOf(item("v1"))).copy(extras = extras, detail = detail)
         assertEquals(
             listOf(ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS, ProgramTab.DETAILS),
-            programTabs(ProgramBody.Episodes, programState),
+            programTabs(programState),
         )
 
         val videoState = VideoUiState(
@@ -87,6 +71,6 @@ class ProgramBodyTest {
             related = listOf(item("other-program")),
             extras = PagedItemsState(items = listOf(item("clip"))),
         )
-        assertEquals(listOf(ProgramTab.MOVIES, ProgramTab.MORE_VIDEOS), programTabs(ProgramBody.Episodes, state))
+        assertEquals(listOf(ProgramTab.MOVIES, ProgramTab.MORE_VIDEOS), programTabs(state))
     }
 }

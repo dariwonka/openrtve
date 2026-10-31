@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -29,6 +30,7 @@ import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.domain.ExploreCategory
 import es.openrtve.ui.header
+import es.openrtve.ui.RootReselectionEffect
 import es.openrtve.ui.rememberExploreScreen
 import es.openrtve.ui.text
 
@@ -38,11 +40,14 @@ fun ExploreScreen(
     repository: CatalogRepository,
     onOpenCategory: (ExploreCategory) -> Unit,
     onOpenSettings: () -> Unit,
+    reselectRequest: Int = 0,
 ) {
     val screen = rememberExploreScreen(repository)
     val viewModel = screen.viewModel
     val state = screen.state
     val context = LocalContext.current
+    val gridState = rememberLazyGridState()
+    RootReselectionEffect(reselectRequest) { gridState.animateScrollToItem(0) }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         // Título grande dentro del contenido en vez de una barra: ocupa lo mismo y se lee mejor.
@@ -66,6 +71,7 @@ fun ExploreScreen(
             state.isLoading -> LoadingPanel()
             state.groups.isEmpty() && state.error != null -> EmptyPanel(state.error.text(context), viewModel::retry)
             else -> LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Adaptive(minSize = 160.dp),
                 contentPadding = PaddingValues(start = ScreenPadding, end = ScreenPadding, bottom = ScreenPadding),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

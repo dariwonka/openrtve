@@ -349,7 +349,6 @@ internal fun FichaTabs(
     tabs: List<ProgramTab>,
     current: ProgramTab?,
     onSelect: (ProgramTab) -> Unit,
-    contentsLabel: Int = R.string.tab_episodes,
 ) {
     val content: @Composable () -> Unit = {
         tabs.forEach { tab ->
@@ -358,7 +357,7 @@ internal fun FichaTabs(
                 onClick = { onSelect(tab) },
                 selectedContentColor = MaterialTheme.colorScheme.primary,
                 unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                text = { Text(text = tab.label(contentsLabel), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                text = { Text(text = tab.label(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
             )
         }
     }
@@ -413,9 +412,9 @@ internal fun relatedColumns(): Int {
 }
 
 @Composable
-internal fun ProgramTab.label(contentsLabel: Int = R.string.tab_episodes): String = stringResource(
+internal fun ProgramTab.label(): String = stringResource(
     when (this) {
-        ProgramTab.EPISODES -> contentsLabel
+        ProgramTab.EPISODES -> R.string.tab_episodes
         ProgramTab.MOVIES -> R.string.tab_movies
         ProgramTab.DOCUMENTARIES -> R.string.tab_documentaries
         ProgramTab.VIDEOS -> R.string.tab_videos

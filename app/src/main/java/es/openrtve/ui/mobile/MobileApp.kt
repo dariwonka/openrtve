@@ -156,15 +156,18 @@ fun MobileApp(
                                     onOpenSettings = actions.openSettings,
                                     onResume = actions.playItem,
                                     onRemoveFromHistory = actions.removeFromHistory,
+                                    reselectRequest = nav.rootRequests.getValue(Tab.HOME),
                                 )
                                 Tab.SEARCH -> SearchScreen(
                                     repository = repository,
                                     onOpenItem = actions.openItem,
+                                    reselectRequest = nav.rootRequests.getValue(Tab.SEARCH),
                                 )
                                 Tab.EXPLORE -> ExploreScreen(
                                     repository = repository,
                                     onOpenCategory = actions.openCategory,
                                     onOpenSettings = actions.openSettings,
+                                    reselectRequest = nav.rootRequests.getValue(Tab.EXPLORE),
                                 )
                             }
                         }

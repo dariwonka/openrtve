@@ -41,12 +41,10 @@ data class PagedItemsState(
     val error: LoadError? = null,
 ) {
     val hasMore: Boolean get() = page < totalPages
-    /** Un error conserva la pestaña para que el usuario pueda reintentarla. */
-    val isAvailable: Boolean get() = items.isNotEmpty() || error != null
 }
 
 /** Pestañas de la ficha de un programa, según los datos que realmente existen. */
-fun programTabs(body: ProgramBody, state: ProgramUiState): List<ProgramTab> = buildList {
+fun programTabs(state: ProgramUiState): List<ProgramTab> = buildList {
     addAll(state.contentSections.map { it.tab })
     if (!state.contents.isCollection) {
         if (state.related.isNotEmpty()) add(ProgramTab.RELATED)

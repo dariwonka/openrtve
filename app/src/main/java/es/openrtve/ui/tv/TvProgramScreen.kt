@@ -3,18 +3,15 @@ package es.openrtve.ui.tv
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
@@ -39,7 +36,6 @@ import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.opensItemDetails
 import es.openrtve.ui.metaLine
 import es.openrtve.ui.rememberProgramScreen
-import kotlinx.coroutines.launch
 
 /**
  * Ficha de programa en TV (ver [TvDetailsScaffold]): cabecera con el botón de
@@ -63,18 +59,13 @@ fun TvProgramScreen(
     val suggestion = screen.suggestion
     val contents = state.contents
     val sections = state.contentSections
-    val firstContent = remember { FocusRequester() }
-    val detailsState = rememberLazyListState()
-    val firstRowState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    val focusManager = LocalFocusManager.current
 
     TvDetailsScaffold(
         backdropUrl = state.detail?.imageUrl ?: program.imageUrl,
-        listState = detailsState,
         header = {
             Text(
                 text = state.title,
+                modifier = if (contents.isCollection) Modifier.initialFocus().focusable() else Modifier,
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
@@ -98,44 +89,29 @@ fun TvProgramScreen(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.height(20.dp))
-            if (contents.isCollection) {
+            if (!contents.isCollection) {
+                Spacer(Modifier.height(20.dp))
                 Button(
-                    onClick = {
-                        // La cabecera enfocada intenta volver arriba; se libera antes de ir a la fila.
-                        focusManager.clearFocus()
-                        scope.launch {
-                            detailsState.scrollToItem(1)
-                            firstRowState.scrollToItem(0)
-                            withFrameNanos { }
-                            firstContent.requestFocus()
-                        }
-                    },
-                    enabled = sections.firstOrNull()?.page?.let { it.items.isNotEmpty() || it.hasMore } == true,
-                    modifier = Modifier.initialFocus(enabled = sections.firstOrNull()?.page?.let { it.items.isNotEmpty() || it.hasMore } == true),
+                    onClick = { suggestion?.let { onOpenItem(it.item) } },
+                    enabled = suggestion != null,
+                    // Deshabilitado no admite el foco: se concede en cuanto hay qué reproducir.
+                    modifier = Modifier.initialFocus(enabled = suggestion != null),
                 ) {
-                    Text(stringResource(contents.browseLabel))
+                    Text(
+                        text = when (suggestion) {
+                            null -> stringResource(R.string.action_play)
+                            is PlaySuggestion.Continue -> stringResource(R.string.program_continue_episode, suggestion.item.title)
+                            is PlaySuggestion.Next -> stringResource(R.string.program_next_episode, suggestion.item.title)
+                            is PlaySuggestion.Play -> stringResource(R.string.program_play_episode, suggestion.item.title)
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
-            } else Button(
-                onClick = { suggestion?.let { onOpenItem(it.item) } },
-                enabled = suggestion != null,
-                // Deshabilitado no admite el foco: se concede en cuanto hay qué reproducir.
-                modifier = Modifier.initialFocus(enabled = suggestion != null),
-            ) {
-                Text(
-                    text = when (suggestion) {
-                        null -> stringResource(R.string.action_play)
-                        is PlaySuggestion.Continue -> stringResource(R.string.program_continue_episode, suggestion.item.title)
-                        is PlaySuggestion.Next -> stringResource(R.string.program_next_episode, suggestion.item.title)
-                        is PlaySuggestion.Play -> stringResource(R.string.program_play_episode, suggestion.item.title)
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
         },
     ) {
-        sections.forEachIndexed { index, section ->
+        sections.forEach { section ->
             tvDetailsSection(section.tab.name, { section.tab.sectionTitle() }) {
                 if (section.tab == ProgramTab.EPISODES) SeasonTabs(state, viewModel)
                 TvContentSection(
@@ -145,10 +121,8 @@ fun TvProgramScreen(
                     },
                     onLoadMore = { viewModel.loadMore(section) },
                     onRetry = { viewModel.retry(section) },
-                    firstItemFocus = firstContent.takeIf { contents.isCollection && index == 0 },
                     entriesById = screen.entriesById,
                     suggestion = suggestion,
-                    listState = if (index == 0) firstRowState else rememberLazyListState(),
                 )
             }
         }

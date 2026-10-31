@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -61,6 +62,7 @@ import es.openrtve.data.CatalogRepository
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.RowLayout
 import es.openrtve.ui.FilterState
+import es.openrtve.ui.RootReselectionEffect
 import es.openrtve.ui.rememberSearchScreen
 import es.openrtve.ui.text
 
@@ -69,6 +71,7 @@ import es.openrtve.ui.text
 fun TvSearchScreen(
     repository: CatalogRepository,
     onOpenItem: (CatalogItem) -> Unit,
+    reselectRequest: Int = 0,
 ) {
     val screen = rememberSearchScreen(repository)
     val viewModel = screen.viewModel
@@ -76,6 +79,8 @@ fun TvSearchScreen(
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val gridState = rememberLazyGridState()
+    RootReselectionEffect(reselectRequest) { gridState.scrollToItem(0) }
 
     // Una sola página con scroll, como en Google TV: título, campo, filtros y
     // resultados. Al bajar a los resultados el campo sube con todo lo demás y
@@ -83,6 +88,7 @@ fun TvSearchScreen(
     val results = state.results
     ProvideTvVerticalScroll {
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Fixed(GRID_COLUMNS),
             contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, bottom = TvVerticalMargin),
             horizontalArrangement = Arrangement.spacedBy(20.dp),
@@ -104,6 +110,7 @@ fun TvSearchScreen(
                     onQueryChange = viewModel::setQuery,
                     // "Buscar" en el teclado lleva a los resultados, como abajo en el mando.
                     onSearch = { focusManager.moveFocus(FocusDirection.Down) },
+                    reselectRequest = reselectRequest,
                 )
             }
             if (!state.isTextSearch && state.filters.isNotEmpty()) {
@@ -206,8 +213,9 @@ private const val LANDSCAPE_SPAN = 2
  * con todas las flechas del mando.
  */
 @Composable
-private fun TvSearchBar(query: String, onQueryChange: (String) -> Unit, onSearch: () -> Unit) {
+private fun TvSearchBar(query: String, onQueryChange: (String) -> Unit, onSearch: () -> Unit, reselectRequest: Int) {
     var editing by remember { mutableStateOf(false) }
+    RootReselectionEffect(reselectRequest) { editing = true }
     /** Al cerrar el campo: `null` si no se ha editado aún, si no, si hay que bajar a los resultados. */
     var closedGoingDown by remember { mutableStateOf<Boolean?>(null) }
     val keyboard = LocalSoftwareKeyboardController.current

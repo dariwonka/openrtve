@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -27,13 +26,12 @@ internal fun TvContentSection(
     onSelect: (CatalogItem) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
-    firstItemFocus: FocusRequester? = null,
     entriesById: Map<String, WatchEntry> = emptyMap(),
     suggestion: PlaySuggestion? = null,
     currentItemId: String? = null,
-    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
 ) {
     val page = section.page
+    val listState = rememberLazyListState()
     val episodic = section.tab == ProgramTab.EPISODES
     LoadMoreOnScrollEnd(listState, threshold = 3, enabled = page.hasMore && page.error == null, contentKey = page.page, loadMore = onLoadMore)
     if (page.error != null || (page.items.isEmpty() && !page.hasMore)) {
@@ -54,7 +52,7 @@ internal fun TvContentSection(
     }
     if (page.items.isEmpty() && !page.hasMore) return
     if (section.tab == ProgramTab.MOVIES || section.tab == ProgramTab.DOCUMENTARIES) {
-        TvRelatedRow(page.items, onSelect, page.hasMore, page.isLoadingMore, onLoadMore, listState, firstItemFocus)
+        TvRelatedRow(page.items, onSelect, page.hasMore, page.isLoadingMore, onLoadMore, listState)
     } else {
         TvEpisodesRow(
             items = page.items,
@@ -74,7 +72,6 @@ internal fun TvContentSection(
             isLoadingMore = page.isLoadingMore,
             onLoadMore = onLoadMore,
             listState = listState,
-            firstItemFocus = firstItemFocus,
             episodic = episodic,
         )
     }

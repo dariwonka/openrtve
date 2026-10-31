@@ -28,7 +28,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -47,6 +51,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import es.openrtve.ui.FilterState
+import es.openrtve.ui.RootReselectionEffect
 import es.openrtve.ui.rememberSearchScreen
 import es.openrtve.ui.text
 
@@ -55,12 +60,19 @@ import es.openrtve.ui.text
 fun SearchScreen(
     repository: CatalogRepository,
     onOpenItem: (CatalogItem) -> Unit,
+    reselectRequest: Int = 0,
 ) {
     val screen = rememberSearchScreen(repository)
     val viewModel = screen.viewModel
     val state = screen.state
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val field = remember { FocusRequester() }
+    RootReselectionEffect(reselectRequest) {
+        field.requestFocus()
+        withFrameNanos { }
+        keyboard?.show()
+    }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         OutlinedTextField(
@@ -79,6 +91,7 @@ fun SearchScreen(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
             modifier = Modifier
+                .focusRequester(field)
                 .fillMaxWidth()
                 .padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
