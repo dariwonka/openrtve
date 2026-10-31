@@ -240,7 +240,8 @@ class RtveJsonParser(
             emission = program.text("emission"),
             seasons = seasons,
             webUrl = program.text("htmlUrl")?.let(hostPolicy::sanitize),
-            programTypeId = program.text("programTypeID"),
+            programTypeId = program.text("programTypeId", "programTypeID"),
+            programType = program.text("programType"),
             inEmission = program.flag("outOfEmission") != true,
             isComplete = program.flag("isComplete") == true,
             showFragments = program.flag("showFragments") == true,
@@ -292,7 +293,7 @@ class RtveJsonParser(
         val nestedMedia = item.obj("lastMultimedia")
         // Sin id propio el item no es un programa: es una envoltura del medio que trae dentro.
         val bareMedia = nestedMedia != null && item.text("id", "uid") == null
-        if (nestedMedia != null && (mediaFirst || bareMedia || isContainer(item, nestedMedia))) {
+        if (nestedMedia != null && (mediaFirst || bareMedia || isContainer(item))) {
             val mediaItem = toCatalogItem(nestedMedia) ?: return null
             // Las previews del medio anidado repiten la imagen del programa; el
             // servicio de imágenes por id sí devuelve la propia del medio.
@@ -341,6 +342,7 @@ class RtveJsonParser(
             mediaTypeId = type?.text("id"),
             mediaTypeName = type?.text("name"),
             mediaSubtypeName = subtype?.text("name"),
+            mediaSubtypeId = subtype?.text("id"),
             programShowsFragments = programInfo?.flag("showFragments"),
             allowedInCountry = media.flag("allowedInCountry")
                 ?: item.flag("allowedInCountry"),
@@ -435,9 +437,9 @@ class RtveJsonParser(
         return ((hours * 3600 + minutes * 60) * 1000 + (seconds * 1000).toLong())
     }
 
-    private fun isContainer(program: JsonObject, media: JsonObject): Boolean =
-        program.text("programType")?.contains("contenedor", ignoreCase = true) == true ||
-            media.obj("subType")?.text("name")?.equals("Película", ignoreCase = true) == true
+    private fun isContainer(program: JsonObject): Boolean =
+        program.text("programTypeId", "programTypeID") == "137310" ||
+            program.text("programType")?.startsWith("Contenedor ", ignoreCase = true) == true
 
     fun parseVideo(raw: String): VideoDetail {
         val root = json.parseToJsonElement(raw).jsonObject

@@ -79,8 +79,8 @@ import es.openrtve.ui.ProgramTab
  * 2. **Pestañas** sólo si hay más de un conjunto de contenido que recorrer
  *    (capítulos, más vídeos, detalles). Material 3: agrupan contenido del mismo
  *    nivel; van fijas cuando caben, y se quedan pegadas arriba al desplazar.
- * 3. **Detalles** es la cola larga (ficha técnica, reparto, etiquetas): existe sólo
- *    si hay algo más que lo que ya cuenta la cabecera.
+ * 3. **Detalles** es la ficha completa de una obra y la pestaña inicial de un vídeo.
+ *    Los programas empiezan por Capítulos y los contenedores por su catálogo.
  *
  * La lista de capítulos pagina sin fin, así que nada puede ir debajo de ella: todo
  * lo que no es la lista va arriba o en una pestaña hermana.
@@ -344,7 +344,12 @@ internal fun PlayActions(label: String, onPlay: () -> Unit, secondary: List<Seco
  * el fondo de la ficha, no sobre `surface`: la fila no es una franja aparte.
  */
 @Composable
-internal fun FichaTabs(tabs: List<ProgramTab>, current: ProgramTab?, onSelect: (ProgramTab) -> Unit) {
+internal fun FichaTabs(
+    tabs: List<ProgramTab>,
+    current: ProgramTab?,
+    onSelect: (ProgramTab) -> Unit,
+    contentsLabel: Int = R.string.tab_episodes,
+) {
     PrimaryTabRow(
         selectedTabIndex = tabs.indexOf(current).coerceAtLeast(0),
         containerColor = MaterialTheme.colorScheme.background,
@@ -355,7 +360,7 @@ internal fun FichaTabs(tabs: List<ProgramTab>, current: ProgramTab?, onSelect: (
                 onClick = { onSelect(tab) },
                 selectedContentColor = MaterialTheme.colorScheme.primary,
                 unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                text = { Text(text = tab.label(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                text = { Text(text = tab.label(contentsLabel), maxLines = 1, overflow = TextOverflow.Ellipsis) },
             )
         }
     }
@@ -396,9 +401,9 @@ internal fun relatedColumns(): Int {
 }
 
 @Composable
-internal fun ProgramTab.label(): String = stringResource(
+internal fun ProgramTab.label(contentsLabel: Int = R.string.tab_episodes): String = stringResource(
     when (this) {
-        ProgramTab.EPISODES -> R.string.tab_episodes
+        ProgramTab.EPISODES -> contentsLabel
         ProgramTab.MORE_VIDEOS -> R.string.tab_more_videos
         ProgramTab.RELATED -> R.string.tab_related
         ProgramTab.DETAILS -> R.string.tab_details

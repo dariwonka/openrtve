@@ -102,6 +102,9 @@ fun TvVideoScreen(
             }
         },
     ) {
+        detail?.facts?.takeIf { it.hasDetails }?.let { facts ->
+            tvDetailsSection("details", { stringResource(R.string.tab_details) }) { TvFactsPanel(facts) }
+        }
         // Con un solo capítulo (el propio vídeo) la fila no aporta nada.
         if (state.chapters.items.size > 1) {
             tvDetailsSection("chapters", { stringResource(R.string.tab_episodes) }) {
@@ -130,9 +133,6 @@ fun TvVideoScreen(
             tvDetailsSection("related", { stringResource(R.string.tab_related) }) {
                 TvRelatedRow(state.related, onOpenItem)
             }
-        }
-        detail?.facts?.takeIf { it.hasDetails }?.let { facts ->
-            tvDetailsSection("details", { stringResource(R.string.tab_details) }) { TvFactsPanel(facts) }
         }
     }
 }

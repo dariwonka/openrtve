@@ -67,5 +67,26 @@ class ProgramBodyTest {
             extras = extras,
         )
         assertEquals(listOf(ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS), videoTabs(videoState))
+        assertEquals(
+            listOf(ProgramTab.DETAILS, ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS),
+            videoTabs(videoState.copy(detail = VideoDetail(
+                item = item("v1"), backdropUrl = null, description = null, promo = null, subtypeName = null,
+                programTitle = null, year = "2024", ageRating = null, genres = emptyList(), director = null,
+                cast = emptyList(), originalLanguage = null, expirationDate = null, webUrl = null,
+            ))),
+        )
+    }
+
+    @Test
+    fun `containers show their catalog and extras without technical details or similar programs`() {
+        val state = state(episodes = listOf(item("film"))).copy(
+            detail = ProgramDetail(
+                "cycle", "Ciclo", null, null, null, emptyList(),
+                programTypeId = "137310", genres = listOf("Cine"), director = "No es una obra",
+            ),
+            related = listOf(item("other-program")),
+            extras = PagedItemsState(items = listOf(item("clip"))),
+        )
+        assertEquals(listOf(ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS), programTabs(ProgramBody.Episodes, state))
     }
 }

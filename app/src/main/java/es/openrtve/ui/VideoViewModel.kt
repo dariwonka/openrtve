@@ -75,7 +75,8 @@ class VideoViewModel(
                 if (detail.belongsToEpisodicProgram) {
                     loadChapters(firstPage = true)
                 }
-                if (media.programId != null && media.programShowsFragments == true) {
+                // Los extras de un ciclo pertenecen a todo el ciclo, no a esta película.
+                if (detail.belongsToEpisodicProgram && media.programShowsFragments == true) {
                     loadExtras(firstPage = true)
                 }
                 relatedKind(detail.subtypeName)?.let { kind ->

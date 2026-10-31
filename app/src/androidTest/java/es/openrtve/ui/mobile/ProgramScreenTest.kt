@@ -2,6 +2,8 @@ package es.openrtve.ui.mobile
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -47,6 +49,46 @@ class ProgramScreenTest {
         programVideos = { _, _, pageNumber, _, _ -> if (pageNumber == 1) page(episodes, 1, 2) else page(listOf(catalogItem("e0", title = "Episodio 0")), 2, 2) }
     }
     private val opened = mutableListOf<CatalogItem>()
+    private val detailsOpened = mutableListOf<CatalogItem>()
+
+    @Test
+    fun filmCyclesShowTheirCatalogAndOpenTheSelectedFilmsSheet() {
+        val film = catalogItem("film", title = "Akelarre").copy(mediaSubtypeName = "Película")
+        repository.program = { id, _ ->
+            loaded(ProgramDetail(
+                id, "Somos cine", "Un ciclo de cine", null, null, emptyList(),
+                programType = "Contenedor Películas", director = "Directora del ciclo",
+            ))
+        }
+        repository.programVideos = { _, _, _, _, _ -> page(listOf(film)) }
+        setContent()
+
+        compose.onAllNodes(hasText(context.getString(R.string.tab_details))).assertCountEquals(0)
+        compose.onAllNodes(hasText(context.getString(R.string.tab_related))).assertCountEquals(0)
+        compose.onAllNodes(hasText(context.getString(R.string.tab_episodes))).assertCountEquals(0)
+        compose.onAllNodes(hasText(context.getString(R.string.program_play_episode, "Akelarre"))).assertCountEquals(0)
+        compose.onNodeWithText(context.getString(R.string.action_browse_movies)).performScrollTo().performClick()
+        compose.onNodeWithText("Akelarre").performScrollTo().performClick()
+
+        assertEquals(listOf("film"), detailsOpened.map { it.id })
+        assertEquals(emptyList<CatalogItem>(), opened)
+    }
+
+    @Test
+    fun episodicProgramsStartOnChaptersEvenWhenTheyHaveTechnicalDetails() {
+        repository.program = { id, _ ->
+            loaded(ProgramDetail(
+                id, "Historia de nuestro cine", "Programa de cine", null, null, emptyList(),
+                programTypeId = "136525", programType = "Entrevistas", director = "Directora del programa",
+            ))
+        }
+        setContent()
+
+        compose.onNodeWithText(context.getString(R.string.tab_episodes)).assertIsSelected()
+        compose.onAllNodes(hasText(context.getString(R.string.tab_movies))).assertCountEquals(0)
+        compose.onNodeWithText("Episodio 3").performScrollTo().performClick()
+        assertEquals(listOf("e3"), opened.map { it.id })
+    }
 
     @Test
     fun withoutHistoryTheNewestEpisodeIsOfferedAndTheListPaginates() {
@@ -119,6 +161,7 @@ class ProgramScreenTest {
                     program = program,
                     onBack = {},
                     onOpenItem = { opened += it },
+                    onOpenRelated = { detailsOpened += it },
                     onError = {},
                 )
             }

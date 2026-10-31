@@ -66,6 +66,10 @@
     <string name="episode_watched">Visto</string>
     <string name="episode_next">Siguiente</string>
     <string name="tab_episodes">Capítulos</string>
+    <string name="tab_movies">Películas</string>
+    <string name="tab_videos">Vídeos</string>
+    <string name="action_browse_movies">Ver películas</string>
+    <string name="action_browse_videos">Ver vídeos</string>
     <string name="tab_more_videos">Extras</string>
     <string name="tab_related">Similares</string>
     <string name="episode_current">Este capítulo</string>

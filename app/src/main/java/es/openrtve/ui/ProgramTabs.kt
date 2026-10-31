@@ -12,8 +12,8 @@ import es.openrtve.domain.VideoDetail
  *   sinopsis plegada, botón). Nunca en una pestaña.
  * - **Pestañas** = colecciones que se recorren. Sólo se enseña la fila si hay más
  *   de una; con una, su contenido va directamente debajo de la cabecera.
- * - **Detalles** = la cola larga (ficha técnica, reparto): sólo si cuenta algo más
- *   que la cabecera.
+ * - **Detalles** = la ficha completa de una obra: es la pestaña inicial de un
+ *   vídeo. Un programa empieza por Capítulos; un contenedor muestra su catálogo.
  *
  * RTVE separa las emisiones completas (`39816`) de fragmentos (`39978`) y
  * avances/tráilers (`39980`). Esa separación alimenta Capítulos y Más vídeos;
@@ -46,16 +46,18 @@ data class PagedItemsState(
 fun programTabs(body: ProgramBody, state: ProgramUiState): List<ProgramTab> = buildList {
     add(ProgramTab.EPISODES)
     if (state.extras.isAvailable) add(ProgramTab.MORE_VIDEOS)
-    if (state.related.isNotEmpty()) add(ProgramTab.RELATED)
-    if (state.detail?.facts?.hasDetails == true) add(ProgramTab.DETAILS)
+    if (!state.contents.isCollection) {
+        if (state.related.isNotEmpty()) add(ProgramTab.RELATED)
+        if (state.detail?.facts?.hasDetails == true) add(ProgramTab.DETAILS)
+    }
 }.take(MAX_TABS)
 
 /** Pestañas de la ficha de un vídeo: capítulos, extras, similares y ficha técnica, si los hay. */
 fun videoTabs(state: VideoUiState): List<ProgramTab> = buildList {
+    if (state.detail?.facts?.hasDetails == true) add(ProgramTab.DETAILS)
     if (state.chapters.isAvailable) add(ProgramTab.EPISODES)
     if (state.extras.isAvailable) add(ProgramTab.MORE_VIDEOS)
     if (state.related.isNotEmpty()) add(ProgramTab.RELATED)
-    if (state.detail?.facts?.hasDetails == true) add(ProgramTab.DETAILS)
 }.take(MAX_TABS)
 
 internal const val MAX_TABS = 4
@@ -87,21 +89,24 @@ data class FichaFacts(
     }
 }
 
-/** Año, edad y géneros ya van en la línea de datos de la cabecera ([metaLine]): aquí no se repiten. */
+/** La cabecera resume los datos; Detalles conserva la ficha completa. */
 val VideoDetail.facts: FichaFacts
     get() = FichaFacts(
-        genres = genres.takeIf { it.size > 2 }.orEmpty(),
+        year = year,
+        ageRating = ageRating,
+        genres = genres,
         director = director,
         cast = cast,
         originalLanguage = originalLanguage,
         expirationDate = expirationDate,
     )
 
-/** Año, edad y géneros van en la línea de datos de la cabecera: aquí no se repiten. */
+/** La cabecera resume los datos; Detalles conserva la ficha completa. */
 val ProgramDetail.facts: FichaFacts
     get() = FichaFacts(
-        // Más de dos géneros no caben en la cabecera: la lista completa va aquí.
-        genres = genres.takeIf { it.size > 2 }.orEmpty(),
+        year = year,
+        ageRating = ageRating,
+        genres = genres,
         director = director,
         cast = cast,
         originalLanguage = originalLanguage,

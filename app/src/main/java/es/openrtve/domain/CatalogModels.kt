@@ -211,6 +211,8 @@ data class CatalogItem(
     val live: LiveInfo? = null,
     /** Página web del item en rtve.es; sirve para compartir y para casar enlaces. */
     val webUrl: String? = null,
+    /** `subType.id` del medio; `130734` identifica una película. */
+    val mediaSubtypeId: String? = null,
 ) {
     val needsAccount: Boolean get() = loginRequired || paid || drm
 }
@@ -276,7 +278,7 @@ data class ProgramDetail(
     /** Ya en el orden en que se muestran (ver [seasonsInDisplayOrder]). */
     val seasons: List<ProgramSeason>,
     val webUrl: String? = null,
-    /** `programTypeID` del feed ("136519" = Series Prime Time...); falta en muchos programas antiguos. */
+    /** `programTypeId`/`programTypeID` del feed ("136519" = Series Prime Time...). */
     val programTypeId: String? = null,
     /** `outOfEmission == false`: sigue publicando episodios. */
     val inEmission: Boolean = true,
@@ -291,7 +293,16 @@ data class ProgramDetail(
     val cast: List<String> = emptyList(),
     val originalLanguage: String? = null,
     val country: String? = null,
+    /** Tipo editorial: distingue series de ciclos como "Contenedor Películas". */
+    val programType: String? = null,
 )
+
+/** Tipos editoriales explícitos de RTVE; no dependen del título ni de los vídeos de la página. */
+val ProgramDetail.isMovieContainer: Boolean
+    get() = programTypeId == "137310" || programType.equals("Contenedor Películas", ignoreCase = true)
+
+val ProgramDetail.isContainer: Boolean
+    get() = isMovieContainer || programType?.startsWith("Contenedor ", ignoreCase = true) == true
 
 data class CatalogLoad<T>(
     val value: T,
@@ -346,8 +357,13 @@ data class ExploreGroup(
  * vídeo no traiga temporada ni número de episodio.
  */
 val VideoDetail.belongsToEpisodicProgram: Boolean
-    get() = item.programId != null &&
+    get() = item.programId != null && !item.isMovie &&
+        programType?.contains("contenedor", ignoreCase = true) != true &&
         (item.seasonId != null || item.episode != null || programType?.contains("contenedor", ignoreCase = true) == false)
+
+val CatalogItem.isMovie: Boolean
+    get() = mediaSubtypeId == "130734" || mediaSubtypeName.equals("Película", ignoreCase = true) ||
+        mediaSubtypeName.equals("Pelicula", ignoreCase = true)
 
 data class VideoDetail(
     val item: CatalogItem,

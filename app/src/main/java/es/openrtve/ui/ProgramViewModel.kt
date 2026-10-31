@@ -60,10 +60,6 @@ class ProgramViewModel(
 
     init {
         loadDetailThenEpisodes()
-        viewModelScope.launch {
-            val related = loadRelatedOrEmpty(repository, RelatedKind.PROGRAM, programId)
-            mutableUiState.update { it.copy(related = related) }
-        }
     }
 
     /** La ficha decide de dónde salen los episodios (radio -> audios.json), así que va primero. */
@@ -83,6 +79,12 @@ class ProgramViewModel(
                     )
                 }
                 if (detail.value.showFragments) loadFirstExtras()
+                if (!mutableUiState.value.contents.isCollection) {
+                    viewModelScope.launch {
+                        val related = loadRelatedOrEmpty(repository, RelatedKind.PROGRAM, programId)
+                        mutableUiState.update { it.copy(related = related) }
+                    }
+                }
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {

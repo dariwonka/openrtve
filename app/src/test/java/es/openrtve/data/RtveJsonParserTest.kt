@@ -5,6 +5,7 @@ import es.openrtve.domain.LinkKind
 import es.openrtve.domain.PlaybackDecision
 import es.openrtve.domain.PlaybackResolver
 import es.openrtve.domain.RowLayout
+import es.openrtve.domain.isMovie
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -278,6 +279,17 @@ class RtveJsonParserTest {
     }
 
     @Test
+    fun `program detail preserves the editorial type of a film cycle`() {
+        for (key in listOf("programTypeId", "programTypeID")) {
+            val detail = parser.parseProgram(
+                """{"page":{"items":[{"id":"61150","name":"Somos cine","programType":"Contenedor Películas","$key":137310}]}}""",
+            )
+            assertEquals("Contenedor Películas", detail.programType)
+            assertEquals("137310", detail.programTypeId)
+        }
+    }
+
+    @Test
     fun `collection titles drop their editorial path`() {
         val module = parser.parseModule(
             raw = """{"page":{"items":[{"title":"Portada En Play > Destacados","collectionItems":[{"id":"7","title":"Vídeo","contentType":"video"}]}]}}""",
@@ -373,6 +385,31 @@ class RtveJsonParserTest {
         assertEquals("Vuelta a España", result[0].subtitle)
         assertEquals("https://img.rtve.es/v/1/horizontal2?w=960", result[0].imageUrl)
         assertEquals("Telediario", result[2].title)
+    }
+
+    @Test
+    fun `the explicit program type is not replaced by the subtype of its latest video`() {
+        val item = parser.parseModule(
+            """{"page":{"items":[{
+              "id":"88070","name":"Historia de nuestro cine","contentType":"video",
+              "programTypeId":136525,"programType":"Entrevistas",
+              "lastMultimedia":{"id":"film","title":"Una película","contentType":"video","subType":{"id":130734,"name":"Película"}}
+            }]}}""", "",
+        ).items.single()
+
+        assertEquals("88070", item.id)
+        assertEquals(ContentKind.PROGRAM, item.kind)
+        assertEquals("Historia de nuestro cine", item.title)
+    }
+
+    @Test
+    fun `a film is identified by its API subtype ID even without a subtype name`() {
+        val item = parser.parseVideoPage(
+            """{"page":{"items":[{"id":"film","title":"Película","contentType":"video","subType":{"id":130734}}]}}""",
+        ).items.single()
+
+        assertEquals("130734", item.mediaSubtypeId)
+        assertTrue(item.isMovie)
     }
 
     @Test

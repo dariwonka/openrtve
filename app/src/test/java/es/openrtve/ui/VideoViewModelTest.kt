@@ -85,6 +85,20 @@ class VideoViewModelTest {
         assertTrue(repository.calls.any { it.startsWith("programExtras(p1") })
     }
 
+    @Test
+    fun `a film never loads the other films or the extras of its cycle as chapters`() = runTest(mainDispatcher.dispatcher) {
+        val film = catalogItem("film", programId = "cine").copy(
+            mediaSubtypeName = "Película", seasonId = "editorial-group", programShowsFragments = true,
+        )
+        repository.video = { _, _ -> loaded(detail(film).copy(programType = "Contenedor Películas")) }
+
+        val viewModel = VideoViewModel(repository, film)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.chapters.items.isEmpty())
+        assertFalse(repository.calls.any { it.startsWith("programVideos(") || it.startsWith("programExtras(") })
+    }
+
     private fun detail(item: es.openrtve.domain.CatalogItem) = VideoDetail(
         item = item, backdropUrl = null, description = null, promo = null, subtypeName = null, programTitle = null,
         year = null, ageRating = null, genres = emptyList(), director = null, cast = emptyList(), originalLanguage = null,

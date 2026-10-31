@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,6 +37,8 @@ import es.openrtve.ui.ProgramBody
 import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.ProgramUiState
 import es.openrtve.ui.facts
+import es.openrtve.ui.contents
+import es.openrtve.ui.opensItemDetails
 import es.openrtve.ui.metaLine
 import es.openrtve.ui.programBody
 import es.openrtve.ui.programTabs
@@ -58,7 +61,7 @@ fun ProgramScreen(
     onError: (String) -> Unit,
     /** Reproducir desde el principio lo que se estaba viendo; sin él, el botón grande sólo continúa. */
     onPlay: ((CatalogItem, restart: Boolean) -> Unit)? = null,
-    /** Abrir un similar: su ficha, no reproducirlo. */
+    /** Abrir la ficha de un similar o una pieza de una colección. */
     onOpenRelated: (CatalogItem) -> Unit = onOpenItem,
 ) {
     val screen = rememberProgramScreen(repository, history, program, onError)
@@ -67,6 +70,7 @@ fun ProgramScreen(
     val suggestion = screen.suggestion
     val context = LocalContext.current
     val detail = state.detail
+    val contents = state.contents
     val body = programBody(state)
     val tabs = remember(body, state.extras, state.related, detail) { programTabs(body, state) }
     val columns = relatedColumns()
@@ -95,7 +99,13 @@ fun ProgramScreen(
                 claim = detail?.emission,
                 synopsis = detail?.description?.let { html -> remember(html) { AnnotatedString.fromHtml(html) } },
                 progress = (suggestion as? PlaySuggestion.Continue)?.entry?.progress,
-                actions = suggestion?.let { target ->
+                actions = if (contents.isCollection) {
+                    {
+                        Button(onClick = { selectTab(ProgramTab.EPISODES) }) {
+                            Text(stringResource(contents.browseLabel))
+                        }
+                    }
+                } else suggestion?.let { target ->
                     {
                         PrimaryPlayButton(
                             suggestion = target,
@@ -107,7 +117,7 @@ fun ProgramScreen(
             )
         },
         tabs = if (tabs.size > 1) {
-            { FichaTabs(tabs, current, selectTab) }
+            { FichaTabs(tabs, current, selectTab, contents.label) }
         } else {
             null
         },
@@ -116,18 +126,20 @@ fun ProgramScreen(
             ProgramTab.EPISODES -> {
                 // Las temporadas se quedan mientras carga la elegida: si desaparecieran,
                 // la lista encogería y la fila de chips perdería su desplazamiento.
-                if (detail?.seasons?.isNotEmpty() == true) {
+                if (!contents.isCollection && detail?.seasons?.isNotEmpty() == true) {
                     item(key = "seasons") { SeasonChips(state, onSelect = viewModel::selectSeason) }
                 }
                 if (body == ProgramBody.Loading) {
                     item(key = "loading") { LoadingMoreRow() }
                     return@FichaLayout
                 }
-                items(state.episodes, key = { it.id }) { episode ->
+                if (contents.isCollection) {
+                    relatedGrid(state.episodes, columns, onOpenRelated)
+                } else items(state.episodes, key = { it.id }) { episode ->
                     val entry = screen.entriesById[episode.id]
                     EpisodeRow(
                         item = episode,
-                        onClick = { onOpenItem(episode) },
+                        onClick = { if (state.opensItemDetails(episode)) onOpenRelated(episode) else onOpenItem(episode) },
                         progress = entry?.takeIf { it.inProgress }?.progress,
                         badge = when {
                             entry?.finished == true -> stringResource(R.string.episode_watched)

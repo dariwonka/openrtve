@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.focusGroup
@@ -16,6 +18,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
@@ -35,8 +38,11 @@ import es.openrtve.ui.PlaySuggestion
 import es.openrtve.ui.ProgramUiState
 import es.openrtve.ui.ProgramViewModel
 import es.openrtve.ui.facts
+import es.openrtve.ui.contents
+import es.openrtve.ui.opensItemDetails
 import es.openrtve.ui.metaLine
 import es.openrtve.ui.rememberProgramScreen
+import kotlinx.coroutines.launch
 
 /**
  * Ficha de programa en TV (ver [TvDetailsScaffold]): cabecera con el botón de
@@ -51,18 +57,24 @@ fun TvProgramScreen(
     /** Capítulos y extras se reproducen al pulsarlos. */
     onOpenItem: (CatalogItem) -> Unit,
     onError: (String) -> Unit,
-    /** Un similar abre su ficha. */
+    /** Los similares y las piezas de una colección abren su ficha. */
     onOpenRelated: (CatalogItem) -> Unit = onOpenItem,
 ) {
     val screen = rememberProgramScreen(repository, history, program, onError)
     val viewModel = screen.viewModel
     val state = screen.state
     val suggestion = screen.suggestion
+    val contents = state.contents
+    val firstContent = remember { FocusRequester() }
+    val detailsState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
     val episodesState = rememberLazyListState()
     LoadMoreOnScrollEnd(episodesState, threshold = 3, loadMore = viewModel::loadMore)
 
     TvDetailsScaffold(
         backdropUrl = state.detail?.imageUrl ?: program.imageUrl,
+        listState = detailsState,
         header = {
             Text(
                 text = state.title,
@@ -90,7 +102,24 @@ fun TvProgramScreen(
                 )
             }
             Spacer(Modifier.height(20.dp))
-            Button(
+            if (contents.isCollection) {
+                Button(
+                    onClick = {
+                        // La cabecera enfocada intenta volver arriba; se libera antes de ir a la fila.
+                        focusManager.clearFocus()
+                        scope.launch {
+                            detailsState.scrollToItem(1)
+                            episodesState.scrollToItem(0)
+                            withFrameNanos { }
+                            firstContent.requestFocus()
+                        }
+                    },
+                    enabled = state.episodes.isNotEmpty(),
+                    modifier = Modifier.initialFocus(enabled = state.episodes.isNotEmpty()),
+                ) {
+                    Text(stringResource(contents.browseLabel))
+                }
+            } else Button(
                 onClick = { suggestion?.let { onOpenItem(it.item) } },
                 enabled = suggestion != null,
                 // Deshabilitado no admite el foco: se concede en cuanto hay qué reproducir.
@@ -109,9 +138,23 @@ fun TvProgramScreen(
             }
         },
     ) {
-        tvDetailsSection("episodes", { stringResource(R.string.tab_episodes) }) {
-            SeasonTabs(state, viewModel)
-            EpisodesBody(state, viewModel, screen.entriesById, suggestion, episodesState, onOpenItem)
+        tvDetailsSection("episodes", { stringResource(contents.label) }) {
+            if (contents.isCollection && state.episodes.isNotEmpty()) {
+                TvRelatedRow(
+                    items = state.episodes,
+                    onOpen = onOpenRelated,
+                    hasMore = state.hasMore,
+                    isLoadingMore = state.isLoadingMore,
+                    onLoadMore = viewModel::loadMore,
+                    listState = episodesState,
+                    firstItemFocus = firstContent,
+                )
+            } else {
+                if (!contents.isCollection) SeasonTabs(state, viewModel)
+                EpisodesBody(state, viewModel, screen.entriesById, suggestion, episodesState) { item ->
+                    if (state.opensItemDetails(item)) onOpenRelated(item) else onOpenItem(item)
+                }
+            }
         }
         if (state.extras.items.isNotEmpty()) {
             tvDetailsSection("extras", { stringResource(R.string.tab_more_videos) }) {
@@ -124,13 +167,15 @@ fun TvProgramScreen(
                 )
             }
         }
-        if (state.related.isNotEmpty()) {
+        if (!contents.isCollection && state.related.isNotEmpty()) {
             tvDetailsSection("related", { stringResource(R.string.tab_related) }) {
                 TvRelatedRow(state.related, onOpenRelated)
             }
         }
-        state.detail?.facts?.takeIf { it.hasDetails }?.let { facts ->
-            tvDetailsSection("details", { stringResource(R.string.tab_details) }) { TvFactsPanel(facts) }
+        if (!contents.isCollection) {
+            state.detail?.facts?.takeIf { it.hasDetails }?.let { facts ->
+                tvDetailsSection("details", { stringResource(R.string.tab_details) }) { TvFactsPanel(facts) }
+            }
         }
     }
 }
