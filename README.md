@@ -18,9 +18,19 @@ de la Corporación de Radio y Televisión Española.
   panel de navegación lateral en la TV.
 - **Portadas** (principal y temáticas) con la presentación que dicta
   cada fila: carrusel destacado, pósters, cuadradas o apaisadas.
-- **Fichas** de programa (temporadas, episodios completos paginados, extras y
-  similares de RTVE) y de vídeo o película (fondo, sinopsis, ficha técnica,
-  reparto y, en películas y documentales, similares).
+- **Fichas** organizadas según los tipos de la API de RTVE, sin deducir nada
+  del título:
+  - una **serie o programa** muestra temporadas y capítulos paginados en el
+    orden de RTVE Play, sus extras (fragmentos y avances) y similares; el botón
+    grande reproduce, continúa o pasa al siguiente capítulo según el historial;
+  - un **contenedor** (un ciclo de cine, una colección de documentales) es un
+    catálogo: cada película o documental abre su propia ficha;
+  - un **vídeo o película** lleva sinopsis y ficha técnica (reparto, dirección,
+    idioma, disponibilidad), el enlace a su programa, más piezas de su ciclo y
+    similares.
+
+  En el móvil, las colecciones van en pestañas Material 3; en la TV, la ficha
+  sigue la página de detalles de Google TV, con una fila por sección.
 - **Buscador** con los filtros rápidos de la app oficial y resultados por
   bloque, paginados; **categorías** leídas de la configuración remota de RTVE.
 - **Directos** con logo del canal, "● Directo" y progreso de la emisión;
@@ -66,6 +76,10 @@ canales, categorías ni filtros.
   <img src="docs/assets/screenshots/tv-explore.png" width="460" alt="Explorar en TV">
 </p>
 <p>
+  <img src="docs/assets/screenshots/tv-search.png" width="460" alt="Buscar en TV">
+  <img src="docs/assets/screenshots/tv-program.png" width="460" alt="Ficha de programa en TV">
+</p>
+<p>
   <img src="docs/assets/screenshots/tv-movie.png" width="460" alt="Ficha de película en TV">
   <img src="docs/assets/screenshots/tv-player.png" width="460" alt="Reproductor en TV">
 </p>
@@ -95,10 +109,11 @@ Con el SDK de Android instalado:
 - `./gradlew testDebugUnitTest`: tests JVM (parser de los feeds, repositorio y
   caché, cliente HTTPS, resolución de reproducción y de enlaces, historial y
   ViewModels). Corren sin emulador y son los que ejecuta la CI.
-- `./gradlew connectedDebugAndroidTest`: tests de Compose de las pantallas de
-  portada, programa y búsqueda contra un repositorio falso, sin red. Necesitan
-  un emulador o dispositivo conectado (`ANDROID_SERIAL=emulator-5554` si hay
-  varios).
+- `./gradlew connectedDebugAndroidTest`: tests de Compose de la portada, la
+  búsqueda y las fichas de programa y de vídeo (en móvil y en TV, con el
+  mando) contra un repositorio falso, sin red. Necesitan un emulador o
+  dispositivo conectado (`ANDROID_SERIAL=emulator-5554` si hay varios); al
+  terminar, Gradle desinstala la app de ese dispositivo.
 
 Los fakes compartidos por ambas capas están en `app/src/sharedTest`.
 
@@ -141,8 +156,11 @@ Un único módulo `app`; los paquetes separan responsabilidades que ya tienen
 comportamiento:
 
 - `data`: cliente HTTPS sobre OkHttp, parser JSON tolerante, caché y repositorio;
-- `domain`: modelos, allowlist de hosts y política de reproducción;
-- `ui`: navegación (una pila por pestaña y Ajustes global), un ViewModel por pantalla y textos;
+- `domain`: modelos, tipos editoriales de RTVE (`MediaClassification`), allowlist
+  de hosts y política de reproducción;
+- `ui`: navegación (una pila por pestaña y Ajustes global), un ViewModel por
+  pantalla, el estado que comparten móvil y TV (secciones de las fichas,
+  paginación, textos);
 - `ui/mobile` y `ui/tv`: los dos árboles de interfaz, que comparten todo lo demás;
 - `playback`: ExoPlayer, `MediaSessionService`, controles y gestos.
 
