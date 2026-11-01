@@ -58,31 +58,29 @@ canales, categorías ni filtros.
 
 ### Móvil
 
-<p>
-  <img src="docs/assets/screenshots/phone-home.png" width="180" alt="Inicio">
-  <img src="docs/assets/screenshots/phone-explore.png" width="180" alt="Explorar">
-  <img src="docs/assets/screenshots/phone-search-results.png" width="180" alt="Buscar">
-  <img src="docs/assets/screenshots/phone-movie.png" width="180" alt="Ficha de película">
-  <img src="docs/assets/screenshots/phone-program.png" width="180" alt="Ficha de programa">
-</p>
-<p>
-  <img src="docs/assets/screenshots/phone-player.png" width="560" alt="Reproductor">
+| Inicio | Explorar | Buscar |
+| :---: | :---: | :---: |
+| [<img src="docs/assets/screenshots/phone-home.png" width="220" alt="Inicio en móvil">](docs/assets/screenshots/phone-home.png) | [<img src="docs/assets/screenshots/phone-explore.png" width="220" alt="Explorar en móvil">](docs/assets/screenshots/phone-explore.png) | [<img src="docs/assets/screenshots/phone-search-results.png" width="220" alt="Resultados de búsqueda en móvil">](docs/assets/screenshots/phone-search-results.png) |
+
+| Ficha de película | Ficha de programa |
+| :---: | :---: |
+| [<img src="docs/assets/screenshots/phone-movie.png" width="220" alt="Ficha de película en móvil">](docs/assets/screenshots/phone-movie.png) | [<img src="docs/assets/screenshots/phone-program.png" width="220" alt="Ficha de programa en móvil">](docs/assets/screenshots/phone-program.png) |
+
+<p align="center">
+  <a href="docs/assets/screenshots/phone-player.png">
+    <img src="docs/assets/screenshots/phone-player.png" width="760" alt="Reproductor en móvil, en horizontal">
+  </a>
+  <br>
+  <sub>Reproductor en horizontal</sub>
 </p>
 
 ### Android TV
 
-<p>
-  <img src="docs/assets/screenshots/tv-home.png" width="460" alt="Inicio en TV">
-  <img src="docs/assets/screenshots/tv-explore.png" width="460" alt="Explorar en TV">
-</p>
-<p>
-  <img src="docs/assets/screenshots/tv-search.png" width="460" alt="Buscar en TV">
-  <img src="docs/assets/screenshots/tv-program.png" width="460" alt="Ficha de programa en TV">
-</p>
-<p>
-  <img src="docs/assets/screenshots/tv-movie.png" width="460" alt="Ficha de película en TV">
-  <img src="docs/assets/screenshots/tv-player.png" width="460" alt="Reproductor en TV">
-</p>
+| Catálogo | Fichas y reproducción |
+| :---: | :---: |
+| [<img src="docs/assets/screenshots/tv-home.png" width="380" alt="Inicio en Android TV">](docs/assets/screenshots/tv-home.png)<br>Inicio | [<img src="docs/assets/screenshots/tv-program.png" width="380" alt="Ficha de programa en Android TV">](docs/assets/screenshots/tv-program.png)<br>Ficha de programa |
+| [<img src="docs/assets/screenshots/tv-explore.png" width="380" alt="Explorar en Android TV">](docs/assets/screenshots/tv-explore.png)<br>Explorar | [<img src="docs/assets/screenshots/tv-movie.png" width="380" alt="Ficha de película en Android TV">](docs/assets/screenshots/tv-movie.png)<br>Ficha de película |
+| [<img src="docs/assets/screenshots/tv-search.png" width="380" alt="Buscar en Android TV">](docs/assets/screenshots/tv-search.png)<br>Buscar | [<img src="docs/assets/screenshots/tv-player.png" width="380" alt="Reproductor en Android TV">](docs/assets/screenshots/tv-player.png)<br>Reproductor |
 
 ## Instalar
 
