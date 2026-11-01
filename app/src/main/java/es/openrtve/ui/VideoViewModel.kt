@@ -7,7 +7,6 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.EpisodeOrder
 import es.openrtve.domain.RelatedKind
 import es.openrtve.domain.belongsToEpisodicProgram
-import es.openrtve.domain.parentStructure
 import es.openrtve.domain.episodeOrder
 import es.openrtve.domain.isFirstSeason
 import es.openrtve.domain.VideoDetail
@@ -33,17 +32,18 @@ data class VideoUiState(
     val extras: PagedItemsState = PagedItemsState(),
     /** "Similares" de RTVE para películas y documentales; vacío si no hay. */
     val related: List<CatalogItem> = emptyList(),
-    /**
-     * Otras piezas del contenedor al que pertenece (las películas de un ciclo de cine):
-     * su selección editorial, distinta de Similares. Vacío si no es de un contenedor.
-     */
-    val moreFromProgram: List<CatalogItem> = emptyList(),
     val isLoading: Boolean = true,
     /** Fallo de la ficha: se puede reproducir igual con [item], y se pinta con su reintento. */
     val error: LoadError? = null,
 )
 
-/** Ficha de vídeo o película: su ficha y, según el programa al que pertenece, capítulos, extras o más piezas. */
+/**
+ * Ficha de vídeo o película. Debajo de la cabecera solo va lo que no está en ella:
+ * - capítulo de una serie: los capítulos de su temporada y, si los tiene, los extras del programa;
+ * - película o documental: Similares, si RTVE los tiene.
+ * Una pieza de una colección (un ciclo de cine) no repite debajo el resto de la
+ * colección: la abre el enlace de la cabecera, como el programa de un capítulo.
+ */
 class VideoViewModel(
     private val repository: CatalogRepository,
     item: CatalogItem,
@@ -100,10 +100,6 @@ class VideoViewModel(
                     // Los extras de un ciclo pertenecen a todo el ciclo, no a esta película.
                     if (media.programShowsFragments == true) extrasLoader.load(firstPage = true)
                 }
-                if (programId != null && media.parentStructure.isCollection) launch {
-                    val pieces = loadContainerPiecesOrEmpty(programId, except = media.id)
-                    mutableUiState.update { it.copy(moreFromProgram = pieces) }
-                }
                 relatedKind(media)?.let { kind ->
                     val related = loadRelatedOrEmpty(repository, kind, media.id)
                     mutableUiState.update { it.copy(related = related) }
@@ -114,16 +110,6 @@ class VideoViewModel(
                 mutableUiState.update { it.copy(isLoading = false, error = error.toLoadError()) }
             }
         }
-    }
-
-    /** Primera página del catálogo del contenedor, sin la pieza que se está viendo; secundaria, sin avisos. */
-    private suspend fun loadContainerPiecesOrEmpty(programId: String, except: String): List<CatalogItem> = try {
-        repository.loadProgramVideos(programId, page = 1, completeOnly = true, order = EpisodeOrder.NEWEST_FIRST)
-            .value.items.filter { it.id != except }
-    } catch (error: CancellationException) {
-        throw error
-    } catch (_: Exception) {
-        emptyList()
     }
 
     /**

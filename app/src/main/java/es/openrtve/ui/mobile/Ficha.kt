@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -139,7 +137,7 @@ internal fun FichaLayout(
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 32.dp), modifier = Modifier.fillMaxSize()) {
-            item(key = "header") {
+            item(key = "header", contentType = "header") {
                 Box(
                     // Con pestañas, la cabecera declara [FichaBarHeight] menos de lo que
                     // dibuja: el hueco que las pestañas reservan para la barra al pegarse
@@ -153,7 +151,7 @@ internal fun FichaLayout(
                 ) { header(scrollOffset) }
             }
             if (tabs != null) {
-                stickyHeader(key = "tabs") {
+                stickyHeader(key = "tabs", contentType = "tabs") {
                     Column {
                         Spacer(Modifier.height(barHeight))
                         Box(Modifier.background(MaterialTheme.colorScheme.background)) { tabs() }
@@ -228,6 +226,8 @@ internal fun FichaHeader(
      * episodio de Spotify o el canal en YouTube, y no compite con Reproducir.
      */
     onSubtitleClick: (() -> Unit)? = null,
+    /** Texto del enlace cuando no basta el nombre: "Más en Cine de siempre". */
+    subtitleLinkText: String? = null,
     meta: String? = null,
     claim: String? = null,
     synopsis: AnnotatedString? = null,
@@ -278,7 +278,7 @@ internal fun FichaHeader(
                         overflow = TextOverflow.Ellipsis,
                     )
                 } else {
-                    ProgramLink(it, onSubtitleClick)
+                    ProgramLink(text = subtitleLinkText ?: it, destination = it, onClick = onSubtitleClick)
                 }
             }
             meta?.takeIf { it.isNotBlank() }?.let {
@@ -308,22 +308,24 @@ internal fun FichaHeader(
     }
 }
 
-/** "Valle Salvaje ›" en el color de acento, con zona táctil de 48 dp aunque el texto sea más bajo. */
+/**
+ * "Valle Salvaje ›" o "Más en Cine de siempre ›" en el color de acento, con
+ * zona táctil de 48 dp aunque el texto sea más bajo. TalkBack lee el texto y la
+ * acción ("Ir a Cine de siempre").
+ */
 @Composable
-private fun ProgramLink(program: String, onClick: () -> Unit) {
-    val label = stringResource(R.string.action_go_to, program)
+private fun ProgramLink(text: String, destination: String, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .heightIn(min = 48.dp)
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = label },
+            .clickable(onClickLabel = stringResource(R.string.action_go_to, destination), role = Role.Button, onClick = onClick),
     ) {
         Text(
-            text = program,
+            text = text,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
@@ -428,7 +430,7 @@ internal fun rememberSelectedTab(tabs: List<ProgramTab>): Pair<ProgramTab?, (Pro
  * [columns] tarjetas a ancho igual, para no anidar una rejilla perezosa en otra lista.
  */
 internal fun LazyListScope.relatedGrid(items: List<CatalogItem>, columns: Int, onOpen: (CatalogItem) -> Unit) {
-    items(items.chunked(columns), key = { row -> "related-${row.first().id}" }) { row ->
+    items(items.chunked(columns), key = { row -> "related-${row.first().id}" }, contentType = { "related-row" }) { row ->
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 8.dp),

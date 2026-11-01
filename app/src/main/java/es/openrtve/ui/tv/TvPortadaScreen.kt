@@ -137,7 +137,7 @@ fun TvPortadaScreen(
                 item(key = "top") { Spacer(Modifier.height(TvVerticalMargin)) }
             }
             val firstId = state.sections.first().row.id
-            items(state.sections, key = { it.row.id }) { section ->
+            items(state.sections, key = { it.row.id }, contentType = { it.row.layout }) { section ->
                 if (resumable.isNotEmpty() && section.row.id == firstId && section.row.layout != RowLayout.HERO) {
                     TvContinueWatching(resumable, onResume, onOpenItem, onRemoveFromHistory, rowModifier(CONTINUE_ROW_ID)) { itemModifier(CONTINUE_ROW_ID, it) }
                     Spacer(Modifier.height(28.dp))

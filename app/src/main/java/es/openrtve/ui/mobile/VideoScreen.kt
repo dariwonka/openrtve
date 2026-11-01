@@ -13,6 +13,7 @@ import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
+import es.openrtve.ui.collectionLinkText
 import es.openrtve.ui.LoadMoreOnScrollEnd
 import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.facts
@@ -22,6 +23,7 @@ import es.openrtve.ui.metaLine
 import es.openrtve.ui.rememberVideoScreen
 import es.openrtve.ui.shareLink
 import es.openrtve.ui.text
+import es.openrtve.ui.primaryTab
 import es.openrtve.ui.titleRes
 import es.openrtve.ui.videoTabs
 
@@ -73,6 +75,7 @@ fun VideoScreen(
                 scrollOffset = scrollOffset,
                 subtitle = programTitle,
                 onSubtitleClick = state.item.programId?.let { programId -> { onOpenProgram(programId, programTitle.orEmpty()) } },
+                subtitleLinkText = context.collectionLinkText(state.structure, programTitle),
                 meta = detail?.metaLine(context),
                 synopsis = detail?.description?.let { html -> remember(html) { AnnotatedString.fromHtml(html) } },
                 facts = detail?.facts,

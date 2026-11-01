@@ -26,8 +26,10 @@ de la Corporación de Radio y Televisión Española.
   - un **contenedor** (un ciclo de cine, una colección de documentales) es un
     catálogo: cada película o documental abre su propia ficha;
   - un **vídeo o película** lleva sinopsis y ficha técnica (reparto, dirección,
-    idioma, disponibilidad), el enlace a su programa, más piezas de su ciclo y
-    similares.
+    idioma, disponibilidad) y el enlace a su programa o colección ("Más en Cine
+    de siempre"). Debajo, solo
+    lo que no está en la cabecera: los capítulos de su temporada si es un
+    episodio, o similares si es una película o un documental.
 
   En el móvil, las colecciones van en pestañas Material 3; en la TV, la ficha
   sigue la página de detalles de Google TV, con una fila por sección.
@@ -109,11 +111,13 @@ Con el SDK de Android instalado:
   ViewModels). Corren sin emulador y son los que ejecuta la CI.
 - `./gradlew connectedDebugAndroidTest`: tests de Compose de la portada, la
   búsqueda y las fichas de programa y de vídeo (en móvil y en TV, con el
-  mando) contra un repositorio falso, sin red. Necesitan un emulador o
-  dispositivo conectado (`ANDROID_SERIAL=emulator-5554` si hay varios); al
+  mando) contra un repositorio falso, sin red; también prueban la sesión de
+  reproducción con ExoPlayer, un archivo local y tokens controlados. Necesitan
+  un emulador o dispositivo conectado (`ANDROID_SERIAL=emulator-5554` si hay varios); al
   terminar, Gradle desinstala la app de ese dispositivo.
 
-Los fakes compartidos por ambas capas están en `app/src/sharedTest`.
+Los fakes y los contratos de recuperación de red, caché y búsqueda compartidos
+por ambas capas están en `app/src/sharedTest`.
 
 Sin SDK en el host, con Docker:
 

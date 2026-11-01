@@ -145,11 +145,11 @@ class DefaultCatalogRepository(
     // Las búsquedas no se persisten: solo interesa el resultado del momento.
     override suspend fun search(query: String): SearchResults {
         val url = "${RtveUrls.SEARCH}?search=${encode(query)}&context=tve&tipology=video&type=completo"
-        return parser.parseSearch(fetchRaw(url))
+        return fetchParsed(url, parser::parseSearch)
     }
 
     override suspend fun searchPage(relativeQuery: String, page: Int): CatalogPage =
-        parser.parseVideoPage(fetchRaw("${RtveUrls.SEARCH_PAGES}$relativeQuery&page=$page"))
+        fetchParsed("${RtveUrls.SEARCH_PAGES}$relativeQuery&page=$page", parser::parseVideoPage)
 
     override suspend fun loadRelated(kind: RelatedKind, id: String): CatalogLoad<List<CatalogItem>> = loadDocument(
         url = "${RtveUrls.RECOMMENDATIONS}/${kind.path}?source=apps&item=/${kind.itemPrefix}/${encode(id)}",
@@ -202,12 +202,12 @@ class DefaultCatalogRepository(
     )
 
     override suspend fun loadNextVideo(videoId: String): CatalogItem? =
-        parser.parseVideoPage(fetchRaw("$VIDEOS_BASE/${encode(videoId)}/next.json")).items.firstOrNull()
+        fetchParsed("$VIDEOS_BASE/${encode(videoId)}/next.json") { parser.parseVideoPage(it).items.firstOrNull() }
 
     override suspend fun loadPreviewSprite(videoId: String): PreviewSprite? {
-        val (spriteUrl, vttUrl) = parser.parseSpriteInfo(fetchRaw("$PREVIEWS_BASE/sprite?idasset=${encode(videoId)}"))
+        val (spriteUrl, vttUrl) = fetchParsed("$PREVIEWS_BASE/sprite?idasset=${encode(videoId)}", parser::parseSpriteInfo)
             ?: return null
-        return parser.parseSpriteVtt(fetchRaw(vttUrl), spriteUrl)
+        return fetchParsed(vttUrl) { parser.parseSpriteVtt(it, spriteUrl) }
     }
 
     override suspend fun loadProgramVideos(
@@ -249,6 +249,10 @@ class DefaultCatalogRepository(
 
     private fun encode(segment: String): String = URLEncoder.encode(segment, "UTF-8")
 
+    /** Descarga en IO y parseo en Default: ningún endpoint devuelve el trabajo de JSON/VTT a Main. */
+    private suspend fun <T> fetchParsed(url: String, parse: (String) -> T): T =
+        withContext(Dispatchers.Default) { parse(fetchRaw(url)) }
+
     /**
      * Petición bloqueante de OkHttp en IO e interrumpible: al cancelar la corrutina
      * (un refresh, salir de la pantalla) la conexión se corta en vez de seguir
@@ -288,7 +292,11 @@ class DefaultCatalogRepository(
             } else {
                 val raw = response.body ?: throw IOException("Respuesta vacía")
                 val value = parse(raw)
-                cache.write(url, raw, now, response.etag)
+                try {
+                    cache.write(url, raw, now, response.etag)
+                } catch (_: IOException) {
+                    // La persistencia es opcional: una descarga válida se muestra aunque no haya espacio.
+                }
                 CatalogLoad(value, isStale = false)
             }
         } catch (cancelled: CancellationException) {

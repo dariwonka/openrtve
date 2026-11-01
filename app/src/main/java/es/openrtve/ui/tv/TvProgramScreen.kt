@@ -31,6 +31,7 @@ import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.label
 import es.openrtve.ui.metaLine
 import es.openrtve.ui.rememberProgramScreen
+import es.openrtve.ui.text
 import es.openrtve.ui.titleRes
 
 /**
@@ -64,6 +65,11 @@ fun TvProgramScreen(
                 claim = state.detail?.emission,
                 synopsis = state.detail?.description,
             )
+            state.detailError?.let { error ->
+                Spacer(Modifier.height(12.dp))
+                Text(error.text(LocalContext.current))
+                Button(onClick = viewModel::retry) { Text(stringResource(R.string.action_retry)) }
+            }
             if (!structure.isCollection) {
                 Spacer(Modifier.height(20.dp))
                 Button(

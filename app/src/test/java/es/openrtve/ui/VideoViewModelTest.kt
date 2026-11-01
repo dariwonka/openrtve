@@ -87,7 +87,7 @@ class VideoViewModelTest {
     }
 
     @Test
-    fun `a film never loads the other films or the extras of its cycle as chapters`() = runTest(mainDispatcher.dispatcher) {
+    fun `a film of a cycle never repeats the cycle below because the header opens it`() = runTest(mainDispatcher.dispatcher) {
         val film = catalogItem("film", programId = "cine").copy(
             mediaSubtypeName = "Película", seasonId = "editorial-group", programShowsFragments = true,
         )
@@ -98,11 +98,33 @@ class VideoViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertTrue("las películas del ciclo no son capítulos", state.chapters.items.isEmpty())
-        assertTrue(state.contentSections.isEmpty())
-        assertFalse(repository.calls.any { it.startsWith("programExtras(") })
-        // Su ciclo se ofrece como "Más de...", sin la propia película.
-        assertEquals(listOf("other-film"), state.moreFromProgram.map { it.id })
+        assertTrue("ni capítulos ni el resto del ciclo", state.contentSections.isEmpty())
+        assertTrue("sin Similares, la ficha acaba en su sinopsis", videoTabs(state).isEmpty())
+        assertFalse(repository.calls.any { it.startsWith("programVideos(") || it.startsWith("programExtras(") })
+    }
+
+    @Test
+    fun `a film with recommendations offers only Similares`() = runTest(mainDispatcher.dispatcher) {
+        val film = catalogItem("film", programId = "cine").copy(mediaTypeId = "39816", mediaSubtypeId = "130734", programTypeId = "137310")
+        repository.video = { _, _ -> loaded(detail(film)) }
+        repository.related = { _, _ -> loaded(listOf(catalogItem("similar"))) }
+
+        val viewModel = VideoViewModel(repository, film)
+        advanceUntilIdle()
+
+        assertEquals(listOf(ProgramTab.RELATED), videoTabs(viewModel.uiState.value))
+    }
+
+    @Test
+    fun `an episode keeps its chapters and never gets its program as a second list`() = runTest(mainDispatcher.dispatcher) {
+        val episode = catalogItem("e9", programId = "p1").copy(seasonId = "s5", episode = 9)
+        repository.video = { _, _ -> loaded(detail(episode)) }
+        repository.programVideos = { _, _, _, _, _ -> page(listOf(catalogItem("e8"))) }
+
+        val viewModel = VideoViewModel(repository, episode)
+        advanceUntilIdle()
+
+        assertEquals(listOf(ProgramTab.EPISODES), videoTabs(viewModel.uiState.value))
     }
 
     @Test
@@ -126,7 +148,7 @@ class VideoViewModelTest {
         repository.video = { _, _ -> loaded(detail(video)) }
         val viewModel = VideoViewModel(repository, video)
         advanceUntilIdle()
-        // Ni capítulos de su "temporada": como pieza de un contenedor, solo su catálogo para "Más de...".
+        // Ni capítulos de su "temporada": es una pieza de un contenedor.
         assertTrue(viewModel.uiState.value.chapters.items.isEmpty())
         assertFalse(repository.calls.any { it.startsWith("programVideos(cycle, season=editorial-season") })
     }

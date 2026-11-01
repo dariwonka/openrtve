@@ -2,6 +2,7 @@ package es.openrtve.ui.mobile
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -38,6 +40,7 @@ import es.openrtve.ui.metaLine
 import es.openrtve.ui.programTabs
 import es.openrtve.ui.rememberProgramScreen
 import es.openrtve.ui.shareLink
+import es.openrtve.ui.text
 import es.openrtve.ui.titleRes
 
 /**
@@ -110,6 +113,14 @@ fun ProgramScreen(
             null
         },
     ) {
+        state.detailError?.let { error ->
+            item(key = "detail-error") {
+                Column(Modifier.fillMaxWidth().padding(horizontal = ScreenPadding, vertical = 8.dp)) {
+                    Text(error.text(context))
+                    TextButton(onClick = viewModel::retry) { Text(stringResource(R.string.action_retry)) }
+                }
+            }
+        }
         if (tabs.size == 1 && current != null) item(key = "section-title") { FichaSectionTitle(stringResource(current.titleRes)) }
         when (current) {
             ProgramTab.RELATED -> relatedGrid(state.related, columns, onOpenRelated)

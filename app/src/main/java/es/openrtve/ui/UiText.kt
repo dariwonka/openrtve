@@ -9,6 +9,7 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.LiveInfo
 import es.openrtve.domain.ProgramDetail
+import es.openrtve.domain.ProgramStructure
 import es.openrtve.domain.VideoDetail
 import es.openrtve.domain.canHaveNextEpisode
 import java.text.SimpleDateFormat
@@ -151,6 +152,14 @@ val ProgramTab.titleRes: Int
         ProgramTab.MORE_VIDEOS -> R.string.tab_more_videos
         ProgramTab.RELATED -> R.string.tab_related
     }
+
+/**
+ * Enlace de una pieza a su colección: "Más en Cine de siempre". El nombre de un ciclo
+ * no dice por sí solo que lleva a más títulos; el de la serie de un capítulo sí, y
+ * se queda tal cual.
+ */
+fun Context.collectionLinkText(structure: ProgramStructure, collection: String?): String? =
+    collection?.takeIf { structure.isCollection }?.let { getString(R.string.collection_more_in, it) }
 
 /** Botón grande de la ficha de programa: "Continuar: …", "Siguiente: …" o "Reproducir: …". */
 fun PlaySuggestion.label(context: Context): String = context.getString(

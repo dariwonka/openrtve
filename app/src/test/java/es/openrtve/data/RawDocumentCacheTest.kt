@@ -30,8 +30,10 @@ class RawDocumentCacheTest {
 
     @Test
     fun `pruning drops the oldest documents and their etags first`() {
-        val small = RawDocumentCache(File(directory, "small"), maxBytes = 400)
-        (1..5).forEach { small.write("k$it", "x".repeat(100), savedAtMillis = it * 1_000L, etag = "e$it") }
+        val folder = File(directory, "small")
+        val unbounded = RawDocumentCache(folder, maxBytes = Long.MAX_VALUE)
+        (1..5).forEach { unbounded.write("k$it", "x".repeat(100), savedAtMillis = it * 1_000L, etag = "e$it") }
+        val small = RawDocumentCache(folder, maxBytes = 400)
         small.prune()
 
         assertNull("el más antiguo se va", small.read("k1"))

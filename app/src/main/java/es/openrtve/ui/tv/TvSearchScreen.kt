@@ -161,7 +161,7 @@ fun TvSearchScreen(
                         fullWidth("videos") {
                             Text(stringResource(R.string.search_videos), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         }
-                        items(results.videos, key = { "v-${it.id}" }, span = { GridItemSpan(LANDSCAPE_SPAN) }) { item ->
+                        items(results.videos, key = { "v-${it.id}" }, contentType = { "video" }, span = { GridItemSpan(LANDSCAPE_SPAN) }) { item ->
                             TvItemCard(item, RowLayout.LANDSCAPE, { onOpenItem(item) })
                         }
                         if (results.hasMoreVideos) {
@@ -183,7 +183,7 @@ fun TvSearchScreen(
 }
 
 private fun LazyGridScope.fullWidth(key: String, content: @Composable () -> Unit) {
-    item(key = key, span = { GridItemSpan(maxLineSpan) }) { content() }
+    item(key = key, contentType = key, span = { GridItemSpan(maxLineSpan) }) { content() }
 }
 
 /** Los avisos de la búsqueda dejan aire entre los filtros y lo que venga después. */

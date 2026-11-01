@@ -51,66 +51,55 @@ class SafeHttpsClient(
                 .header("User-Agent", USER_AGENT)
                 .apply { if (etag != null && hop == 0) header("If-None-Match", etag) }
                 .build()
-            client.newCall(request).executeInterruptibly().use { response ->
+            val document = client.newCall(request).readInterruptibly { response ->
                 when {
-                    response.code == 304 && etag != null -> return TextResponse(body = null, etag = etag)
+                    response.code == 304 && etag != null -> TextResponse(body = null, etag = etag)
                     response.isRedirect -> {
                         if (hop == MAX_REDIRECTS) throw IOException("Demasiadas redirecciones")
                         val location = response.header("Location") ?: throw IOException("Redirección sin Location")
                         target = hostPolicy.sanitize(request.url.resolve(location)?.toString() ?: location)
                             ?: throw IOException("Redirección a un host no permitido")
+                        null
                     }
                     !response.isSuccessful -> throw HttpStatusException(response.code)
                     else -> {
                         val source = response.body.source()
                         if (source.request(maxPayloadBytes + 1)) throw IOException("Respuesta demasiado grande")
-                        return TextResponse(body = source.readUtf8(), etag = response.header("ETag"))
+                        TextResponse(body = source.readUtf8(), etag = response.header("ETag"))
                     }
                 }
             }
+            if (document != null) return document
         }
         throw IOException("No se pudo completar la petición")
     }
 
     /**
-     * Como `execute()`, pero si interrumpen el hilo (una corrutina cancelada bajo
-     * `runInterruptible`) la llamada se cancela y la conexión se libera, en vez de
-     * seguir descargando hasta el timeout. La lectura de socket de OkHttp no
-     * responde a `Thread.interrupt()`; esperar en un latch sí.
+     * El callback consume y cierra toda la respuesta. Quien llama espera hasta el
+     * final del cuerpo: una interrupción cancela también las lecturas de socket,
+     * no solo la espera de cabeceras.
      */
-    private fun Call.executeInterruptibly(): Response {
+    private fun <T> Call.readInterruptibly(read: (Response) -> T): T {
         val done = CountDownLatch(1)
-        val lock = Any()
-        var result: Response? = null
-        var failure: IOException? = null
-        // Quien espera se ha ido: una respuesta que llegue tarde se cierra aquí o la
-        // conexión quedaría ocupada hasta el timeout.
-        var abandoned = false
-        enqueue(
-            object : Callback {
-                // El cuerpo lo lee quien espera; aquí solo se entrega.
-                override fun onResponse(call: Call, response: Response) {
-                    synchronized(lock) { if (abandoned) response.close() else result = response }
-                    done.countDown()
-                }
+        var result: Result<T>? = null
+        enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                result = runCatching { response.use(read) }
+                done.countDown()
+            }
 
-                override fun onFailure(call: Call, e: IOException) {
-                    failure = e
-                    done.countDown()
-                }
-            },
-        )
+            override fun onFailure(call: Call, e: IOException) {
+                result = Result.failure(e)
+                done.countDown()
+            }
+        })
         try {
             done.await()
         } catch (interrupted: InterruptedException) {
-            synchronized(lock) {
-                abandoned = true
-                result?.close()
-            }
             cancel()
             throw interrupted
         }
-        return result ?: throw (failure ?: IOException("Sin respuesta"))
+        return checkNotNull(result).getOrThrow()
     }
 
     companion object {

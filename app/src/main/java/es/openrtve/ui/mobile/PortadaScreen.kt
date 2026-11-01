@@ -131,7 +131,7 @@ fun PortadaScreen(
                     if (resumable.isNotEmpty() && !heroFirst) {
                         item(key = "continue") { ContinueWatchingRow(resumable, onResume, onOpenItem, onRemoveFromHistory, Modifier.animateItem()) }
                     }
-                    items(state.sections, key = { it.row.id }) { section ->
+                    items(state.sections, key = { it.row.id }, contentType = { it.row.layout }) { section ->
                         SectionView(
                             section = section,
                             fullBleedHero = isRoot && section.row.id == state.sections.first().row.id,

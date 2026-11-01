@@ -17,7 +17,7 @@ import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
-import es.openrtve.domain.ProgramStructure
+import es.openrtve.ui.collectionLinkText
 import es.openrtve.ui.facts
 import es.openrtve.ui.contentSections
 import es.openrtve.ui.structure
@@ -74,12 +74,11 @@ fun TvVideoScreen(
                 if (detail == null && state.error != null) {
                     Button(onClick = viewModel::retry) { Text(stringResource(R.string.action_retry)) }
                 }
-                // Ir al programa es navegación secundaria: verbo y destino, que ya se lee
-                // justo encima. Una pieza de un contenedor no lo lleva: su ciclo se ve como
-                // fila de contenido ("Más de Cine de siempre"), más abajo.
-                state.item.programId?.takeUnless { state.structure.isCollection }?.let { programId ->
+                // Ir al programa es navegación secundaria y siempre está, como en el móvil. A una
+                // colección se va diciendo que lleva a más títulos ("Más en Cine de siempre").
+                state.item.programId?.let { programId ->
                     Button(onClick = { onOpenProgram(programId, programTitle.orEmpty()) }) {
-                        Text(stringResource(R.string.action_open_program))
+                        Text(context.collectionLinkText(state.structure, programTitle) ?: stringResource(R.string.action_open_program))
                     }
                 }
             }
@@ -96,15 +95,6 @@ fun TvVideoScreen(
                     onRetry = { viewModel.retry(section) },
                     currentItemId = state.item.id,
                 )
-            }
-        }
-        if (state.moreFromProgram.isNotEmpty() && programTitle != null) {
-            tvDetailsSection("more-from-program", { stringResource(R.string.action_more_from, programTitle) }) {
-                // Cada pieza de un contenedor tiene su ficha: se abre, no se reproduce.
-                when (state.structure) {
-                    ProgramStructure.MOVIES, ProgramStructure.DOCUMENTARIES -> TvRelatedRow(state.moreFromProgram, onOpenItem)
-                    else -> TvEpisodesRow(state.moreFromProgram, onPlay = onOpenItem, episodic = false)
-                }
             }
         }
         if (state.related.isNotEmpty()) {

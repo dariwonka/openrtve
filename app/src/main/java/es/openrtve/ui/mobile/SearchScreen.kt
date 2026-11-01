@@ -156,8 +156,8 @@ private fun SearchResultsView(
             modifier = Modifier.fillMaxSize(),
         ) {
             if (results.programs.isNotEmpty()) {
-                item(key = "programs-header") { SectionHeader(stringResource(R.string.search_programs)) }
-                item(key = "programs") {
+                item(key = "programs-header", contentType = "heading") { SectionHeader(stringResource(R.string.search_programs)) }
+                item(key = "programs", contentType = "program-row") {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = ScreenPadding),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -169,8 +169,8 @@ private fun SearchResultsView(
                 }
             }
             if (results.videos.isNotEmpty()) {
-                item(key = "videos-header") { SectionHeader(stringResource(R.string.search_videos)) }
-                items(results.videos, key = { it.id }) { item ->
+                item(key = "videos-header", contentType = "heading") { SectionHeader(stringResource(R.string.search_videos)) }
+                items(results.videos, key = { it.id }, contentType = { "video" }) { item ->
                     EpisodeRow(
                         item, onClick = { onOpenItem(item) },
                         badge = if (item.mediaForm == MediaForm.EXTRA) item.mediaTypeName else item.mediaSubtypeName,

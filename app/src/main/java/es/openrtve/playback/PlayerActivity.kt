@@ -85,8 +85,10 @@ import es.openrtve.R
 import es.openrtve.domain.PlaybackDecision
 import es.openrtve.ui.theme.OpenRtveTheme
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 
@@ -110,12 +112,17 @@ class PlayerActivity : ComponentActivity() {
     private var showNext by mutableStateOf(false)
     private var extrasJob: Job? = null
     private var request: PlaybackRequest? = null
+    /** Una orden del usuario se aplica una vez; reconectar conserva pausa y posición. */
+    private var pendingPlay = false
+    private var extrasForUri: String? = null
     internal var playerView: PlayerView? = null
     private var liveTicker: Job? = null
 
     /** Estado del directo: en el borde en vivo o rezagado dentro de la ventana DVR. */
     internal data class LiveState(val atLiveEdge: Boolean)
     private var startJob: Job? = null
+    /** Licencia de una petición, pedida mientras se conecta la sesión: el arranque no encadena las dos esperas. */
+    private var license: Pair<PlaybackRequest, Deferred<String?>>? = null
     /** Ya se probó la variante sin DRM de la petición actual; no hay más alternativas. */
     private var usedFallback = false
 
@@ -166,7 +173,13 @@ class PlayerActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
-        request = PlaybackRequest.from(intent)
+        request = savedInstanceState?.getBundle(SAVED_REQUEST)?.let(PlaybackRequest::from)
+            ?: PlaybackRequest.from(intent)
+        pendingPlay = savedInstanceState == null && request != null
+        if (pendingPlay) request?.let(::licenseFor)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) { controller?.let(::startRequested) }
+        }
         applyPresentation()
 
         setContent {
@@ -236,11 +249,23 @@ class PlayerActivity : ComponentActivity() {
         inPictureInPicture = isInPictureInPictureMode
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        request?.let { outState.putBundle(SAVED_REQUEST, it.toBundle()) }
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)
-        request = PlaybackRequest.from(intent)
-        usedFallback = false
+        PlaybackRequest.from(intent)?.let { incoming ->
+            saveProgress()
+            setIntent(intent)
+            request = incoming
+            pendingPlay = true
+            usedFallback = false
+            dropLicense()
+            licenseFor(incoming)
+        }
+        // La notificación no trae una orden nueva: conserva el contexto de la sesión.
         applyPresentation()
         errorRes = null
         controller?.let(::startRequested)
@@ -265,8 +290,13 @@ class PlayerActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         saveProgress()
-        val player = controller ?: return
         val inPictureInPicture = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
+        if (!inPictureInPicture || isFinishing) {
+            startJob?.cancel()
+            startJob = null
+            dropLicense()
+        }
+        val player = controller ?: return
         when {
             isFinishing -> {
                 player.stop()
@@ -315,6 +345,7 @@ class PlayerActivity : ComponentActivity() {
             connect()
             return
         }
+        pendingPlay = true
         startRequested(player)
     }
 
@@ -353,44 +384,68 @@ class PlayerActivity : ComponentActivity() {
         )
     }
 
-    /**
-     * Solo carga el item si difiere del que ya tiene la sesión: al rotar, entrar en PiP
-     * o volver desde la notificación se reanuda en vez de empezar de cero.
-     */
+    /** Reconectar conserva la sesión; una orden explícita aplica continuar o reiniciar. */
     private fun startRequested(player: MediaController) {
-        val request = request
-        if (request == null) {
-            if (player.currentMediaItem == null) {
-                errorRes = R.string.player_error_nothing
-            }
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) || isFinishing) return
+        val target = request ?: player.currentMediaItem?.mediaMetadata?.extras
+            ?.let(PlaybackRequest::from)?.also { request = it }
+        if (target == null) {
+            if (player.currentMediaItem == null) errorRes = R.string.player_error_nothing
             return
+        }
+        if (extrasForUri != target.uri) {
+            extrasForUri = target.uri
+            loadExtras(target.videoId)
         }
         val current = player.currentMediaItem?.mediaId
-        if (current == request.uri || (request.fallbackUri != null && current == request.fallbackUri)) {
-            if (player.playbackState == Player.STATE_IDLE) player.prepare()
+        if (current == target.uri || (target.fallbackUri != null && current == target.fallbackUri)) {
+            if (pendingPlay) {
+                if (target.restart || player.playbackState == Player.STATE_ENDED) player.seekTo(0L)
+                if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                player.play()
+                pendingPlay = false
+            }
             return
         }
-        loadExtras(request.videoId)
         startJob?.cancel()
         startJob = lifecycleScope.launch {
-            if (request.drmTokenUrl != null && !isWidevineAvailable() && request.fallbackUri != null) {
+            if (target.drmTokenUrl != null && !isWidevineAvailable() && target.fallbackUri != null) {
                 usedFallback = true
-                play(player, request.toMediaItem(uri = request.fallbackUri, licenseUrl = null))
+                play(player, target.toMediaItem(uri = target.fallbackUri, licenseUrl = null))
+                pendingPlay = false
                 return@launch
             }
-            // La licencia es temporal: se pide justo antes de reproducir y no se guarda.
-            val licenseUrl = request.drmTokenUrl?.let { tokenUrl ->
-                try {
-                    runInterruptible(Dispatchers.IO) { container.drmTokenClient.widevineLicenseUrl(tokenUrl) }
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    // Sin licencia solo fallará el contenido protegido; el resto reproduce igual.
-                    null
-                }
+            val licenseUrl = licenseFor(target)?.await()
+            if (license?.first === target) license = null
+            if (request === target && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && !isFinishing) {
+                play(player, target.toMediaItem(uri = target.uri, licenseUrl = licenseUrl))
+                pendingPlay = false
             }
-            play(player, request.toMediaItem(uri = request.uri, licenseUrl = licenseUrl))
         }
+    }
+
+    /**
+     * URL de licencia de [target], si la necesita. Es temporal: se pide al recibir la
+     * orden, se usa una vez y se descarta al salir, nunca se guarda.
+     */
+    private fun licenseFor(target: PlaybackRequest): Deferred<String?>? {
+        val tokenUrl = target.drmTokenUrl ?: return null
+        if (target.fallbackUri != null && !isWidevineAvailable()) return null
+        license?.let { (owner, pending) -> if (owner === target) return pending }
+        return lifecycleScope.async {
+            try {
+                runInterruptible(Dispatchers.IO) { container.drmTokenClient.widevineLicenseUrl(tokenUrl) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                null
+            }
+        }.also { license = target to it }
+    }
+
+    private fun dropLicense() {
+        license?.second?.cancel()
+        license = null
     }
 
     private val settings get() = (application as OpenRtveApplication).container.settings
@@ -408,7 +463,7 @@ class PlayerActivity : ComponentActivity() {
     private fun play(player: MediaController, item: MediaItem) {
         errorRes = null
         val resumeAt = request?.takeUnless { it.restart }?.historyKey
-            ?.let { history.entryFor(it)?.positionMs }
+            ?.let { history.entryFor(it)?.takeIf { entry -> entry.inProgress }?.positionMs }
             ?: 0L
         if (resumeAt > 0) player.setMediaItem(item, resumeAt) else player.setMediaItem(item)
         player.prepare()
@@ -473,6 +528,8 @@ class PlayerActivity : ComponentActivity() {
         saveProgress()
         history.register(next)
         request = PlaybackRequest.from(decision, restart = false)
+        setIntent(intent(this, decision))
+        pendingPlay = true
         usedFallback = false
         errorRes = null
         showNext = false
@@ -483,7 +540,10 @@ class PlayerActivity : ComponentActivity() {
     /** Guarda la posición para "Seguir viendo"; el ticker lo llama cada segundo y onStop al salir. */
     private fun saveProgress() {
         val player = controller ?: return
-        val key = request?.historyKey ?: return
+        val target = request ?: return
+        val key = target.historyKey ?: return
+        val active = player.currentMediaItem?.mediaId
+        if (active != target.uri && active != target.fallbackUri) return
         if (player.isCurrentMediaItemLive) return
         val duration = player.duration
         if (duration == C.TIME_UNSET || duration <= 0) return
@@ -556,11 +616,22 @@ class PlayerActivity : ComponentActivity() {
         val videoId: String?,
     ) {
 
+        fun toBundle(): Bundle = Bundle().apply {
+            putString(EXTRA_URI, uri)
+            putString(EXTRA_MIME_TYPE, mimeType)
+            putString(EXTRA_TITLE, title)
+            putString(EXTRA_DRM_TOKEN_URL, drmTokenUrl)
+            putString(EXTRA_FALLBACK_URI, fallbackUri)
+            putString(EXTRA_HISTORY_KEY, historyKey)
+            putString(EXTRA_VIDEO_ID, videoId)
+            // Reiniciar es una orden transitoria, no parte del contenido activo.
+        }
+
         fun toMediaItem(uri: String, licenseUrl: String?): MediaItem = MediaItem.Builder()
             .setMediaId(uri)
             .setUri(uri)
             .setMimeType(mimeType)
-            .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(title).setExtras(toBundle()).build())
             .apply {
                 if (licenseUrl != null) {
                     setDrmConfiguration(
@@ -584,24 +655,27 @@ class PlayerActivity : ComponentActivity() {
                 videoId = decision.videoId,
             )
 
-            fun from(intent: Intent): PlaybackRequest? {
-                val uri = intent.getStringExtra(EXTRA_URI)?.takeIf(String::isNotBlank) ?: return null
-                val mimeType = intent.getStringExtra(EXTRA_MIME_TYPE)?.takeIf(String::isNotBlank) ?: return null
+            fun from(intent: Intent): PlaybackRequest? = intent.extras?.let(::from)
+
+            fun from(extras: Bundle): PlaybackRequest? {
+                val uri = extras.getString(EXTRA_URI)?.takeIf(String::isNotBlank) ?: return null
+                val mimeType = extras.getString(EXTRA_MIME_TYPE)?.takeIf(String::isNotBlank) ?: return null
                 return PlaybackRequest(
                     uri = uri,
                     mimeType = mimeType,
-                    title = intent.getStringExtra(EXTRA_TITLE).orEmpty(),
-                    drmTokenUrl = intent.getStringExtra(EXTRA_DRM_TOKEN_URL),
-                    fallbackUri = intent.getStringExtra(EXTRA_FALLBACK_URI),
-                    historyKey = intent.getStringExtra(EXTRA_HISTORY_KEY),
-                    restart = intent.getBooleanExtra(EXTRA_RESTART, false),
-                    videoId = intent.getStringExtra(EXTRA_VIDEO_ID),
+                    title = extras.getString(EXTRA_TITLE).orEmpty(),
+                    drmTokenUrl = extras.getString(EXTRA_DRM_TOKEN_URL),
+                    fallbackUri = extras.getString(EXTRA_FALLBACK_URI),
+                    historyKey = extras.getString(EXTRA_HISTORY_KEY),
+                    restart = extras.getBoolean(EXTRA_RESTART, false),
+                    videoId = extras.getString(EXTRA_VIDEO_ID),
                 )
             }
         }
     }
 
     companion object {
+        private const val SAVED_REQUEST = "active-playback"
         private const val EXTRA_URI = "playback_uri"
         private const val EXTRA_MIME_TYPE = "playback_mime_type"
         private const val EXTRA_TITLE = "playback_title"

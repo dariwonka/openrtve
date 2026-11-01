@@ -76,8 +76,8 @@
 
     <string name="action_play">Reproducir</string>
     <string name="action_open_program">Ver programa</string>
+    <string name="collection_more_in">Más en %1$s</string>
     <string name="action_go_to">Ir a %1$s</string>
-    <string name="action_more_from">Más de %1$s</string>
     <string name="action_share">Compartir</string>
     <string name="action_more">más</string>
     <string name="action_less">menos</string>

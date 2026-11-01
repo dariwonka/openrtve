@@ -22,6 +22,8 @@ data class ProgramUiState(
     val programId: String,
     val title: String,
     val detail: ProgramDetail? = null,
+    /** Los metadatos pueden fallar aunque la lista de vídeos esté disponible. */
+    val detailError: LoadError? = null,
     val selectedSeasonId: String? = null,
     /** Emisiones completas de la temporada elegida; carga ya mientras llega la ficha. */
     val episodes: PagedItemsState = PagedItemsState(isLoading = true),
@@ -69,7 +71,7 @@ class ProgramViewModel(
         detailJob?.cancel()
         episodeLoader.cancel()
         detailJob = viewModelScope.launch {
-            mutableUiState.update { it.copy(episodes = it.episodes.copy(isLoading = true, error = null)) }
+            mutableUiState.update { it.copy(detailError = null, episodes = it.episodes.copy(isLoading = true, error = null)) }
             val programId = mutableUiState.value.programId
             try {
                 val detail = repository.loadProgram(programId).value
@@ -81,8 +83,8 @@ class ProgramViewModel(
                 }
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
-                // Sin ficha se intenta igualmente con los vídeos; el reintento vuelve a pedirla.
+            } catch (error: Exception) {
+                mutableUiState.update { it.copy(detailError = error.toLoadError()) }
             }
             mutableUiState.update { it.copy(order = orderFor(it.selectedSeasonId)) }
             episodeLoader.load(firstPage = true)

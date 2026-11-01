@@ -1,5 +1,6 @@
 package es.openrtve.ui
 
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +72,9 @@ fun rememberPortadaScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val historyEntries by (history?.entries ?: remember { MutableStateFlow(emptyList()) }).collectAsStateWithLifecycle()
     val resumable = remember(historyEntries) { history?.resumable.orEmpty() }
+    // Arranque completo (Play Vitals, Macrobenchmark): la primera fila ya tiene contenido
+    // o la pantalla explica el fallo. Solo cuenta la primera vez en la actividad.
+    ReportDrawnWhen { !state.isLoading && state.sections.firstOrNull()?.state !is SectionState.Loading }
 
     LifecycleResumeEffect(viewModel) {
         viewModel.onResumed()

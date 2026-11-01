@@ -8,12 +8,11 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -57,7 +56,12 @@ class WatchHistory(
 
     /** Vive lo que la app: el historial es un singleton del contenedor. */
     private val writer = CoroutineScope(SupervisorJob() + ioDispatcher)
-    private val writeLock = Mutex()
+    private val writes = Channel<Unit>(Channel.CONFLATED)
+
+    init {
+        // Un escritor y como máximo un aviso pendiente: una ráfaga no encola fsyncs del mismo estado.
+        writer.launch { for (ignored in writes) persist(mutableEntries.value) }
+    }
 
     fun entryFor(itemId: String): WatchEntry? = mutableEntries.value.firstOrNull { it.item.id == itemId }
 
@@ -107,8 +111,8 @@ class WatchHistory(
             .sortedByDescending { it.updatedAtMillis }
             .take(MAX_ENTRIES)
         mutableEntries.value = trimmed
-        // Siempre se vuelca el estado más reciente: dos escrituras encoladas no pueden dejar una vieja.
-        writer.launch { writeLock.withLock { persist(mutableEntries.value) } }
+        // El escritor toma la instantánea más reciente cuando puede guardar.
+        writes.trySend(Unit)
     }
 
     private fun persist(entries: List<WatchEntry>) {

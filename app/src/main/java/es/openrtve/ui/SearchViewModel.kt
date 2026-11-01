@@ -7,13 +7,12 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.QuickFilter
 import es.openrtve.domain.SearchResults
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -72,7 +71,8 @@ class SearchViewModel(
             try {
                 val filters = repository.loadQuickFilters().value
                 mutableUiState.update { it.copy(filters = filters) }
-                filters.firstOrNull()?.let(::selectFilter)
+                val first = filters.firstOrNull()
+                if (first != null) selectFilter(first) else mutableUiState.update { it.copy(filter = FilterState.Loaded(emptyList())) }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -149,24 +149,25 @@ class SearchViewModel(
         }
     }
 
-    @OptIn(FlowPreview::class)
     private fun observeQuery() {
         viewModelScope.launch {
             mutableUiState
                 .map { it.query.trim() to it.attempt }
                 .distinctUntilChanged()
-                .debounce(QUERY_DEBOUNCE_MS)
-                // Una consulta nueva cancela la anterior: no espera a que termine ni pinta sus resultados.
-                .collectLatest { (query, _) ->
+                // Cancela antes de esperar: durante el debounce tampoco puede publicarse la consulta anterior.
+                .collectLatest { (query, attempt) ->
                     moreVideosJob?.cancel()
                     if (query.length < SearchUiState.MIN_QUERY_LENGTH) {
                         mutableUiState.update { it.copy(results = null, isSearching = false, isLoadingMoreVideos = false, searchError = null) }
                         return@collectLatest
                     }
-                    mutableUiState.update { it.copy(isSearching = true, isLoadingMoreVideos = false, searchError = null) }
+                    mutableUiState.update { it.copy(results = null, isSearching = true, isLoadingMoreVideos = false, searchError = null) }
+                    delay(QUERY_DEBOUNCE_MS)
                     try {
                         val results = repository.search(query)
-                        mutableUiState.update { it.copy(results = results, isSearching = false) }
+                        mutableUiState.update {
+                            if (it.query.trim() == query && it.attempt == attempt) it.copy(results = results, isSearching = false) else it
+                        }
                     } catch (error: CancellationException) {
                         throw error
                     } catch (error: Exception) {
