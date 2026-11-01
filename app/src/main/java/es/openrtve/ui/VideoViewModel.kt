@@ -7,6 +7,7 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.EpisodeOrder
 import es.openrtve.domain.RelatedKind
 import es.openrtve.domain.belongsToEpisodicProgram
+import es.openrtve.domain.parentStructure
 import es.openrtve.domain.episodeOrder
 import es.openrtve.domain.isFirstSeason
 import es.openrtve.domain.VideoDetail
@@ -32,12 +33,17 @@ data class VideoUiState(
     val extras: PagedItemsState = PagedItemsState(),
     /** "Similares" de RTVE para películas y documentales; vacío si no hay. */
     val related: List<CatalogItem> = emptyList(),
+    /**
+     * Otras piezas del contenedor al que pertenece (las películas de un ciclo de cine):
+     * su selección editorial, distinta de Similares. Vacío si no es de un contenedor.
+     */
+    val moreFromProgram: List<CatalogItem> = emptyList(),
     val isLoading: Boolean = true,
     /** Fallo de la ficha: se puede reproducir igual con [item], y se pinta con su reintento. */
     val error: LoadError? = null,
 )
 
-/** Ficha de vídeo o película, al estilo de la pantalla de película de Findroid. */
+/** Ficha de vídeo o película: su ficha y, según el programa al que pertenece, capítulos, extras o más piezas. */
 class VideoViewModel(
     private val repository: CatalogRepository,
     item: CatalogItem,
@@ -45,10 +51,20 @@ class VideoViewModel(
     private val mutableUiState = MutableStateFlow(VideoUiState(item = item))
     val uiState: StateFlow<VideoUiState> = mutableUiState.asStateFlow()
     private var job: Job? = null
-    private var chaptersJob: Job? = null
-    private var extrasJob: Job? = null
     /** Orden de los capítulos según la regla de RTVE Play para el programa (ver `episodeOrder`). */
     private var chaptersOrder: EpisodeOrder? = null
+
+    /** Solo se cargan cuando el medio tiene programa (ver [load]). */
+    private val programId: String get() = checkNotNull(mutableUiState.value.item.programId)
+
+    private val chaptersLoader = PagedItemsLoader(viewModelScope, mutableUiState, VideoUiState::chapters, { copy(chapters = it) }) { page ->
+        val seasonId = mutableUiState.value.item.seasonId
+        repository.loadProgramVideos(programId, seasonId, page, completeOnly = true, order = chaptersOrder(programId, seasonId)).value
+    }
+
+    private val extrasLoader = PagedItemsLoader(viewModelScope, mutableUiState, VideoUiState::extras, { copy(extras = it) }) { page ->
+        repository.loadProgramExtras(programId, page).value
+    }
 
     init {
         load()
@@ -56,29 +72,21 @@ class VideoViewModel(
 
     fun retry() = load()
 
-    fun loadMoreChapters() = loadChapters(firstPage = false)
-
-    fun retryChapters() = loadChapters(firstPage = mutableUiState.value.chapters.items.isEmpty())
-
-    fun loadMoreExtras() = loadExtras(firstPage = false)
-
-    fun retryExtras() = loadExtras(firstPage = mutableUiState.value.extras.items.isEmpty())
-
     fun loadMore(section: ContentSection) {
-        if (section.loadsComplete) loadMoreChapters()
-        if (section.loadsExtras) loadMoreExtras()
+        if (section.loadsComplete) chaptersLoader.loadMore()
+        if (section.loadsExtras) extrasLoader.loadMore()
     }
 
     fun retry(section: ContentSection) {
-        if (section.loadsComplete) retryChapters()
-        if (section.loadsExtras) retryExtras()
+        if (section.loadsComplete) chaptersLoader.retry()
+        if (section.loadsExtras) extrasLoader.retry()
     }
 
     private fun load() {
         val id = mutableUiState.value.item.playbackId ?: mutableUiState.value.item.id
         job?.cancel()
-        chaptersJob?.cancel()
-        extrasJob?.cancel()
+        chaptersLoader.cancel()
+        extrasLoader.cancel()
         job = viewModelScope.launch {
             mutableUiState.update { it.copy(isLoading = true, error = null) }
             try {
@@ -86,12 +94,15 @@ class VideoViewModel(
                 // La ficha trae los derechos reales, que faltan en muchos feeds de portada.
                 mutableUiState.update { it.copy(detail = detail, item = detail.item, isLoading = false) }
                 val media = detail.item
-                if (detail.belongsToEpisodicProgram) {
-                    loadChapters(firstPage = true)
+                val programId = media.programId
+                if (programId != null && media.belongsToEpisodicProgram) {
+                    chaptersLoader.load(firstPage = true)
+                    // Los extras de un ciclo pertenecen a todo el ciclo, no a esta película.
+                    if (media.programShowsFragments == true) extrasLoader.load(firstPage = true)
                 }
-                // Los extras de un ciclo pertenecen a todo el ciclo, no a esta película.
-                if (detail.belongsToEpisodicProgram && media.programShowsFragments == true) {
-                    loadExtras(firstPage = true)
+                if (programId != null && media.parentStructure.isCollection) launch {
+                    val pieces = loadContainerPiecesOrEmpty(programId, except = media.id)
+                    mutableUiState.update { it.copy(moreFromProgram = pieces) }
                 }
                 relatedKind(media)?.let { kind ->
                     val related = loadRelatedOrEmpty(repository, kind, media.id)
@@ -105,44 +116,14 @@ class VideoViewModel(
         }
     }
 
-    private fun loadChapters(firstPage: Boolean) {
-        val state = mutableUiState.value
-        val programId = state.item.programId ?: return
-        val current = state.chapters
-        if (!firstPage && (!current.hasMore || current.isLoading || current.isLoadingMore)) return
-        chaptersJob?.cancel()
-        chaptersJob = viewModelScope.launch {
-            mutableUiState.update {
-                it.copy(chapters = it.chapters.copy(isLoading = firstPage, isLoadingMore = !firstPage, error = null))
-            }
-            try {
-                val latest = mutableUiState.value
-                val result = repository.loadProgramVideos(
-                    programId = programId,
-                    seasonId = latest.item.seasonId,
-                    page = if (firstPage) 1 else latest.chapters.page + 1,
-                    completeOnly = true,
-                    order = chaptersOrder(programId, latest.item.seasonId),
-                )
-                mutableUiState.update {
-                    val items = if (firstPage) result.value.items else it.chapters.items + result.value.items
-                    it.copy(
-                        chapters = PagedItemsState(
-                            items = items.distinctBy(CatalogItem::id),
-                            page = result.value.page,
-                            totalPages = result.value.totalPages,
-                            isStale = it.chapters.isStale || result.isStale,
-                        ),
-                    )
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                mutableUiState.update {
-                    it.copy(chapters = it.chapters.copy(isLoading = false, isLoadingMore = false, error = error.toLoadError()))
-                }
-            }
-        }
+    /** Primera página del catálogo del contenedor, sin la pieza que se está viendo; secundaria, sin avisos. */
+    private suspend fun loadContainerPiecesOrEmpty(programId: String, except: String): List<CatalogItem> = try {
+        repository.loadProgramVideos(programId, page = 1, completeOnly = true, order = EpisodeOrder.NEWEST_FIRST)
+            .value.items.filter { it.id != except }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        emptyList()
     }
 
     /**
@@ -158,43 +139,6 @@ class VideoViewModel(
     } catch (_: Exception) {
         EpisodeOrder.NEWEST_FIRST
     }.also { chaptersOrder = it }
-
-    private fun loadExtras(firstPage: Boolean) {
-        val state = mutableUiState.value
-        val programId = state.item.programId ?: return
-        val current = state.extras
-        if (!firstPage && (!current.hasMore || current.isLoading || current.isLoadingMore)) return
-        extrasJob?.cancel()
-        extrasJob = viewModelScope.launch {
-            mutableUiState.update {
-                it.copy(extras = it.extras.copy(isLoading = firstPage, isLoadingMore = !firstPage, error = null))
-            }
-            try {
-                val latest = mutableUiState.value
-                val result = repository.loadProgramExtras(
-                    programId = programId,
-                    page = if (firstPage) 1 else latest.extras.page + 1,
-                )
-                mutableUiState.update {
-                    val items = if (firstPage) result.value.items else it.extras.items + result.value.items
-                    it.copy(
-                        extras = PagedItemsState(
-                            items = items.distinctBy(CatalogItem::id),
-                            page = result.value.page,
-                            totalPages = result.value.totalPages,
-                            isStale = it.extras.isStale || result.isStale,
-                        ),
-                    )
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                mutableUiState.update {
-                    it.copy(extras = it.extras.copy(isLoading = false, isLoadingMore = false, error = error.toLoadError()))
-                }
-            }
-        }
-    }
 }
 
 /** Qué recomendaciones tiene una ficha de vídeo: solo películas y documentales tienen modelo propio. */

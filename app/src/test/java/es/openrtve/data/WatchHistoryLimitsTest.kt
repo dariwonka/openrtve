@@ -63,7 +63,6 @@ class WatchHistoryLimitsTest {
         assertEquals(600_000L, finished.positionMs)
         assertEquals(1f, finished.progress, 0f)
         assertFalse(finished.inProgress)
-        assertEquals("v1", history.lastWatchedOf("p")!!.item.id)
 
         history.updateProgress("v1", 90_000, 600_000)
         val reopened = history.entryFor("v1")!!

@@ -1,9 +1,7 @@
 package es.openrtve.ui.tv
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.tv.material3.Button
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
@@ -128,19 +126,19 @@ fun TvSearchScreen(
             }
             when {
                 !state.isTextSearch -> when (val filter = state.filter) {
-                    FilterState.Loading -> fullWidth("status") { TvInlineMessage(stringResource(R.string.state_loading)) }
-                    is FilterState.Failed -> fullWidth("status") { TvInlineMessage(filter.error.text(context), viewModel::retryFilter) }
+                    FilterState.Loading -> fullWidth("status") { TvInlineMessage(stringResource(R.string.state_loading), StatusPadding) }
+                    is FilterState.Failed -> fullWidth("status") { TvInlineMessage(filter.error.text(context), StatusPadding, viewModel::retryFilter) }
                     is FilterState.Loaded -> if (filter.items.isEmpty()) {
-                        fullWidth("status") { TvInlineMessage(stringResource(R.string.state_empty_module), viewModel::retryFilter) }
+                        fullWidth("status") { TvInlineMessage(stringResource(R.string.state_empty_module), StatusPadding, viewModel::retryFilter) }
                     } else {
                         items(filter.items, key = { "f-${it.id}" }, span = { GridItemSpan(POSTER_SPAN) }) { item ->
                             TvItemCard(item, RowLayout.POSTER, { onOpenItem(item) })
                         }
                     }
                 }
-                state.searchError != null -> fullWidth("status") { TvInlineMessage(state.searchError.text(context), viewModel::retrySearch) }
+                state.searchError != null -> fullWidth("status") { TvInlineMessage(state.searchError.text(context), StatusPadding, viewModel::retrySearch) }
                 results == null -> Unit
-                results.isEmpty -> fullWidth("status") { TvInlineMessage(stringResource(R.string.search_empty)) }
+                results.isEmpty -> fullWidth("status") { TvInlineMessage(stringResource(R.string.search_empty), StatusPadding) }
                 else -> {
                     if (results.programs.isNotEmpty()) {
                         fullWidth("programs") {
@@ -188,18 +186,8 @@ private fun LazyGridScope.fullWidth(key: String, content: @Composable () -> Unit
     item(key = key, span = { GridItemSpan(maxLineSpan) }) { content() }
 }
 
-/** Aviso dentro de la página (cargando, vacío, error con reintento), sin ocupar toda la pantalla. */
-@Composable
-private fun TvInlineMessage(message: String, onRetry: (() -> Unit)? = null) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(vertical = 24.dp),
-    ) {
-        Text(message, style = MaterialTheme.typography.titleMedium)
-        if (onRetry != null) Button(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
-    }
-}
+/** Los avisos de la búsqueda dejan aire entre los filtros y lo que venga después. */
+private val StatusPadding = Modifier.padding(vertical = 24.dp)
 
 /** Seis columnas: un póster ocupa una y una tarjeta apaisada dos (cinco y tres por fila). */
 private const val GRID_COLUMNS = 6

@@ -41,8 +41,7 @@ class TvVideoScreenTest {
         val film = catalogItem("film", title = "Una película del programa").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")
         val repository = FakeCatalogRepository().apply {
             video = { _, _ -> loaded(VideoDetail(
-                item = broadcast, backdropUrl = null, description = null, promo = null, subtypeName = null,
-                programTitle = "Historia de nuestro cine", programType = "Entrevistas", year = "2026",
+                item = broadcast, backdropUrl = null, description = null, programTitle = "Historia de nuestro cine", year = "2026",
                 ageRating = null, genres = emptyList(), director = null, cast = emptyList(),
                 originalLanguage = null, expirationDate = null, webUrl = null,
             )) }

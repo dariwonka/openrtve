@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -56,6 +59,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
@@ -63,25 +67,29 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import es.openrtve.R
 import es.openrtve.domain.CatalogItem
+import es.openrtve.ui.FichaFacts
 import es.openrtve.ui.ProgramTab
+import es.openrtve.ui.titleRes
 
 /**
- * Piezas comunes de las fichas (formato y vídeo). Las dos siguen la misma plantilla:
+ * Piezas comunes de las fichas (programa y vídeo). Las dos siguen la misma plantilla:
  *
  * 1. **Cabecera**: imagen a sangre con el título encima, línea de datos, botón
- *    grande y sinopsis plegada. Es lo que hace falta para decidir y para darle al
- *    play, así que nunca va en una pestaña.
- * 2. **Pestañas** sólo si hay más de un conjunto de contenido que recorrer
- *    (capítulos, más vídeos, detalles). Material 3: agrupan contenido del mismo
- *    nivel; van fijas cuando caben, y se quedan pegadas arriba al desplazar.
- * 3. **Detalles** es la ficha completa de una obra y la pestaña inicial de un vídeo.
- *    Los programas empiezan por Capítulos y los contenedores por su catálogo.
+ *    grande, sinopsis y ficha técnica plegadas. Es lo que hace falta para decidir
+ *    y para darle al play, así que nunca va en una pestaña.
+ * 2. **Pestañas** sólo si hay más de una colección que recorrer (la principal,
+ *    Extras, Similares; ver ProgramTabs). Material 3: agrupan contenido del mismo
+ *    nivel; van fijas cuando caben, y se quedan pegadas arriba al desplazar. Con
+ *    una sola, en su lugar va su título.
  *
  * La lista de capítulos pagina sin fin, así que nada puede ir debajo de ella: todo
  * lo que no es la lista va arriba o en una pestaña hermana.
@@ -158,15 +166,6 @@ internal fun FichaLayout(
     }
 }
 
-/** Ficha sin cabecera que enseñar (cargando, o fallida): la barra opaca con el título y, debajo, [content]. */
-@Composable
-internal fun FichaPanel(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        FichaTopBar(title = title, alpha = 1f, onBack = onBack, onShare = null)
-        content()
-    }
-}
-
 /** Barra flotante de la ficha: transparente sobre la imagen, opaca y con título al desplazar. */
 @Composable
 private fun FichaTopBar(title: String, alpha: Float, onBack: () -> Unit, onShare: (() -> Unit)?) {
@@ -174,7 +173,7 @@ private fun FichaTopBar(title: String, alpha: Float, onBack: () -> Unit, onShare
     // Sobre la imagen, los botones llevan un velo redondo para que se vean sobre
     // cualquier foto; al volverse opaca la barra, el velo desaparece.
     val scrim = Color.Black.copy(alpha = 0.35f * (1f - alpha))
-    val tint = androidx.compose.ui.graphics.lerp(Color.White, MaterialTheme.colorScheme.onBackground, alpha)
+    val tint = lerp(Color.White, MaterialTheme.colorScheme.onBackground, alpha)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -214,7 +213,7 @@ private fun FichaTopBar(title: String, alpha: Float, onBack: () -> Unit, onShare
 
 /**
  * Cabecera de ficha: imagen 16:9 a sangre con parallax y el título encima; debajo,
- * subtítulo, línea de datos, reclamo, aviso, acciones, progreso y sinopsis plegada.
+ * subtítulo, línea de datos, reclamo, acciones, progreso, sinopsis y ficha técnica.
  * Todo lo que falte se omite sin dejar hueco.
  */
 @Composable
@@ -223,10 +222,17 @@ internal fun FichaHeader(
     title: String,
     scrollOffset: () -> Int,
     subtitle: String? = null,
+    /**
+     * Si el subtítulo es el programa al que pertenece la ficha, lleva a él: la
+     * navegación se nombra por su destino, como el programa en la ficha de un
+     * episodio de Spotify o el canal en YouTube, y no compite con Reproducir.
+     */
+    onSubtitleClick: (() -> Unit)? = null,
     meta: String? = null,
     claim: String? = null,
-    notice: String? = null,
     synopsis: AnnotatedString? = null,
+    /** Reparto, dirección...: van con la sinopsis y se despliegan con ella. */
+    facts: FichaFacts? = null,
     progress: Float? = null,
     actions: (@Composable () -> Unit)? = null,
 ) {
@@ -263,13 +269,17 @@ internal fun FichaHeader(
         }
         Column(Modifier.padding(horizontal = ScreenPadding)) {
             subtitle?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (onSubtitleClick == null) {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    ProgramLink(it, onSubtitleClick)
+                }
             }
             meta?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(4.dp))
@@ -279,10 +289,6 @@ internal fun FichaHeader(
                 Spacer(Modifier.height(8.dp))
                 Text(text = it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
-            notice?.takeIf { it.isNotBlank() }?.let {
-                Spacer(Modifier.height(8.dp))
-                Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
             if (actions != null) {
                 Spacer(Modifier.height(12.dp))
                 actions()
@@ -291,12 +297,41 @@ internal fun FichaHeader(
                 Spacer(Modifier.height(8.dp))
                 ProgressStrip(it)
             }
-            synopsis?.takeIf { it.isNotBlank() }?.let {
+            val about = synopsis?.takeIf { it.isNotBlank() }
+            val credits = facts?.takeIf { it.hasDetails }
+            if (about != null || credits != null) {
                 Spacer(Modifier.height(12.dp))
-                ExpandableText(it)
+                FichaAbout(about, credits)
             }
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+/** "Valle Salvaje ›" en el color de acento, con zona táctil de 48 dp aunque el texto sea más bajo. */
+@Composable
+private fun ProgramLink(program: String, onClick: () -> Unit) {
+    val label = stringResource(R.string.action_go_to, program)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+    ) {
+        Text(
+            text = program,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 
@@ -337,7 +372,8 @@ internal fun PlayActions(label: String, onPlay: () -> Unit, secondary: List<Seco
 }
 
 /**
- * Pestañas fijas de la ficha: son tres como mucho y caben a ancho igual.
+ * Pestañas de la ficha: fijas a ancho igual hasta tres; con más, desplazables
+ * (Material 3), para que ningún rótulo se corte.
  *
  * Material 3: la activa en `primary`, las demás en `onSurfaceVariant`. `Tab` pinta
  * por defecto las no seleccionadas del mismo color que la seleccionada, con lo que
@@ -357,7 +393,7 @@ internal fun FichaTabs(
                 onClick = { onSelect(tab) },
                 selectedContentColor = MaterialTheme.colorScheme.primary,
                 unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                text = { Text(text = tab.label(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                text = { Text(text = stringResource(tab.titleRes), maxLines = 1, overflow = TextOverflow.Ellipsis) },
             )
         }
     }
@@ -365,7 +401,7 @@ internal fun FichaTabs(
         PrimaryScrollableTabRow(
             selectedTabIndex = tabs.indexOf(current).coerceAtLeast(0),
             containerColor = MaterialTheme.colorScheme.background,
-            edgePadding = 0.dp,
+            edgePadding = ScreenPadding,
             tabs = content,
         )
     } else {
@@ -411,39 +447,59 @@ internal fun relatedColumns(): Int {
     return ((widthDp - ScreenPadding * 2) / 120.dp).toInt().coerceAtLeast(3)
 }
 
+/** Título de la única sección de una ficha: sin fila de pestañas, se dice qué es lo que sigue. */
 @Composable
-internal fun ProgramTab.label(): String = stringResource(
-    when (this) {
-        ProgramTab.EPISODES -> R.string.tab_episodes
-        ProgramTab.MOVIES -> R.string.tab_movies
-        ProgramTab.DOCUMENTARIES -> R.string.tab_documentaries
-        ProgramTab.VIDEOS -> R.string.tab_videos
-        ProgramTab.MORE_VIDEOS -> R.string.tab_more_videos
-        ProgramTab.RELATED -> R.string.tab_related
-        ProgramTab.DETAILS -> R.string.tab_details
-    },
-)
+internal fun FichaSectionTitle(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = ScreenPadding, end = ScreenPadding, top = 8.dp, bottom = 4.dp),
+    )
+}
 
-/** Sinopsis plegada a tres líneas, con "más" alineado con el párrafo. */
+/**
+ * Sinopsis y ficha técnica, plegadas juntas como en Google TV o Netflix: plegado
+ * se ven tres líneas de sinopsis y una de reparto y de dirección; "más" despliega
+ * todo (idioma, país, disponibilidad...). Lo que se lee junto no va en una pestaña.
+ */
 @Composable
-internal fun ExpandableText(text: String) = ExpandableText(AnnotatedString(text))
-
-@Composable
-internal fun ExpandableText(text: AnnotatedString) {
-    var expanded by rememberSaveable(text.text) { mutableStateOf(false) }
-    var hasOverflow by remember(text) { mutableStateOf(false) }
+internal fun FichaAbout(synopsis: AnnotatedString?, facts: FichaFacts?) {
+    var expanded by rememberSaveable(synopsis?.text, facts) { mutableStateOf(false) }
+    var truncated by remember(synopsis, facts) { mutableStateOf(false) }
+    val rows = facts?.rows.orEmpty()
+    val visibleRows = if (expanded) rows else rows.take(facts?.compactRowCount ?: 0)
     Column {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = if (expanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis,
-            onTextLayout = { result -> if (!expanded) hasOverflow = result.hasVisualOverflow },
-        )
+        synopsis?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = if (expanded) Int.MAX_VALUE else 3,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { result -> if (result.hasVisualOverflow) truncated = true },
+            )
+        }
+        visibleRows.forEach { (label, value) ->
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)) {
+                        append(stringResource(label))
+                        append(": ")
+                    }
+                    append(value)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = if (expanded) Int.MAX_VALUE else 1,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { result -> if (result.hasVisualOverflow) truncated = true },
+            )
+        }
         // Texto pulsable y no TextButton: el botón centra su texto en un ancho mínimo
         // y "más" quedaba sangrado respecto al párrafo. El alto de 48 dp se mantiene.
-        if (hasOverflow || expanded) {
+        if (expanded || truncated || rows.size > visibleRows.size) {
             Text(
                 text = stringResource(if (expanded) R.string.action_less else R.string.action_more),
                 style = MaterialTheme.typography.labelLarge,

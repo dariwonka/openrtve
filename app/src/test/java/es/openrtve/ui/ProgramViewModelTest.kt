@@ -36,15 +36,15 @@ class ProgramViewModelTest {
     @Test
     fun `detail arrives first and the first page of complete episodes follows`() = runTest(mainDispatcher.dispatcher) {
         val viewModel = ProgramViewModel(repository, "135930", "Telediario (inicial)")
-        assertTrue(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.episodes.isLoading)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertEquals("Telediario", state.title)
-        assertEquals(listOf("e1"), state.episodes.map { it.id })
-        assertEquals(1, state.page)
-        assertTrue(state.hasMore)
-        assertFalse(state.isLoading)
+        assertEquals(listOf("e1"), state.episodes.items.map { it.id })
+        assertEquals(1, state.episodes.page)
+        assertTrue(state.episodes.hasMore)
+        assertFalse(state.episodes.isLoading)
         assertEquals(listOf("program(135930, force=false)", "programVideos(135930, season=null, page=1, complete=true, order=NEWEST_FIRST)"), repository.calls)
     }
 
@@ -80,15 +80,15 @@ class ProgramViewModelTest {
 
         viewModel.loadMore()
         runCurrent()
-        assertTrue(viewModel.uiState.value.isLoadingMore)
+        assertTrue(viewModel.uiState.value.episodes.isLoadingMore)
         viewModel.loadMore()
         runCurrent()
         secondPage.complete(Unit)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(listOf("e1", "shared", "e2"), state.episodes.map { it.id })
-        assertFalse(state.hasMore)
+        assertEquals(listOf("e1", "shared", "e2"), state.episodes.items.map { it.id })
+        assertFalse(state.episodes.hasMore)
         assertEquals(1, repository.calls.count { "page=2" in it })
 
         viewModel.loadMore()
@@ -104,7 +104,7 @@ class ProgramViewModelTest {
         val viewModel = ProgramViewModel(repository, "1", "")
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.episodes.isEmpty())
+        assertTrue(viewModel.uiState.value.episodes.items.isEmpty())
         assertEquals(listOf("clip", "trailer"), viewModel.uiState.value.extras.items.map { it.id })
         assertTrue(repository.calls.any { it.startsWith("programExtras(1") })
     }
@@ -115,12 +115,12 @@ class ProgramViewModelTest {
         advanceUntilIdle()
         viewModel.loadMore()
         advanceUntilIdle()
-        assertEquals(2, viewModel.uiState.value.episodes.size)
+        assertEquals(2, viewModel.uiState.value.episodes.items.size)
 
         viewModel.selectSeason("t2")
-        assertTrue(viewModel.uiState.value.episodes.isEmpty())
+        assertTrue(viewModel.uiState.value.episodes.items.isEmpty())
         advanceUntilIdle()
-        assertEquals(listOf("e1"), viewModel.uiState.value.episodes.map { it.id })
+        assertEquals(listOf("e1"), viewModel.uiState.value.episodes.items.map { it.id })
         assertTrue(repository.calls.last().contains("season=t2, page=1"))
 
         val before = repository.calls.size
@@ -138,8 +138,8 @@ class ProgramViewModelTest {
         val state = viewModel.uiState.value
         assertNull(state.detail)
         assertEquals("Título de la fila", state.title)
-        assertEquals(listOf("e1"), state.episodes.map { it.id })
-        assertNull(state.error)
+        assertEquals(listOf("e1"), state.episodes.items.map { it.id })
+        assertNull(state.episodes.error)
     }
 
     @Test
@@ -147,33 +147,25 @@ class ProgramViewModelTest {
         repository.programVideos = { _, _, _, _, _ -> throw SocketTimeoutException() }
         val viewModel = ProgramViewModel(repository, "1", "")
         advanceUntilIdle()
-        assertEquals(LoadError.Timeout, viewModel.uiState.value.error)
-        assertFalse(viewModel.uiState.value.isLoading)
+        assertEquals(LoadError.Timeout, viewModel.uiState.value.episodes.error)
+        assertFalse(viewModel.uiState.value.episodes.isLoading)
 
         repository.programVideos = { _, _, pageNumber, _, _ -> page(listOf(catalogItem("e$pageNumber")), page = pageNumber, totalPages = 2) }
         viewModel.retry()
         advanceUntilIdle()
-        assertNull(viewModel.uiState.value.error)
-        assertEquals(listOf("e1"), viewModel.uiState.value.episodes.map { it.id })
+        assertNull(viewModel.uiState.value.episodes.error)
+        assertEquals(listOf("e1"), viewModel.uiState.value.episodes.items.map { it.id })
 
         repository.programVideos = { _, _, _, _, _ -> throw IOException() }
         viewModel.loadMore()
         advanceUntilIdle()
-        assertEquals(LoadError.Unknown, viewModel.uiState.value.error)
-        assertFalse(viewModel.uiState.value.isLoadingMore)
+        assertEquals(LoadError.Unknown, viewModel.uiState.value.episodes.error)
+        assertFalse(viewModel.uiState.value.episodes.isLoadingMore)
 
         repository.programVideos = { _, _, pageNumber, _, _ -> page(listOf(catalogItem("e$pageNumber")), page = pageNumber, totalPages = 2) }
         viewModel.retry()
         advanceUntilIdle()
-        assertEquals("con episodios, reintentar pide la siguiente página", listOf("e1", "e2"), viewModel.uiState.value.episodes.map { it.id })
-    }
-
-    @Test
-    fun `stale data from either source marks the screen as stale`() = runTest(mainDispatcher.dispatcher) {
-        repository.programVideos = { _, _, _, _, _ -> page(listOf(catalogItem("e1")), isStale = true) }
-        val viewModel = ProgramViewModel(repository, "1", "")
-        advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.isStale)
+        assertEquals("con episodios, reintentar pide la siguiente página", listOf("e1", "e2"), viewModel.uiState.value.episodes.items.map { it.id })
     }
 
     @Test
@@ -224,11 +216,11 @@ class ProgramViewModelTest {
         val viewModel = ProgramViewModel(repository, "program", "")
         advanceUntilIdle()
         val chapters = viewModel.uiState.value.contentSections.first { it.tab == ProgramTab.EPISODES }
-        assertTrue(chapters.page.items.isEmpty())
+        assertTrue(chapters.items.isEmpty())
         viewModel.loadMore(chapters)
         advanceUntilIdle()
         val state = viewModel.uiState.value
-        assertEquals(listOf("episode"), state.headerEpisodes.filter { it.contentTab(state.contents) == ProgramTab.EPISODES }.map { it.id })
+        assertEquals(listOf("episode"), state.headerEpisodes.filter { it.contentTab(state.structure) == ProgramTab.EPISODES }.map { it.id })
         viewModel.selectSeason("t1")
         advanceUntilIdle()
         assertEquals(listOf("film", "episode"), viewModel.uiState.value.headerEpisodes.map { it.id })

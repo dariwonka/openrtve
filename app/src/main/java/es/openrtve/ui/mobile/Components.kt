@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -372,7 +373,7 @@ internal fun FeaturedCard(item: CatalogItem, onOpen: () -> Unit, modifier: Modif
     }
 }
 
-/** Tarjeta cuadrada (radio, música). */
+/** Tarjeta cuadrada, para las filas `ColeccionCuadrado` (logos de canal, colecciones). */
 @Composable
 internal fun SquareCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier = modifier.clip(CardShape).clickable(onClick = onClick)) {
@@ -410,7 +411,7 @@ internal fun HeroPager(
     Column {
         HorizontalPager(
             state = pagerState,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = if (fullBleed) 0.dp else ScreenPadding),
+            contentPadding = PaddingValues(horizontal = if (fullBleed) 0.dp else ScreenPadding),
             pageSpacing = if (fullBleed) 0.dp else 12.dp,
         ) { page ->
             val item = items[page]

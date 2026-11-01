@@ -101,11 +101,6 @@ class WatchHistory(
     val resumable: List<WatchEntry>
         get() = mutableEntries.value.filter { it.inProgress }.sortedByDescending { it.updatedAtMillis }
 
-    /** Lo último visto (a medias o entero) de un programa. */
-    fun lastWatchedOf(programId: String): WatchEntry? =
-        mutableEntries.value.filter { it.item.programId == programId && (it.inProgress || it.finished) }
-            .maxByOrNull { it.updatedAtMillis }
-
     private fun save(entries: List<WatchEntry>) {
         val trimmed = entries
             .filter { nowMillis() - it.updatedAtMillis < MAX_AGE_MS }

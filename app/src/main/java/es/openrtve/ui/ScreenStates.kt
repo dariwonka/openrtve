@@ -19,7 +19,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import es.openrtve.AppContainer
 import es.openrtve.data.CatalogRepository
+import es.openrtve.data.Settings
 import es.openrtve.data.WatchEntry
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
@@ -114,7 +116,6 @@ fun rememberProgramScreen(
     repository: CatalogRepository,
     history: WatchHistory,
     program: CatalogItem,
-    onError: (String) -> Unit,
 ): ProgramScreenState {
     val viewModel: ProgramViewModel = viewModel(
         key = "program-${program.id}",
@@ -124,12 +125,12 @@ fun rememberProgramScreen(
     val historyEntries by history.entries.collectAsStateWithLifecycle()
     val entriesById = remember(historyEntries) { historyEntries.associateBy { it.item.id } }
     // De la lista completa, no de la temporada que se esté mirando: el botón grande es estable.
-    val suggestion = remember(historyEntries, state.headerEpisodes, state.headerOrder, state.contents) {
-        if (state.contents.isCollection) null else suggestPlay(history, program.id, state.headerEpisodes, state.headerOrder) {
-            it.contentTab(state.contents) == ProgramTab.EPISODES
+    val suggestion = remember(historyEntries, state.headerEpisodes, state.headerOrder, state.structure) {
+        if (state.structure.isCollection) null else suggestPlay(history, program.id, state.headerEpisodes, state.headerOrder) {
+            it.contentTab(state.structure) == ProgramTab.EPISODES
         }
     }
-    ErrorEffect(state.error, onError, viewModel::dismissError)
+    // Sin ErrorEffect: cada sección explica su fallo en el sitio, con su reintento.
     return ProgramScreenState(viewModel, state, entriesById, suggestion)
 }
 
@@ -206,6 +207,28 @@ fun rememberExploreScreen(repository: CatalogRepository, tv: Boolean = false): E
     val viewModel: ExploreViewModel = viewModel(factory = viewModelFactory { initializer { ExploreViewModel(repository, tv) } })
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     return ExploreScreenState(viewModel, state)
+}
+
+class SettingsScreenState(
+    val viewModel: SettingsViewModel,
+    val settings: Settings,
+    /** Tamaño de la caché; `null` mientras se calcula. */
+    val cacheBytes: Long?,
+    val versionName: String,
+)
+
+@Composable
+fun rememberSettingsScreen(container: AppContainer): SettingsScreenState {
+    val context = LocalContext.current
+    val viewModel: SettingsViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer { SettingsViewModel(container.settings, container.documentCache, context.applicationContext) }
+        },
+    )
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val cacheBytes by viewModel.cacheBytes.collectAsStateWithLifecycle()
+    val versionName = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?" }
+    return SettingsScreenState(viewModel, settings, cacheBytes, versionName)
 }
 
 private const val LIVE_REFRESH_MS = 60_000L

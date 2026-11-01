@@ -14,7 +14,7 @@ class ProgramTabsTest {
     private fun item(id: String) = referenceItem(id, ContentKind.VIDEO, "Vídeo $id")
 
     private fun state(episodes: List<CatalogItem> = emptyList()) =
-        ProgramUiState(programId = "p1", title = "Programa", episodes = episodes, isLoading = false)
+        ProgramUiState(programId = "p1", title = "Programa", episodes = PagedItemsState(episodes))
 
     @Test
     fun `la ficha de programa solo tiene capitulos, asi que no enseña fila de pestañas`() {
@@ -23,16 +23,16 @@ class ProgramTabsTest {
     }
 
     @Test
-    fun `la ficha de video enseña detalles solo si hay ficha tecnica`() {
+    fun `la ficha tecnica va en la cabecera, nunca en una pestaña`() {
         val video = item("v1")
-        fun detail(director: String?) = VideoDetail(
-            item = video, backdropUrl = null, description = "Sinopsis", promo = null, subtypeName = null,
-            programTitle = null, year = null, ageRating = null, genres = emptyList(), director = director,
-            cast = emptyList(), originalLanguage = null, expirationDate = null, webUrl = null,
+        val detail = VideoDetail(
+            item = video, backdropUrl = null, description = "Sinopsis", programTitle = null, year = "2024", ageRating = null, genres = emptyList(), director = "Alguien",
+            cast = listOf("Actriz"), originalLanguage = null, expirationDate = null, webUrl = null,
         )
-        // La sinopsis va en la cabecera: sola no justifica la pestaña.
-        assertTrue(videoTabs(VideoUiState(item = video, detail = detail(null))).isEmpty())
-        assertEquals(listOf(ProgramTab.DETAILS), videoTabs(VideoUiState(item = video, detail = detail("Alguien"))))
+        assertTrue(videoTabs(VideoUiState(item = video, detail = detail)).isEmpty())
+        // Lo que ya dice la línea de datos de la cabecera no se repite en la ficha técnica.
+        assertEquals(listOf(es.openrtve.R.string.video_cast, es.openrtve.R.string.video_director), detail.facts.rows.map { it.first })
+        assertEquals(2, detail.facts.compactRowCount)
     }
 
     @Test
@@ -40,10 +40,7 @@ class ProgramTabsTest {
         val extras = PagedItemsState(items = listOf(item("clip")), page = 1, totalPages = 1)
         val detail = ProgramDetail("p1", "Programa", null, null, null, emptyList(), director = "Directora")
         val programState = state(episodes = listOf(item("v1"))).copy(extras = extras, detail = detail)
-        assertEquals(
-            listOf(ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS, ProgramTab.DETAILS),
-            programTabs(programState),
-        )
+        assertEquals(listOf(ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS), programTabs(programState))
 
         val videoState = VideoUiState(
             item = item("v1"),
@@ -51,14 +48,6 @@ class ProgramTabsTest {
             extras = extras,
         )
         assertEquals(listOf(ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS), videoTabs(videoState))
-        assertEquals(
-            listOf(ProgramTab.DETAILS, ProgramTab.EPISODES, ProgramTab.MORE_VIDEOS),
-            videoTabs(videoState.copy(detail = VideoDetail(
-                item = item("v1"), backdropUrl = null, description = null, promo = null, subtypeName = null,
-                programTitle = null, year = "2024", ageRating = null, genres = emptyList(), director = null,
-                cast = emptyList(), originalLanguage = null, expirationDate = null, webUrl = null,
-            ))),
-        )
     }
 
     @Test

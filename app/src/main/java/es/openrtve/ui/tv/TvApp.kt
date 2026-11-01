@@ -112,7 +112,7 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
         ) {
             Box(Modifier.fillMaxSize()) {
                 DestinationHost(nav, navigation) { current ->
-                    when (current) {
+                    ProvideScreenInitialFocus { when (current) {
                         is Destination.Portada -> TvPortadaScreen(
                             repository = repository,
                             url = current.url,
@@ -134,7 +134,6 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
                             program = current.item,
                             onOpenItem = actions.playItem,
                             onOpenRelated = actions.openItem,
-                            onError = actions.showMessage,
                         )
                         is Destination.Video -> TvVideoScreen(
                             repository = repository,
@@ -161,7 +160,7 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
                             Tab.SEARCH -> TvSearchScreen(repository, actions.openItem, reselectRequest = nav.rootRequests.getValue(Tab.SEARCH))
                             Tab.EXPLORE -> TvExploreScreen(repository, actions.openCategory, reselectRequest = nav.rootRequests.getValue(Tab.EXPLORE))
                         }
-                    }
+                    } }
                 }
                 if (message != null) {
                     Text(

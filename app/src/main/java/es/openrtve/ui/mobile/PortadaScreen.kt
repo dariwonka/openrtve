@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -315,7 +316,7 @@ private fun PlaceholderRow(layout: RowLayout, fullBleedHero: Boolean) {
                 .fillMaxWidth()
                 .padding(horizontal = if (fullBleed) 0.dp else ScreenPadding)
                 .aspectRatio(16f / 9f)
-                .clip(if (fullBleed) androidx.compose.foundation.shape.RoundedCornerShape(0.dp) else CardShape)
+                .clip(if (fullBleed) RectangleShape else CardShape)
                 .background(MaterialTheme.colorScheme.surface),
         )
         return

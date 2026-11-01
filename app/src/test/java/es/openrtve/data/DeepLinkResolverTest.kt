@@ -86,7 +86,7 @@ class DeepLinkResolverTest {
     }
 
     private fun detail(item: es.openrtve.domain.CatalogItem) = VideoDetail(
-        item = item, backdropUrl = null, description = null, promo = null, subtypeName = null, programTitle = null,
+        item = item, backdropUrl = null, description = null, programTitle = null,
         year = null, ageRating = null, genres = emptyList(), director = null, cast = emptyList(), originalLanguage = null,
         expirationDate = null, webUrl = null,
     )

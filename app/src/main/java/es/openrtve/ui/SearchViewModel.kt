@@ -42,7 +42,6 @@ data class SearchUiState(
     internal val attempt: Int = 0,
 ) {
     val isTextSearch: Boolean get() = query.trim().length >= MIN_QUERY_LENGTH
-    val filterItems: List<CatalogItem> get() = (filter as? FilterState.Loaded)?.items.orEmpty()
 
     companion object {
         const val MIN_QUERY_LENGTH = 3

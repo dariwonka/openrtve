@@ -29,7 +29,6 @@ class WatchHistoryTest {
         val finished = history.entryFor("v1")!!
         assertTrue("al 95 % se considera visto", finished.finished)
         assertTrue(history.resumable.none { it.item.id == "v1" })
-        assertEquals("v1", history.lastWatchedOf("p1")!!.item.id)
     }
 
     @Test

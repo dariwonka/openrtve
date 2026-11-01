@@ -2,8 +2,6 @@ package es.openrtve.data
 
 import es.openrtve.domain.ContentKind
 import es.openrtve.domain.LinkKind
-import es.openrtve.domain.PlaybackDecision
-import es.openrtve.domain.PlaybackResolver
 import es.openrtve.domain.RowLayout
 import es.openrtve.domain.isMovie
 import es.openrtve.domain.MediaForm
@@ -340,7 +338,7 @@ class RtveJsonParserTest {
             assertTrue(programShowsFragments == true)
             assertEquals("136519", programTypeId)
             assertEquals("Series Prime Time", programType)
-            assertTrue(needsAccount)
+            assertTrue(drm)
         }
     }
 
@@ -564,7 +562,8 @@ class RtveJsonParserTest {
         assertEquals(listOf("Emma Stone", "Olivia Colman"), detail.cast)
         assertEquals(listOf("Drama", "Comedia"), detail.genres)
         assertEquals("2018", detail.year)
-        assertEquals("Película", detail.subtypeName)
+        assertEquals("Película", detail.item.mediaSubtypeName)
+        assertEquals("Comedia negra", detail.promo)
         assertTrue(detail.item.drm)
     }
 

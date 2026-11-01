@@ -216,9 +216,7 @@ data class CatalogItem(
     /** Tipo del programa padre, según `programInfo`; no se deduce del título. */
     val programTypeId: String? = null,
     val programType: String? = null,
-) {
-    val needsAccount: Boolean get() = loginRequired || paid || drm
-}
+)
 
 /**
  * Lo que el feed de directos sabe de la emisión: si está en el aire, cuándo
@@ -300,13 +298,6 @@ data class ProgramDetail(
     val programType: String? = null,
 )
 
-/** Tipos editoriales explícitos de RTVE; no dependen del título ni de los vídeos de la página. */
-val ProgramDetail.isMovieContainer: Boolean
-    get() = programTypeId == "137310" || programType.equals("Contenedor Películas", ignoreCase = true)
-
-val ProgramDetail.isContainer: Boolean
-    get() = isMovieContainer || programType?.startsWith("Contenedor ", ignoreCase = true) == true
-
 data class CatalogLoad<T>(
     val value: T,
     val isStale: Boolean,
@@ -353,30 +344,15 @@ data class ExploreGroup(
     val isKids: Boolean = false,
 )
 
-/** Ficha completa de un vídeo (`videos/{id}.json`): lo que Findroid muestra en su pantalla de película. */
-/**
- * Un "contenedor" (ciclo de cine, colección de documentales) agrupa piezas
- * sueltas: no tiene capítulos que recorrer. Un programa de verdad sí, aunque el
- * vídeo no traiga temporada ni número de episodio.
- */
-val VideoDetail.belongsToEpisodicProgram: Boolean
-    get() {
-        val parentType = programType ?: item.programType
-        return item.programId != null && !item.isFullMovie && item.programTypeId != "137310" &&
-            parentType?.startsWith("Contenedor ", ignoreCase = true) != true &&
-            (item.seasonId != null || item.episode != null || parentType != null)
-    }
-
+/** Ficha completa de un vídeo (`videos/{id}.json`); [item] trae sus derechos y su programa. */
 data class VideoDetail(
     val item: CatalogItem,
     val backdropUrl: String?,
     /** Puede contener HTML; la UI lo renderiza. */
     val description: String?,
-    val promo: String?,
-    val subtypeName: String?,
+    /** Reclamo corto (`promoDesc`): una frase para un destacado, distinta de la sinopsis. */
+    val promo: String? = null,
     val programTitle: String?,
-    /** Tipo del programa al que pertenece ("Serie Documental", "Contenedor Películas"...). */
-    val programType: String? = null,
     val year: String?,
     val ageRating: String?,
     val genres: List<String>,

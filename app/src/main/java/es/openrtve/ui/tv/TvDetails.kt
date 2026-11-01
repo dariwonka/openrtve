@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -34,6 +35,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -119,6 +122,50 @@ internal fun TvDetailsScaffold(
     }
 }
 
+/**
+ * Textos de la cabecera, comunes a la ficha de programa y la de vídeo: título,
+ * subtítulo, línea de datos, reclamo (el horario de emisión) y la sinopsis en
+ * tres líneas. Lo que falte se omite sin dejar hueco.
+ */
+@Composable
+internal fun TvDetailsHeaderText(
+    title: String,
+    subtitle: String? = null,
+    meta: String? = null,
+    claim: String? = null,
+    /** HTML del feed. */
+    synopsis: String? = null,
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.displaySmall,
+        fontWeight = FontWeight.Bold,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+    subtitle?.let {
+        Text(text = it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+    }
+    meta?.let {
+        Spacer(Modifier.height(8.dp))
+        Text(text = it, style = MaterialTheme.typography.bodyLarge)
+    }
+    claim?.let {
+        Spacer(Modifier.height(4.dp))
+        Text(text = it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+    }
+    synopsis?.let {
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = remember(it) { AnnotatedString.fromHtml(it) },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
 /** Una sección de la ficha: título y su contenido (normalmente una fila horizontal). */
 internal fun LazyListScope.tvDetailsSection(key: String, title: @Composable () -> String, content: @Composable ColumnScope.() -> Unit) {
     item(key = key) {
@@ -140,14 +187,15 @@ internal fun TvEpisodesRow(
     hasMore: Boolean = false,
     isLoadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
-    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    listState: LazyListState = rememberLazyListState(),
     episodic: Boolean = true,
+    takesInitialFocus: Boolean = false,
 ) {
     TvLazyRow(
         state = listState,
         contentPadding = TvRowPadding,
         horizontalArrangement = Arrangement.spacedBy(20.dp),
-        modifier = Modifier.focusRestorer(),
+        modifier = Modifier.focusRestorer().then(if (takesInitialFocus) Modifier.initialFocus() else Modifier),
     ) {
         items(items, key = { it.id }) { item ->
             TvEpisodeCard(
@@ -159,20 +207,7 @@ internal fun TvEpisodesRow(
                 episodic = episodic,
             )
         }
-        if (hasMore) {
-            item(key = "more") {
-                TvFocusSurface(
-                    onClick = onLoadMore,
-                    modifier = Modifier.width(TvEpisodeWidth).aspectRatio(16f / 9f),
-                ) {
-                    Text(
-                        stringResource(if (isLoadingMore) R.string.state_loading else R.string.program_load_more),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                }
-            }
-        }
+        if (hasMore) loadMoreTile(isLoadingMore, onLoadMore, Modifier.width(TvEpisodeWidth).aspectRatio(16f / 9f))
     }
 }
 
@@ -184,13 +219,14 @@ internal fun TvRelatedRow(
     hasMore: Boolean = false,
     isLoadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
-    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    listState: LazyListState = rememberLazyListState(),
+    takesInitialFocus: Boolean = false,
 ) {
     TvLazyRow(
         state = listState,
         contentPadding = TvRowPadding,
         horizontalArrangement = Arrangement.spacedBy(20.dp),
-        modifier = Modifier.focusRestorer(),
+        modifier = Modifier.focusRestorer().then(if (takesInitialFocus) Modifier.initialFocus() else Modifier),
     ) {
         items(items, key = { it.id }) { item ->
             TvItemCard(
@@ -198,19 +234,19 @@ internal fun TvRelatedRow(
                 Modifier.width(TvPosterWidth),
             )
         }
-        if (hasMore) {
-            item(key = "more") {
-                TvFocusSurface(
-                    onClick = onLoadMore,
-                    modifier = Modifier.width(TvPosterWidth).aspectRatio(2f / 3f),
-                ) {
-                    Text(
-                        stringResource(if (isLoadingMore) R.string.state_loading else R.string.program_load_more),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                }
-            }
+        if (hasMore) loadMoreTile(isLoadingMore, onLoadMore, Modifier.width(TvPosterWidth).aspectRatio(2f / 3f))
+    }
+}
+
+/** Última tarjeta de una fila con más páginas, del tamaño de las demás: pide la siguiente. */
+private fun LazyListScope.loadMoreTile(isLoadingMore: Boolean, onLoadMore: () -> Unit, modifier: Modifier) {
+    item(key = "more") {
+        TvFocusSurface(onClick = onLoadMore, modifier = modifier) {
+            Text(
+                stringResource(if (isLoadingMore) R.string.state_loading else R.string.program_load_more),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.align(Alignment.Center),
+            )
         }
     }
 }
@@ -255,7 +291,7 @@ private fun TvEpisodeCard(
             TvArtwork(item.imageUrl, Modifier.fillMaxSize())
             progress?.let { TvProgressStrip(it, Modifier.align(Alignment.BottomCenter)) }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(TvCardCaptionGap))
         badge?.let {
             Text(it, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         }

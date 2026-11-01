@@ -1,7 +1,9 @@
 package es.openrtve.ui
 
 import android.content.Context
+import androidx.annotation.StringRes
 import es.openrtve.R
+import es.openrtve.data.WatchEntry
 import es.openrtve.domain.BlockReason
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ExploreGroup
@@ -103,16 +105,15 @@ fun ExploreGroup.header(context: Context): String? =
  * Línea de datos de la cabecera, como en Google TV: "2018 · 108 min · +12 ·
  * Comedia, Drama", omitiendo lo que falte. Los géneros, como mucho dos.
  */
-fun VideoDetail.metaLine(context: Context): String? = listOfNotNull(
-    year,
-    item.durationMs?.let { minutesLabel(context, it) },
-    ageBadge(ageRating),
-    genres.take(MAX_HEADER_GENRES).joinToString(", ").ifBlank { null },
-).takeIf { it.isNotEmpty() }?.joinToString(" · ")
+fun VideoDetail.metaLine(context: Context): String? =
+    headerMetaLine(year, item.durationMs?.let { minutesLabel(context, it) }, ageRating, genres)
 
 /** La misma línea para un programa: "2024 · +12 · Drama"; el horario de emisión va aparte. */
-fun ProgramDetail.metaLine(): String? = listOfNotNull(
+fun ProgramDetail.metaLine(): String? = headerMetaLine(year, minutes = null, ageRating, genres)
+
+private fun headerMetaLine(year: String?, minutes: String?, ageRating: String?, genres: List<String>): String? = listOfNotNull(
     year,
+    minutes,
     ageBadge(ageRating),
     genres.take(MAX_HEADER_GENRES).joinToString(", ").ifBlank { null },
 ).takeIf { it.isNotEmpty() }?.joinToString(" · ")
@@ -125,8 +126,9 @@ fun ProgramDetail.metaLine(): String? = listOfNotNull(
  */
 fun ageBadge(ageRange: String?): String? {
     val text = ageRange?.lowercase() ?: return null
+    val minimumAge = AGE_DIGITS.find(text)?.groupValues?.get(1)
     return when {
-        AGE_DIGITS.find(text) != null -> "+${AGE_DIGITS.find(text)!!.groupValues[1]}"
+        minimumAge != null -> "+$minimumAge"
         "todos los públicos" in text -> "TP"
         "infancia" in text -> "Infantil"
         else -> null
@@ -134,7 +136,49 @@ fun ageBadge(ageRange: String?): String? {
 }
 
 private val AGE_DIGITS = Regex("menores de (\\d+)")
-private const val MAX_HEADER_GENRES = 2
+
+/** Géneros que caben en la línea de datos de la cabecera; el resto va a la ficha técnica. */
+internal const val MAX_HEADER_GENRES = 2
+
+/** Título de una sección de la ficha: pestaña en el móvil, fila en TV. */
+@get:StringRes
+val ProgramTab.titleRes: Int
+    get() = when (this) {
+        ProgramTab.EPISODES -> R.string.tab_episodes
+        ProgramTab.MOVIES -> R.string.tab_movies
+        ProgramTab.DOCUMENTARIES -> R.string.tab_documentaries
+        ProgramTab.VIDEOS -> R.string.tab_videos
+        ProgramTab.MORE_VIDEOS -> R.string.tab_more_videos
+        ProgramTab.RELATED -> R.string.tab_related
+    }
+
+/** Botón grande de la ficha de programa: "Continuar: …", "Siguiente: …" o "Reproducir: …". */
+fun PlaySuggestion.label(context: Context): String = context.getString(
+    when (this) {
+        is PlaySuggestion.Continue -> R.string.program_continue_episode
+        is PlaySuggestion.Next -> R.string.program_next_episode
+        is PlaySuggestion.Play -> R.string.program_play_episode
+    },
+    item.title,
+)
+
+/**
+ * Etiqueta de una pieza en su sección. En Capítulos, dónde está el espectador: el
+ * que se ve en esta ficha, los vistos y el siguiente; en el resto, su tipo.
+ */
+fun ContentSection.badge(
+    context: Context,
+    item: CatalogItem,
+    entry: WatchEntry?,
+    suggestion: PlaySuggestion?,
+    currentItemId: String?,
+): String? = when {
+    tab != ProgramTab.EPISODES -> if (tab == ProgramTab.MORE_VIDEOS) item.mediaTypeName else item.mediaSubtypeName
+    item.id == currentItemId -> context.getString(R.string.episode_current)
+    entry?.finished == true -> context.getString(R.string.episode_watched)
+    suggestion is PlaySuggestion.Next && suggestion.item.id == item.id -> context.getString(R.string.episode_next)
+    else -> null
+}
 
 /** Fecha del feed (`dd-MM-yyyy HH:mm:ss`) como `dd/MM/yyyy`. */
 fun String.feedDateToDisplay(): String = take(10).replace('-', '/')

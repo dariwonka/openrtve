@@ -1,16 +1,11 @@
 package es.openrtve.ui.tv
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Button
-import androidx.tv.material3.Text
 import es.openrtve.R
 import es.openrtve.data.WatchEntry
 import es.openrtve.domain.CatalogItem
@@ -18,6 +13,8 @@ import es.openrtve.ui.ContentSection
 import es.openrtve.ui.LoadMoreOnScrollEnd
 import es.openrtve.ui.PlaySuggestion
 import es.openrtve.ui.ProgramTab
+import es.openrtve.ui.badge
+import es.openrtve.ui.showsPosters
 import es.openrtve.ui.text
 
 @Composable
@@ -29,63 +26,41 @@ internal fun TvContentSection(
     entriesById: Map<String, WatchEntry> = emptyMap(),
     suggestion: PlaySuggestion? = null,
     currentItemId: String? = null,
+    takesInitialFocus: Boolean = false,
 ) {
-    val page = section.page
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     val episodic = section.tab == ProgramTab.EPISODES
-    LoadMoreOnScrollEnd(listState, threshold = 3, enabled = page.hasMore && page.error == null, contentKey = page.page, loadMore = onLoadMore)
-    if (page.error != null || (page.items.isEmpty() && !page.hasMore)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(TvRowPadding)) {
-            Text(
-                page.error?.text(LocalContext.current) ?: stringResource(
-                    when {
-                        page.isLoading -> R.string.state_loading
-                        episodic -> R.string.program_empty
-                        else -> R.string.state_empty_module
-                    },
-                ),
-            )
-            if (!page.isLoading) Button(onClick = onRetry, modifier = Modifier.initialFocus(enabled = page.items.isEmpty())) {
-                Text(stringResource(R.string.action_retry))
-            }
-        }
+    LoadMoreOnScrollEnd(listState, threshold = 3, enabled = section.hasMore && section.error == null, contentKey = section.progressKey, loadMore = onLoadMore)
+    if (section.error != null || (section.items.isEmpty() && !section.hasMore)) {
+        TvInlineMessage(
+            message = section.error?.text(context) ?: stringResource(
+                when {
+                    section.isLoading -> R.string.state_loading
+                    episodic -> R.string.program_empty
+                    else -> R.string.state_empty_module
+                },
+            ),
+            onRetry = onRetry.takeUnless { section.isLoading },
+            modifier = Modifier.padding(TvRowPadding),
+            focusRetry = section.items.isEmpty(),
+        )
     }
-    if (page.items.isEmpty() && !page.hasMore) return
-    if (section.tab == ProgramTab.MOVIES || section.tab == ProgramTab.DOCUMENTARIES) {
-        TvRelatedRow(page.items, onSelect, page.hasMore, page.isLoadingMore, onLoadMore, listState)
+    if (section.items.isEmpty() && !section.hasMore) return
+    if (section.tab.showsPosters) {
+        TvRelatedRow(section.items, onSelect, section.hasMore, section.isLoadingMore, onLoadMore, listState, takesInitialFocus)
     } else {
         TvEpisodesRow(
-            items = page.items,
+            items = section.items,
             onPlay = onSelect,
             progressOf = { entriesById[it.id]?.takeIf { entry -> entry.inProgress }?.progress },
-            badgeOf = { item ->
-                when {
-                    episodic && item.id == currentItemId -> stringResource(R.string.episode_current)
-                    episodic && entriesById[item.id]?.finished == true -> stringResource(R.string.episode_watched)
-                    episodic && suggestion is PlaySuggestion.Next && suggestion.item.id == item.id -> stringResource(R.string.episode_next)
-                    section.tab == ProgramTab.MORE_VIDEOS -> item.mediaTypeName
-                    !episodic -> item.mediaSubtypeName
-                    else -> null
-                }
-            },
-            hasMore = page.hasMore,
-            isLoadingMore = page.isLoadingMore,
+            badgeOf = { item -> section.badge(context, item, entriesById[item.id], suggestion, currentItemId) },
+            hasMore = section.hasMore,
+            isLoadingMore = section.isLoadingMore,
             onLoadMore = onLoadMore,
             listState = listState,
             episodic = episodic,
+            takesInitialFocus = takesInitialFocus,
         )
     }
 }
-
-@Composable
-internal fun ProgramTab.sectionTitle(): String = stringResource(
-    when (this) {
-        ProgramTab.EPISODES -> R.string.tab_episodes
-        ProgramTab.MOVIES -> R.string.tab_movies
-        ProgramTab.DOCUMENTARIES -> R.string.tab_documentaries
-        ProgramTab.VIDEOS -> R.string.tab_videos
-        ProgramTab.MORE_VIDEOS -> R.string.tab_more_videos
-        ProgramTab.RELATED -> R.string.tab_related
-        ProgramTab.DETAILS -> R.string.tab_details
-    },
-)

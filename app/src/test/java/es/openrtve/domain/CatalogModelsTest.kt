@@ -66,12 +66,8 @@ class CatalogModelsTest {
     }
 
     @Test
-    fun `an account is needed for login, paid or drm content`() {
+    fun `search results are empty only without programs and videos`() {
         val free = catalogItem("1")
-        assertFalse(free.needsAccount)
-        assertTrue(free.copy(loginRequired = true).needsAccount)
-        assertTrue(free.copy(paid = true).needsAccount)
-        assertTrue(free.copy(drm = true).needsAccount)
         assertTrue(SearchResults(emptyList(), emptyList()).isEmpty)
         assertFalse(SearchResults(listOf(free), emptyList()).isEmpty)
     }

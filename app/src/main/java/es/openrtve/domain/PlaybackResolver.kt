@@ -24,7 +24,6 @@ sealed interface PlaybackDecision {
         val fallbackUri: String? = null,
         /** Clave del item en "Seguir viendo"; `null` si no se guarda progreso (directos). */
         val historyKey: String? = null,
-        val resumePositionMs: Long = 0L,
         /** ID del vídeo bajo demanda: da acceso a previews de la barra y al siguiente episodio. */
         val videoId: String? = null,
     ) : PlaybackDecision

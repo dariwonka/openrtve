@@ -37,24 +37,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import coil3.compose.rememberAsyncImagePainter
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.toBitmap
 import es.openrtve.R
 import es.openrtve.domain.PreviewSprite
-import es.openrtve.domain.SpriteCue
 
 /**
  * Panel de ajustes del reproductor, como el de RTVE Play: calidad, velocidad,

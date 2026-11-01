@@ -1,5 +1,6 @@
 package es.openrtve.ui
 
+
 import es.openrtve.data.HttpStatusException
 import es.openrtve.domain.ContentKind
 import es.openrtve.domain.VideoDetail
@@ -90,37 +91,44 @@ class VideoViewModelTest {
         val film = catalogItem("film", programId = "cine").copy(
             mediaSubtypeName = "Película", seasonId = "editorial-group", programShowsFragments = true,
         )
-        repository.video = { _, _ -> loaded(detail(film).copy(programType = "Contenedor Películas")) }
+        repository.video = { _, _ -> loaded(detail(film.copy(programType = "Contenedor Películas"))) }
+        repository.programVideos = { _, _, _, _, _ -> page(listOf(film, catalogItem("other-film").copy(mediaSubtypeName = "Película"))) }
 
         val viewModel = VideoViewModel(repository, film)
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.chapters.items.isEmpty())
-        assertFalse(repository.calls.any { it.startsWith("programVideos(") || it.startsWith("programExtras(") })
+        val state = viewModel.uiState.value
+        assertTrue("las películas del ciclo no son capítulos", state.chapters.items.isEmpty())
+        assertTrue(state.contentSections.isEmpty())
+        assertFalse(repository.calls.any { it.startsWith("programExtras(") })
+        // Su ciclo se ofrece como "Más de...", sin la propia película.
+        assertEquals(listOf("other-film"), state.moreFromProgram.map { it.id })
     }
 
     @Test
     fun `a film mixed into a broadcast feed has its own section in the video sheet`() = runTest(mainDispatcher.dispatcher) {
         val broadcast = catalogItem("broadcast", programId = "p1").copy(programType = "Entrevistas")
         val film = catalogItem("film", programId = "p1").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")
-        repository.video = { _, _ -> loaded(detail(broadcast).copy(programType = "Entrevistas")) }
+        repository.video = { _, _ -> loaded(detail(broadcast)) }
         repository.programVideos = { _, _, _, _, _ -> page(listOf(broadcast, film)) }
 
         val viewModel = VideoViewModel(repository, broadcast)
         advanceUntilIdle()
         val state = viewModel.uiState.value
         assertEquals(listOf(ProgramTab.EPISODES, ProgramTab.MOVIES), state.contentSections.map { it.tab })
-        assertEquals(listOf("film"), state.contentSections.last().page.items.map { it.id })
-        assertTrue(film.opensDetailsIn(state.contents))
+        assertEquals(listOf("film"), state.contentSections.last().items.map { it.id })
+        assertTrue(film.opensDetailsIn(state.structure))
     }
 
     @Test
     fun `a container ID prevents chapter loading even when its name is missing and a season is present`() = runTest(mainDispatcher.dispatcher) {
         val video = catalogItem("video", programId = "cycle").copy(programTypeId = "137310", seasonId = "editorial-season")
         repository.video = { _, _ -> loaded(detail(video)) }
-        VideoViewModel(repository, video)
+        val viewModel = VideoViewModel(repository, video)
         advanceUntilIdle()
-        assertFalse(repository.calls.any { it.startsWith("programVideos(") })
+        // Ni capítulos de su "temporada": como pieza de un contenedor, solo su catálogo para "Más de...".
+        assertTrue(viewModel.uiState.value.chapters.items.isEmpty())
+        assertFalse(repository.calls.any { it.startsWith("programVideos(cycle, season=editorial-season") })
     }
 
     @Test
@@ -140,7 +148,7 @@ class VideoViewModelTest {
     }
 
     private fun detail(item: es.openrtve.domain.CatalogItem) = VideoDetail(
-        item = item, backdropUrl = null, description = null, promo = null, subtypeName = null, programTitle = null,
+        item = item, backdropUrl = null, description = null, programTitle = null,
         year = null, ageRating = null, genres = emptyList(), director = null, cast = emptyList(), originalLanguage = null,
         expirationDate = null, webUrl = null,
     )

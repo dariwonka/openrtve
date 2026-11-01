@@ -1,23 +1,22 @@
 package es.openrtve.ui
 
 import es.openrtve.R
-import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.VideoDetail
 
 /**
- * Pestañas de las fichas, con la misma regla que en LibreTres:
+ * Pestañas de las fichas del móvil, según Material 3 ("las pestañas agrupan
+ * contenido del mismo nivel; lo que se lee junto no va en pestañas"):
  *
- * - **Cabecera** = lo que hace falta para decidir y darle al play (título, datos,
- *   sinopsis plegada, botón). Nunca en una pestaña.
- * - **Pestañas** = colecciones que se recorren. Sólo se enseña la fila si hay más
- *   de una; con una, su contenido va directamente debajo de la cabecera.
- * - **Detalles** = la ficha completa de una obra: es la pestaña inicial de un
- *   vídeo. Un programa empieza por Capítulos; un contenedor muestra su catálogo.
+ * - **Cabecera** = lo que hace falta para decidir y darle al play: título, línea
+ *   de datos, botón, sinopsis y ficha técnica (reparto, dirección...) plegadas.
+ *   Nunca en una pestaña.
+ * - **Pestañas** = colecciones que se recorren: la principal del programa
+ *   (Capítulos, Películas, Documentales o Vídeos), Extras y Similares. Con una
+ *   sola no hay fila de pestañas: va su título y su contenido.
  *
- * RTVE separa las emisiones completas (`39816`) de fragmentos (`39978`) y
- * avances/tráilers (`39980`). Esa separación alimenta Capítulos y Más vídeos;
- * no se mezclan los programas relacionados, que son otro tipo de contenido.
+ * En TV no hay pestañas de sección: cada colección es una fila (ver TvDetails).
+ * Qué pieza va a qué sección se decide en ContentSections.
  */
 enum class ProgramTab {
     EPISODES,
@@ -27,85 +26,66 @@ enum class ProgramTab {
     MORE_VIDEOS,
     /** "Similares" de RTVE (`recomsys`): otros programas o vídeos que ver después. */
     RELATED,
-    DETAILS,
-}
-
-/** Estado paginado común a capítulos y extras. */
-data class PagedItemsState(
-    val items: List<CatalogItem> = emptyList(),
-    val page: Int = 0,
-    val totalPages: Int = 0,
-    val isLoading: Boolean = false,
-    val isLoadingMore: Boolean = false,
-    val isStale: Boolean = false,
-    val error: LoadError? = null,
-) {
-    val hasMore: Boolean get() = page < totalPages
 }
 
 /** Pestañas de la ficha de un programa, según los datos que realmente existen. */
 fun programTabs(state: ProgramUiState): List<ProgramTab> = buildList {
     addAll(state.contentSections.map { it.tab })
-    if (!state.contents.isCollection) {
-        if (state.related.isNotEmpty()) add(ProgramTab.RELATED)
-        if (state.detail?.facts?.hasDetails == true) add(ProgramTab.DETAILS)
-    }
+    // Un contenedor es un catálogo: sus piezas ya son "lo siguiente que ver".
+    if (!state.structure.isCollection && state.related.isNotEmpty()) add(ProgramTab.RELATED)
 }
 
-/** Pestañas de la ficha de un vídeo: capítulos, extras, similares y ficha técnica, si los hay. */
+/** Pestañas de la ficha de un vídeo: capítulos o piezas del programa, extras y similares, si los hay. */
 fun videoTabs(state: VideoUiState): List<ProgramTab> = buildList {
-    if (state.detail?.facts?.hasDetails == true) add(ProgramTab.DETAILS)
     addAll(state.contentSections.map { it.tab })
     if (state.related.isNotEmpty()) add(ProgramTab.RELATED)
 }
 
-/** Ficha técnica de un vídeo, en filas etiqueta/valor; la sinopsis va aparte, en la cabecera. */
+/**
+ * Ficha técnica: lo que no va en la línea de datos de la cabecera (año, edad y
+ * géneros ya están ahí). Reparto y dirección van primero: son las que se ven
+ * con la sinopsis plegada.
+ */
 data class FichaFacts(
-    val year: String? = null,
-    val ageRating: String? = null,
-    val genres: List<String> = emptyList(),
-    val director: String? = null,
     val cast: List<String> = emptyList(),
+    val director: String? = null,
+    /** Solo cuando son más de los que caben en la cabecera. */
+    val genres: List<String> = emptyList(),
     val originalLanguage: String? = null,
-    val expirationDate: String? = null,
     val country: String? = null,
+    val expirationDate: String? = null,
 ) {
-    /** Si la pestaña de detalles tiene algo que enseñar. */
     val hasDetails: Boolean get() = rows.isNotEmpty()
 
-    /** Las filas etiqueta/valor, omitiendo lo que falte. */
+    /** Filas etiqueta/valor, omitiendo lo que falte. */
     val rows: List<Pair<Int, String>> = buildList {
-        year?.takeIf { it.isNotBlank() }?.let { add(R.string.video_year to it) }
-        ageRating?.takeIf { it.isNotBlank() }?.let { add(R.string.video_age_rating to it) }
-        genres.joinToString(", ").takeIf { it.isNotBlank() }?.let { add(R.string.video_genres to it) }
-        director?.takeIf { it.isNotBlank() }?.let { add(R.string.video_director to it) }
         cast.joinToString(", ").takeIf { it.isNotBlank() }?.let { add(R.string.video_cast to it) }
+        director?.takeIf { it.isNotBlank() }?.let { add(R.string.video_director to it) }
+        genres.joinToString(", ").takeIf { it.isNotBlank() }?.let { add(R.string.video_genres to it) }
         originalLanguage?.let(::languageName)?.let { add(R.string.video_language to it) }
-        expirationDate?.let { add(R.string.video_available_until to it.feedDateToDisplay()) }
         country?.let(::countryName)?.let { add(R.string.video_country to it) }
+        expirationDate?.let { add(R.string.video_available_until to it.feedDateToDisplay()) }
     }
+
+    /** Cuántas de las primeras filas (reparto, dirección) se ven con la sinopsis plegada. */
+    val compactRowCount: Int = listOf(cast.isNotEmpty(), !director.isNullOrBlank()).count { it }
 }
 
-/** La cabecera resume los datos; Detalles conserva la ficha completa. */
+/** Lo que la línea de datos de la cabecera no dice: en el móvil se despliega con la sinopsis; en TV va en Detalles. */
 val VideoDetail.facts: FichaFacts
     get() = FichaFacts(
-        year = year,
-        ageRating = ageRating,
-        genres = genres,
-        director = director,
         cast = cast,
+        director = director,
+        genres = genres.takeIf { it.size > MAX_HEADER_GENRES }.orEmpty(),
         originalLanguage = originalLanguage,
         expirationDate = expirationDate,
     )
 
-/** La cabecera resume los datos; Detalles conserva la ficha completa. */
 val ProgramDetail.facts: FichaFacts
     get() = FichaFacts(
-        year = year,
-        ageRating = ageRating,
-        genres = genres,
-        director = director,
         cast = cast,
+        director = director,
+        genres = genres.takeIf { it.size > MAX_HEADER_GENRES }.orEmpty(),
         originalLanguage = originalLanguage,
         country = country,
     )

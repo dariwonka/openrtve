@@ -125,7 +125,6 @@ fun MobileApp(
                                 program = destination.item,
                                 onBack = navigation::pop,
                                 onOpenItem = actions.playItem,
-                                onError = actions.showMessage,
                                 onPlay = actions::play,
                                 onOpenRelated = actions.openItem,
                             )

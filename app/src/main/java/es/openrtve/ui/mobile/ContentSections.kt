@@ -17,6 +17,8 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.ui.ContentSection
 import es.openrtve.ui.PlaySuggestion
 import es.openrtve.ui.ProgramTab
+import es.openrtve.ui.badge
+import es.openrtve.ui.showsPosters
 import es.openrtve.ui.text
 import androidx.compose.ui.platform.LocalContext
 
@@ -31,40 +33,32 @@ internal fun LazyListScope.fichaContentSection(
     suggestion: PlaySuggestion? = null,
     currentItemId: String? = null,
 ) {
-    val page = section.page
     val episodic = section.tab == ProgramTab.EPISODES
-    if (section.tab == ProgramTab.MOVIES || section.tab == ProgramTab.DOCUMENTARIES) {
-        relatedGrid(page.items, columns, onSelect)
+    if (section.tab.showsPosters) {
+        relatedGrid(section.items, columns, onSelect)
     } else {
-        items(page.items, key = { "${section.tab}-${it.id}" }) { item ->
+        items(section.items, key = { "${section.tab}-${it.id}" }) { item ->
             val entry = entriesById[item.id]
             EpisodeRow(
                 item,
                 onClick = { onSelect(item) },
                 progress = entry?.takeIf { it.inProgress }?.progress,
-                badge = when {
-                    episodic && item.id == currentItemId -> stringResource(R.string.episode_current)
-                    episodic && entry?.finished == true -> stringResource(R.string.episode_watched)
-                    episodic && suggestion is PlaySuggestion.Next && suggestion.item.id == item.id -> stringResource(R.string.episode_next)
-                    section.tab == ProgramTab.MORE_VIDEOS -> item.mediaTypeName
-                    !episodic -> item.mediaSubtypeName
-                    else -> null
-                },
+                badge = section.badge(LocalContext.current, item, entry, suggestion, currentItemId),
                 highlighted = episodic && (item.id == currentItemId || suggestion?.item?.id == item.id),
                 episodic = episodic,
             )
         }
     }
-    if (page.error != null) {
-        item(key = "content-error") { EmptyPanel(page.error.text(LocalContext.current), onRetry) }
-    } else if (page.items.isEmpty() && !page.isLoading && !page.hasMore) {
+    if (section.error != null) {
+        item(key = "content-error") { EmptyPanel(section.error.text(LocalContext.current), onRetry) }
+    } else if (section.items.isEmpty() && !section.isLoading && !section.hasMore) {
         item(key = "content-empty") {
             EmptyPanel(stringResource(if (episodic) R.string.program_empty else R.string.state_empty_module), onRetry)
         }
     }
-    if (page.isLoading || page.isLoadingMore) {
+    if (section.isLoading || section.isLoadingMore) {
         item(key = "content-loading") { LoadingMoreRow() }
-    } else if (page.hasMore && page.error == null) {
+    } else if (section.hasMore && section.error == null) {
         item(key = "content-more") {
             Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
                 TextButton(onClick = onLoadMore) { Text(stringResource(R.string.program_load_more)) }

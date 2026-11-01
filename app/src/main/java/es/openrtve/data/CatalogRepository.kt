@@ -12,6 +12,7 @@ import es.openrtve.domain.PreviewSprite
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.QuickFilter
 import es.openrtve.domain.RelatedKind
+import es.openrtve.domain.RtveTypes
 import es.openrtve.domain.RtveUrls
 import es.openrtve.domain.SearchResults
 import es.openrtve.domain.VideoDetail
@@ -221,7 +222,7 @@ class DefaultCatalogRepository(
             append(PROGRAMS_BASE).append('/').append(encode(programId))
             if (seasonId != null) append("/temporadas/").append(encode(seasonId))
             append("/videos.json?page=").append(page)
-            if (completeOnly) append("&type=").append(TYPE_COMPLETE)
+            if (completeOnly) append("&type=").append(RtveTypes.COMPLETE)
             append("&order=").append(encode(order.apiValue))
         }
         return loadDocument(
@@ -239,7 +240,7 @@ class DefaultCatalogRepository(
         order: EpisodeOrder,
         forceRefresh: Boolean,
     ): CatalogLoad<CatalogPage> = loadDocument(
-        url = "$PROGRAMS_BASE/${encode(programId)}/videos.json?page=$page&type=$TYPE_FRAGMENT,$TYPE_PREVIEW&order=${encode(order.apiValue)}",
+        url = "$PROGRAMS_BASE/${encode(programId)}/videos.json?page=$page&type=${RtveTypes.FRAGMENT},${RtveTypes.PREVIEW}&order=${encode(order.apiValue)}",
         forceRefresh = forceRefresh,
         freshForMillis = PROGRAM_FRESH_MS,
         staleForMillis = PROGRAM_STALE_MS,
@@ -311,8 +312,5 @@ class DefaultCatalogRepository(
         const val VIDEOS_BASE = "https://api.rtve.es/api/videos"
         const val PREVIEWS_BASE = "https://videopreviews.rtve.es/tiivii-previews/api"
         const val MAX_RELATED = 24
-        const val TYPE_COMPLETE = "39816"
-        const val TYPE_FRAGMENT = "39978"
-        const val TYPE_PREVIEW = "39980"
     }
 }

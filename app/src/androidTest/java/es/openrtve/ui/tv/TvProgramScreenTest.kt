@@ -7,13 +7,11 @@ import androidx.compose.ui.test.hasAnySibling
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.input.key.Key
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import es.openrtve.R
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ContentKind
@@ -35,7 +33,7 @@ class TvProgramScreenTest {
     val compose = createComposeRule()
 
     @Test
-    fun aFilmCycleHasNoBrowseButtonAndTheRemoteReachesItsPoster() {
+    fun aFilmCycleStartsOnItsFirstPosterWithoutAPlayButton() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val film = catalogItem("film", title = "Akelarre").copy(mediaSubtypeName = "Película")
         val repository = FakeCatalogRepository().apply {
@@ -54,16 +52,13 @@ class TvProgramScreenTest {
             OpenRtveTvTheme {
                 TvProgramScreen(
                     repository, history, catalogItem("cycle", kind = ContentKind.PROGRAM),
-                    onOpenItem = { played += it }, onError = {}, onOpenRelated = { opened += it },
+                    onOpenItem = { played += it }, onOpenRelated = { opened += it },
                 )
             }
         }
 
         compose.onAllNodes(hasText("Ver películas")).assertCountEquals(0)
-        compose.waitUntil(timeoutMillis = 5_000) {
-            compose.onAllNodes(hasText("Somos cine") and isFocused()).fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithText("Somos cine").performKeyInput { pressKey(Key.DirectionDown) }
+        // Sin botón que reproducir, el foco empieza en el catálogo, no en un título sin señal de foco.
         compose.waitUntil(timeoutMillis = 5_000) {
             compose.onAllNodes(hasClickAction() and hasAnySibling(hasText("Akelarre")) and isFocused())
                 .fetchSemanticsNodes().isNotEmpty()

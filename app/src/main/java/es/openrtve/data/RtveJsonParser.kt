@@ -7,7 +7,6 @@ import es.openrtve.domain.ExploreCategory
 import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.QuickFilter
 import es.openrtve.domain.RowLayout
-import es.openrtve.domain.RtveUrls
 import es.openrtve.domain.SearchResults
 import es.openrtve.domain.VideoDetail
 import es.openrtve.domain.ContentKind
@@ -21,6 +20,7 @@ import es.openrtve.domain.SpriteCue
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.ProgramSeason
 import es.openrtve.domain.RtveHostPolicy
+import es.openrtve.domain.programStructure
 import es.openrtve.domain.seasonsInDisplayOrder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -442,8 +442,7 @@ class RtveJsonParser(
     }
 
     private fun isContainer(program: JsonObject): Boolean =
-        program.text("programTypeId", "programTypeID") == "137310" ||
-            program.text("programType")?.startsWith("Contenedor ", ignoreCase = true) == true
+        programStructure(program.text("programTypeId", "programTypeID"), program.text("programType")).isCollection
 
     fun parseVideo(raw: String): VideoDetail {
         val root = json.parseToJsonElement(raw).jsonObject
@@ -457,9 +456,7 @@ class RtveJsonParser(
                 ?: derivedImage("v", item.id, "horizontal2", BACKDROP_WIDTH),
             description = video.text("description", "longDescription", "shortDescription"),
             promo = video.text("promoDesc"),
-            subtypeName = video.obj("subType")?.text("name"),
             programTitle = video.obj("programInfo")?.text("title"),
-            programType = video.obj("programInfo")?.text("programType"),
             year = video.text("productionDate")?.let(::productionYear),
             ageRating = video.text("ageRange"),
             genres = video.genres(),

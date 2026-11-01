@@ -1,6 +1,7 @@
 package es.openrtve.ui.mobile
 
-import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -34,8 +35,7 @@ class VideoScreenTest {
         val trailer = film.copy(id = "trailer", title = "Un avance del programa", mediaTypeId = "39980")
         val repository = FakeCatalogRepository().apply {
             video = { _, _ -> loaded(VideoDetail(
-                item = broadcast, backdropUrl = null, description = "Un programa de cine", promo = null,
-                subtypeName = null, programTitle = "Historia de nuestro cine", programType = "Entrevistas",
+                item = broadcast, backdropUrl = null, description = "Un programa de cine", programTitle = "Historia de nuestro cine",
                 year = "2026", ageRating = null, genres = emptyList(), director = null, cast = emptyList(),
                 originalLanguage = null, expirationDate = null, webUrl = null,
             )) }
@@ -52,7 +52,7 @@ class VideoScreenTest {
                 )
             }
         }
-        compose.onNodeWithText(context.getString(R.string.tab_details)).assertIsSelected()
+        compose.onAllNodes(hasText(context.getString(R.string.tab_details))).assertCountEquals(0)
         compose.onNodeWithText(context.getString(R.string.tab_movies)).performScrollTo().performClick()
         compose.onNodeWithText("Una película del programa").performScrollTo().performClick()
         compose.onNodeWithText(context.getString(R.string.tab_more_videos)).performScrollTo().performClick()

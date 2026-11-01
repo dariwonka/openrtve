@@ -5,15 +5,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.fromHtml
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
@@ -22,13 +17,13 @@ import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
+import es.openrtve.domain.ProgramStructure
 import es.openrtve.ui.facts
 import es.openrtve.ui.contentSections
-import es.openrtve.ui.contents
-import es.openrtve.ui.opensDetailsIn
-import es.openrtve.ui.ProgramTab
+import es.openrtve.ui.structure
 import es.openrtve.ui.metaLine
 import es.openrtve.ui.rememberVideoScreen
+import es.openrtve.ui.titleRes
 import es.openrtve.ui.text
 
 /**
@@ -52,34 +47,17 @@ fun TvVideoScreen(
     val context = LocalContext.current
     val detail = state.detail
     val viewModel = screen.viewModel
+    val programTitle = detail?.programTitle ?: state.item.subtitle
 
     TvDetailsScaffold(
         backdropUrl = detail?.backdropUrl ?: state.item.imageUrl,
         header = {
-            Text(
-                text = state.item.title,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+            TvDetailsHeaderText(
+                title = state.item.title,
+                subtitle = programTitle,
+                meta = detail?.metaLine(context),
+                synopsis = detail?.description,
             )
-            (detail?.programTitle ?: state.item.subtitle)?.let {
-                Text(text = it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-            }
-            detail?.metaLine(context)?.let {
-                Spacer(Modifier.height(8.dp))
-                Text(text = it, style = MaterialTheme.typography.bodyLarge)
-            }
-            detail?.description?.let {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = remember(it) { AnnotatedString.fromHtml(it) },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
             // Sin ficha se puede reproducir igual; se dice qué falló y se ofrece reintentar.
             if (detail == null && state.error != null) {
                 Spacer(Modifier.height(12.dp))
@@ -96,25 +74,23 @@ fun TvVideoScreen(
                 if (detail == null && state.error != null) {
                     Button(onClick = viewModel::retry) { Text(stringResource(R.string.action_retry)) }
                 }
-                state.item.programId?.let { programId ->
-                    val programTitle = detail?.programTitle ?: state.item.subtitle
+                // Ir al programa es navegación secundaria: verbo y destino, que ya se lee
+                // justo encima. Una pieza de un contenedor no lo lleva: su ciclo se ve como
+                // fila de contenido ("Más de Cine de siempre"), más abajo.
+                state.item.programId?.takeUnless { state.structure.isCollection }?.let { programId ->
                     Button(onClick = { onOpenProgram(programId, programTitle.orEmpty()) }) {
-                        // "Más de Cine de siempre" dice adónde lleva; "Programa" a secas, no.
-                        Text(programTitle?.let { stringResource(R.string.action_more_from, it) } ?: stringResource(R.string.action_open_program))
+                        Text(stringResource(R.string.action_open_program))
                     }
                 }
             }
         },
     ) {
-        detail?.facts?.takeIf { it.hasDetails }?.let { facts ->
-            tvDetailsSection("details", { stringResource(R.string.tab_details) }) { TvFactsPanel(facts) }
-        }
         state.contentSections.forEach { section ->
-            tvDetailsSection(section.tab.name, { section.tab.sectionTitle() }) {
+            tvDetailsSection(section.tab.name, { stringResource(section.tab.titleRes) }) {
                 TvContentSection(
                     section,
                     onSelect = { video ->
-                        if (section.tab != ProgramTab.MORE_VIDEOS && video.opensDetailsIn(state.contents)) onOpenItem(video) else onPlay(video, false)
+                        if (section.opensDetails(video, state.structure)) onOpenItem(video) else onPlay(video, false)
                     },
                     onLoadMore = { viewModel.loadMore(section) },
                     onRetry = { viewModel.retry(section) },
@@ -122,10 +98,23 @@ fun TvVideoScreen(
                 )
             }
         }
+        if (state.moreFromProgram.isNotEmpty() && programTitle != null) {
+            tvDetailsSection("more-from-program", { stringResource(R.string.action_more_from, programTitle) }) {
+                // Cada pieza de un contenedor tiene su ficha: se abre, no se reproduce.
+                when (state.structure) {
+                    ProgramStructure.MOVIES, ProgramStructure.DOCUMENTARIES -> TvRelatedRow(state.moreFromProgram, onOpenItem)
+                    else -> TvEpisodesRow(state.moreFromProgram, onPlay = onOpenItem, episodic = false)
+                }
+            }
+        }
         if (state.related.isNotEmpty()) {
             tvDetailsSection("related", { stringResource(R.string.tab_related) }) {
                 TvRelatedRow(state.related, onOpenItem)
             }
+        }
+        // La ficha técnica cierra la página, como "Acerca de" en Google TV.
+        detail?.facts?.takeIf { it.hasDetails }?.let { facts ->
+            tvDetailsSection("details", { stringResource(R.string.tab_details) }) { TvFactsPanel(facts) }
         }
     }
 }

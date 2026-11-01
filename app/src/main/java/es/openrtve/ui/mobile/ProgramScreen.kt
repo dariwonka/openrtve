@@ -12,9 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -29,17 +27,18 @@ import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
 import es.openrtve.ui.LoadMoreOnScrollEnd
-import es.openrtve.ui.FichaFacts
 import es.openrtve.ui.PlaySuggestion
 import es.openrtve.ui.ProgramTab
 import es.openrtve.ui.ProgramUiState
 import es.openrtve.ui.facts
 import es.openrtve.ui.contentSections
-import es.openrtve.ui.opensItemDetails
+import es.openrtve.ui.structure
+import es.openrtve.ui.label
 import es.openrtve.ui.metaLine
 import es.openrtve.ui.programTabs
 import es.openrtve.ui.rememberProgramScreen
 import es.openrtve.ui.shareLink
+import es.openrtve.ui.titleRes
 
 /**
  * Ficha de programa: cabecera con imagen, botón grande (Reproducir, Continuar o
@@ -53,13 +52,12 @@ fun ProgramScreen(
     program: CatalogItem,
     onBack: () -> Unit,
     onOpenItem: (CatalogItem) -> Unit,
-    onError: (String) -> Unit,
     /** Reproducir desde el principio lo que se estaba viendo; sin él, el botón grande sólo continúa. */
     onPlay: ((CatalogItem, restart: Boolean) -> Unit)? = null,
     /** Abrir la ficha de un similar o una pieza de una colección. */
     onOpenRelated: (CatalogItem) -> Unit = onOpenItem,
 ) {
-    val screen = rememberProgramScreen(repository, history, program, onError)
+    val screen = rememberProgramScreen(repository, history, program)
     val viewModel = screen.viewModel
     val state = screen.state
     val suggestion = screen.suggestion
@@ -74,8 +72,8 @@ fun ProgramScreen(
     LoadMoreOnScrollEnd(
         listState,
         threshold = 4,
-        enabled = activeSection?.page?.hasMore == true && activeSection.page.error == null,
-        contentKey = activeSection?.page?.page,
+        enabled = activeSection?.hasMore == true && activeSection.error == null,
+        contentKey = activeSection?.progressKey,
         loadMore = { activeSection?.let(viewModel::loadMore) },
     )
 
@@ -92,6 +90,8 @@ fun ProgramScreen(
                 meta = detail?.metaLine(),
                 claim = detail?.emission,
                 synopsis = detail?.description?.let { html -> remember(html) { AnnotatedString.fromHtml(html) } },
+                // En un contenedor (un ciclo de cine) reparto y dirección no son de ninguna obra.
+                facts = detail?.facts?.takeUnless { state.structure.isCollection },
                 progress = (suggestion as? PlaySuggestion.Continue)?.entry?.progress,
                 actions = suggestion?.let { target ->
                     {
@@ -110,18 +110,16 @@ fun ProgramScreen(
             null
         },
     ) {
+        if (tabs.size == 1 && current != null) item(key = "section-title") { FichaSectionTitle(stringResource(current.titleRes)) }
         when (current) {
             ProgramTab.RELATED -> relatedGrid(state.related, columns, onOpenRelated)
-            ProgramTab.DETAILS -> item(key = "details") { FichaFactsPanel(detail?.facts ?: FichaFacts()) }
             else -> activeSection?.let { section ->
                 if (section.tab == ProgramTab.EPISODES && detail?.seasons?.isNotEmpty() == true) {
                     item(key = "seasons") { SeasonChips(state, onSelect = viewModel::selectSeason) }
                 }
                 fichaContentSection(
                     section, columns,
-                    onSelect = { item ->
-                        if (section.tab != ProgramTab.MORE_VIDEOS && state.opensItemDetails(item)) onOpenRelated(item) else onOpenItem(item)
-                    },
+                    onSelect = { item -> if (section.opensDetails(item, state.structure)) onOpenRelated(item) else onOpenItem(item) },
                     onLoadMore = { viewModel.loadMore(section) },
                     onRetry = { viewModel.retry(section) },
                     entriesById = screen.entriesById,
@@ -139,11 +137,7 @@ internal fun PrimaryPlayButton(
     onPlay: (CatalogItem, restart: Boolean) -> Unit,
     canRestart: Boolean = true,
 ) {
-    val label = when (suggestion) {
-        is PlaySuggestion.Continue -> stringResource(R.string.program_continue_episode, suggestion.item.title)
-        is PlaySuggestion.Next -> stringResource(R.string.program_next_episode, suggestion.item.title)
-        is PlaySuggestion.Play -> stringResource(R.string.program_play_episode, suggestion.item.title)
-    }
+    val label = suggestion.label(LocalContext.current)
     val restart = stringResource(R.string.action_restart)
     PlayActions(
         label = label,

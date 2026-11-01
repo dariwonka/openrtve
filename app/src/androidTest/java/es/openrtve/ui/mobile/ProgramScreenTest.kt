@@ -1,5 +1,7 @@
 package es.openrtve.ui.mobile
 
+import androidx.compose.ui.text.AnnotatedString
+
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -76,7 +78,7 @@ class ProgramScreenTest {
     }
 
     @Test
-    fun episodicProgramsStartOnChaptersEvenWhenTheyHaveTechnicalDetails() {
+    fun technicalDetailsGoInTheHeaderAndNeverBecomeATab() {
         repository.program = { id, _ ->
             loaded(ProgramDetail(
                 id, "Historia de nuestro cine", "Programa de cine", null, null, emptyList(),
@@ -85,7 +87,10 @@ class ProgramScreenTest {
         }
         setContent()
 
-        compose.onNodeWithText(context.getString(R.string.tab_episodes)).assertIsSelected()
+        // Una sola colección: sin fila de pestañas, con su título; la dirección va con la sinopsis.
+        compose.onNodeWithText(context.getString(R.string.tab_episodes)).performScrollTo().assertIsDisplayed()
+        compose.onAllNodes(hasText(context.getString(R.string.tab_details))).assertCountEquals(0)
+        compose.onNodeWithText("Directora del programa", substring = true).performScrollTo().assertIsDisplayed()
         compose.onAllNodes(hasText(context.getString(R.string.tab_movies))).assertCountEquals(0)
         compose.onNodeWithText("Episodio 3").performScrollTo().performClick()
         assertEquals(listOf("e3"), opened.map { it.id })
@@ -101,13 +106,12 @@ class ProgramScreenTest {
         setContent()
 
         compose.onNodeWithText("Episodio 3").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(context.getString(R.string.tab_details)).performScrollTo().performClick()
-        compose.onNodeWithText(context.getString(R.string.tab_details)).assertIsSelected()
         compose.onAllNodes(hasText(context.getString(R.string.tab_related))).assertCountEquals(0)
         relatedReady.complete(Unit)
+        // Similares llega tarde: aparece su pestaña, pero la ficha sigue en Capítulos.
         compose.onNodeWithText(context.getString(R.string.tab_related)).assertIsDisplayed()
-        compose.onNodeWithText(context.getString(R.string.tab_details)).assertIsSelected()
-        compose.onNodeWithText("Directora").assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.tab_episodes)).assertIsSelected()
+        compose.onNodeWithText("Episodio 3").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -196,7 +200,7 @@ class ProgramScreenTest {
     fun shortSynopsisDoesNotOfferMore() {
         compose.setContent {
             OpenRtveTheme {
-                ExpandableText("Una sinopsis breve")
+                FichaAbout(AnnotatedString("Una sinopsis breve"), facts = null)
             }
         }
         compose.onAllNodes(hasText(context.getString(R.string.action_more))).assertCountEquals(0)
@@ -206,7 +210,7 @@ class ProgramScreenTest {
     fun longSynopsisCanExpandAndCollapse() {
         compose.setContent {
             OpenRtveTheme {
-                ExpandableText(List(30) { "Una sinopsis suficientemente larga para ocupar varias líneas." }.joinToString(" "))
+                FichaAbout(AnnotatedString(List(30) { "Una sinopsis suficientemente larga para ocupar varias líneas." }.joinToString(" ")), facts = null)
             }
         }
         compose.onNodeWithText(context.getString(R.string.action_more)).assertIsDisplayed().performClick()
@@ -223,7 +227,6 @@ class ProgramScreenTest {
                     onBack = {},
                     onOpenItem = { opened += it },
                     onOpenRelated = { detailsOpened += it },
-                    onError = {},
                 )
             }
         }

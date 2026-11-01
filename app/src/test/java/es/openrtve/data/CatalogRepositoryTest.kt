@@ -3,7 +3,6 @@ package es.openrtve.data
 import es.openrtve.domain.RtveUrls
 import java.io.IOException
 import java.nio.file.Files
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

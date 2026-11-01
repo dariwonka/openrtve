@@ -24,6 +24,8 @@ import androidx.compose.ui.text.TextStyle
 import es.openrtve.ui.scheduleLabel
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -48,7 +50,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.FilterChip
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Glow
 import androidx.tv.material3.MaterialTheme
@@ -63,30 +66,38 @@ import es.openrtve.domain.imageFor
 import es.openrtve.ui.CategoryArtwork
 
 /**
- * Foco inicial de una pantalla: se concede una sola vez cada vez que la pantalla
- * entra en composición. Se crea a nivel de pantalla, no dentro de un ítem de una
- * lista perezosa: así un ítem que sale y vuelve al hacer scroll no roba el foco.
+ * Si la pantalla ya dio su foco inicial. Es estado de la pantalla, no del elemento
+ * que lo pide: un elemento de una lista perezosa sale de la composición al hacer
+ * scroll y, al volver (también cuando la lista lo compone para buscar adónde
+ * mover el foco), traía un "foco inicial" nuevo que se lo quitaba al usuario.
  */
 @Stable
-internal class InitialFocus {
-    val requester = FocusRequester()
+internal class ScreenInitialFocus {
     var granted by mutableStateOf(false)
 }
 
+private val LocalScreenInitialFocus = staticCompositionLocalOf<ScreenInitialFocus?> { null }
+
+/** Un foco inicial por pantalla (o diálogo): se crea al entrar y se olvida al salir. */
 @Composable
-internal fun rememberInitialFocus(): InitialFocus = remember { InitialFocus() }
+internal fun ProvideScreenInitialFocus(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalScreenInitialFocus provides remember { ScreenInitialFocus() }, content = content)
+}
 
 /**
  * Pide el foco al entrar en la pantalla. Sin esto, al abrir un destino desde el
  * drawer el foco se queda en el drawer y la pantalla parece "muerta". Con
  * [enabled] a `false` (un botón aún deshabilitado) espera a que se pueda enfocar.
+ * Solo lo obtiene el primero que lo consigue en cada pantalla.
  */
 @Composable
-internal fun Modifier.initialFocus(focus: InitialFocus = rememberInitialFocus(), enabled: Boolean = true): Modifier {
-    LaunchedEffect(focus, enabled) {
-        if (enabled) requestFocusUntilGranted(focus.requester) { focus.granted }
+internal fun Modifier.initialFocus(enabled: Boolean = true): Modifier {
+    val screen = LocalScreenInitialFocus.current ?: remember { ScreenInitialFocus() }
+    val requester = remember { FocusRequester() }
+    LaunchedEffect(screen, enabled) {
+        if (enabled) requestFocusUntilGranted(requester) { screen.granted }
     }
-    return onFocusChanged { if (it.hasFocus) focus.granted = true }.focusRequester(focus.requester)
+    return onFocusChanged { if (it.hasFocus) screen.granted = true }.focusRequester(requester)
 }
 
 /**
@@ -117,6 +128,13 @@ internal val TvLandscapeWidth = 260.dp
 /** Degradado de las tarjetas con el título sobre la imagen. */
 private val TvTitleScrim = Brush.verticalGradient(0.3f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.85f))
 internal val TvPosterWidth = 150.dp
+
+/**
+ * Separación entre la imagen de una tarjeta y su título. Al enfocarla, la imagen
+ * crece un 8 % (un 4 % hacia abajo: 9 dp en un póster) y lleva un borde de 3 dp
+ * y un brillo: con menos aire, el halo del foco tocaba el título.
+ */
+internal val TvCardCaptionGap = 18.dp
 internal val TvSquareWidth = 180.dp
 
 /**
@@ -138,7 +156,7 @@ internal fun RowLayout.cardWidth(): Dp = when (this) {
 
 /**
  * Superficie enfocable con la respuesta al foco que piden las guías de TV:
- * escala 1.1, borde claro y un ligero brillo. Es la base de todas las tarjetas.
+ * escala 1.08, borde claro y un ligero brillo. Es la base de todas las tarjetas.
  */
 @Composable
 internal fun TvFocusSurface(
@@ -234,21 +252,6 @@ internal fun TvLiveDot(modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-internal fun TvLiveBadge(modifier: Modifier = Modifier) {
-    Text(
-        text = stringResource(R.string.kind_live).uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        color = Color.White,
-        modifier = modifier
-            .padding(10.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(Color(0xFFD32F2F))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-    )
-}
-
 /** Tarjeta de contenido según la presentación de la fila. El texto va debajo, fuera de la zona que escala. */
 internal val TvCardTitleStyle: TextStyle
     @Composable get() = MaterialTheme.typography.titleSmall
@@ -272,7 +275,7 @@ internal fun TvItemCard(
                 rank?.let { TvRankBadge(it, Modifier.align(Alignment.BottomStart)) }
                 progress?.let { TvProgressStrip(it, Modifier.align(Alignment.BottomCenter)) }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(TvCardCaptionGap))
             TvCardTitle(item.title, layout)
             if (!layout.isVertical) item.subtitle?.let { TvCardSubtitle(it) }
         } else {
@@ -296,7 +299,7 @@ private fun ColumnScope.TvLiveItemCard(item: CatalogItem, live: LiveInfo, layout
         rank?.let { TvRankBadge(it, Modifier.align(Alignment.BottomStart)) }
         live.takeIf { it.isOnAir }?.progressAt(now)?.let { TvProgressStrip(it, Modifier.align(Alignment.BottomCenter)) }
     }
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(TvCardCaptionGap))
     if (upcoming) {
         Text(
             text = listOfNotNull(live.scheduleLabel(context, now), live.category).joinToString(" · "),
@@ -388,15 +391,12 @@ internal fun TvImageTile(
 }
 
 @Composable
-internal fun TvChoiceButton(label: String, selected: Boolean, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.colors(
-            containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-            contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-        ),
-    ) {
-        Text(label)
+@OptIn(ExperimentalTvMaterial3Api::class)
+internal fun TvChoiceButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    // El chip de filtro de Material para TV: seleccionado con su marca y relleno, y
+    // con la respuesta al foco estándar. Se activa al pulsar, no al pasar por él.
+    FilterChip(selected = selected, onClick = onClick, modifier = modifier) {
+        Text(label, maxLines = 1)
     }
 }
 
@@ -422,6 +422,29 @@ internal fun TvSectionTitle(title: String) {
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.padding(TvRowPadding),
     )
+}
+
+/**
+ * Aviso dentro de la página (cargando, vacío, error con reintento), sin ocupar toda
+ * la pantalla. [focusRetry] da el foco al reintento cuando no hay nada más que enfocar.
+ */
+@Composable
+internal fun TvInlineMessage(
+    message: String,
+    modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null,
+    focusRetry: Boolean = false,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier,
+    ) {
+        Text(message, style = MaterialTheme.typography.titleMedium)
+        if (onRetry != null) {
+            Button(onClick = onRetry, modifier = Modifier.initialFocus(enabled = focusRetry)) { Text(stringResource(R.string.action_retry)) }
+        }
+    }
 }
 
 @Composable

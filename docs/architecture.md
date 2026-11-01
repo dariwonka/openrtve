@@ -73,10 +73,49 @@ Datos, estado y política son comunes. Las superficies no lo son:
   volver desde la notificación reanuda en vez de reiniciar. PiP y pantalla
   inmersiva se activan solo para vídeo.
 
-La actividad móvil y el reproductor no bloquean la orientación: responden al
-espacio disponible y respetan la rotación elegida por el usuario. Solo el
-launcher exclusivo de Android TV declara `landscape`, como exige la checklist
-de publicación de TV.
+La actividad móvil no bloquea la orientación. El reproductor pide
+`sensorLandscape` (en tablets y plegables Android lo ignora) y el launcher
+exclusivo de Android TV declara `landscape`, como exige la checklist de TV.
+
+### Fichas: estructura del programa y secciones
+
+`MediaClassification` es la única definición de los tipos de RTVE: la forma
+de un medio (completo o extra), su tema (película, documental) y la
+estructura del programa (`ProgramStructure`: una serie con capítulos o un
+contenedor de películas, documentales o vídeos). Nada se deduce del título y
+ninguna pantalla repite los ids.
+
+`ContentSections` reparte las dos listas paginadas de la API (completos y
+extras) en secciones: la principal de la estructura (Capítulos, Películas,
+Documentales, Vídeos), Extras y, aparte, Similares. Cada sección sabe de qué
+fuentes sale para pedir más o reintentar, y `opensDetails` decide si una pieza
+abre su ficha (contenedores, películas) o se reproduce (capítulos, extras).
+
+Cada lista paginada es un `PagedItemsState` y la carga `PagedItemsLoader`
+(primera página o siguiente, sin duplicados, con el fallo en la propia lista),
+el mismo en la ficha de programa y en la de vídeo. Los errores de las fichas se
+explican en su sección con su reintento, nunca como un aviso pasajero: un aviso
+que se descarta dejaría la sección diciendo que está vacía. Los textos que
+comparten móvil y TV (título de sección, botón grande, etiqueta de cada pieza)
+salen de `UiText`.
+
+- Móvil (Material 3): pestañas solo para colecciones; con una, su título. La
+  ficha técnica no es una pestaña: va con la sinopsis y se despliega con ella.
+- TV (página de detalles de Google TV): cabecera grande y una fila por
+  sección; las temporadas son `FilterChip`, que se eligen al pulsar; la ficha
+  técnica cierra la página. Un contenedor no tiene botón de reproducir y el
+  foco empieza en su catálogo.
+
+### Foco y desplazamiento en TV
+
+- `ProvideTvVerticalScroll` lleva la fila enfocada arriba con su título (la
+  anterior sale de la pantalla); las filas horizontales conservan el pivote
+  estándar de TV con `TvLazyRow`.
+- El foco inicial es estado de la pantalla (`ProvideScreenInitialFocus`): un
+  elemento de una lista perezosa que vuelve a componerse no puede robar el
+  foco al usuario. Cada destino y cada diálogo tienen el suyo.
+- Las tarjetas dejan `TvCardCaptionGap` entre la imagen y el título: al
+  enfocarlas crecen un 8 % con borde y brillo.
 
 ## Arranque
 

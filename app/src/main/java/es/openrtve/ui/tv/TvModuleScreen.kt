@@ -55,7 +55,6 @@ internal fun TvItemGrid(
 ) {
     // En rejilla el hero no tiene sentido: se degrada a apaisada.
     val gridLayout = layout.gridLayout
-    val initialFocus = rememberInitialFocus()
     ProvideTvVerticalScroll(top = TvFocusScaleRoom) { LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = gridLayout.gridCellWidth()),
         contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, top = TvFocusScaleRoom, bottom = TvVerticalMargin),
@@ -68,7 +67,7 @@ internal fun TvItemGrid(
                 item,
                 gridLayout,
                 { onOpenItem(item) },
-                if (index == 0 && takesInitialFocus) Modifier.initialFocus(initialFocus) else Modifier,
+                if (index == 0 && takesInitialFocus) Modifier.initialFocus() else Modifier,
                 rank = (index + 1).takeIf { gridLayout == RowLayout.RANKED },
             )
         }

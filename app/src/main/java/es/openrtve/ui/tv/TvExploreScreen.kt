@@ -12,6 +12,13 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -37,13 +44,15 @@ fun TvExploreScreen(
     val viewModel = screen.viewModel
     val state = screen.state
     val context = LocalContext.current
-    val initialFocus = rememberInitialFocus()
     val gridState = rememberLazyGridState()
+    // Repetir Explorar en el menú vuelve arriba y a la primera categoría.
+    val firstTile = remember { FocusRequester() }
+    var firstTileFocused by remember { mutableStateOf(false) }
     RootReselectionEffect(reselectRequest) {
-        initialFocus.granted = false
         gridState.scrollToItem(0)
         if (state.groups.any { it.categories.isNotEmpty() }) {
-            requestFocusUntilGranted(initialFocus.requester) { initialFocus.granted }
+            firstTileFocused = false
+            requestFocusUntilGranted(firstTile) { firstTileFocused }
         }
     }
 
@@ -73,7 +82,11 @@ fun TvExploreScreen(
                 }
                 // Una misma portada puede estar en dos grupos (TDP en Temáticas y en Canales).
                 itemsIndexed(group.categories, key = { _, it -> "$groupIndex/${it.contentUrl}" }) { index, category ->
-                    val focus = if (index == 0 && groupIndex == 0) Modifier.initialFocus(initialFocus) else Modifier
+                    val focus = if (index == 0 && groupIndex == 0) {
+                        Modifier.initialFocus().focusRequester(firstTile).onFocusChanged { firstTileFocused = it.isFocused }
+                    } else {
+                        Modifier
+                    }
                     TvImageTile(category.title, category.imageUrl, { onOpenCategory(category) }, focus.fillMaxWidth(), category.fallbackImageUrl)
                 }
             }

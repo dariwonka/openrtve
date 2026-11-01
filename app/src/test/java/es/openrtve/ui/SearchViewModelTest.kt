@@ -21,6 +21,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
+/** Lo que enseña el filtro rápido elegido; vacío mientras carga o si falló. */
+private val SearchUiState.filterItems get() = (filter as? FilterState.Loaded)?.items.orEmpty()
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModelTest {
     @get:Rule

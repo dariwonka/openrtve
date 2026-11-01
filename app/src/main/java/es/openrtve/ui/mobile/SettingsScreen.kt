@@ -20,20 +20,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import es.openrtve.AppContainer
 import es.openrtve.R
-import es.openrtve.ui.SettingsViewModel
+import es.openrtve.ui.rememberSettingsScreen
 import es.openrtve.ui.formatBytes
 
 @Composable
@@ -42,16 +36,12 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onMessage: (String) -> Unit,
 ) {
-    val context = LocalContext.current
-    val viewModel: SettingsViewModel = viewModel(
-        factory = viewModelFactory {
-            initializer { SettingsViewModel(container.settings, container.documentCache, context.applicationContext) }
-        },
-    )
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val cacheBytes by viewModel.cacheBytes.collectAsStateWithLifecycle()
+    val screen = rememberSettingsScreen(container)
+    val viewModel = screen.viewModel
+    val settings = screen.settings
+    val cacheBytes = screen.cacheBytes
+    val versionName = screen.versionName
     val cleared = stringResource(R.string.settings_cache_cleared)
-    val versionName = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?" }
 
     Column(Modifier.fillMaxSize()) {
         ScreenTopBar(title = stringResource(R.string.settings_title), onBack = onBack)

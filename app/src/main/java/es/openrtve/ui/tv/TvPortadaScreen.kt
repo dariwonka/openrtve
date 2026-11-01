@@ -212,17 +212,20 @@ private fun TvContinueWatchingOptions(
     onDismiss: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.surface, TvCardShape)
-                .padding(24.dp)
-                .width(360.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Button(onClick = onResume, modifier = Modifier.fillMaxWidth().initialFocus()) { Text(stringResource(R.string.action_continue)) }
-            Button(onClick = onOpenDetails, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.continue_open_details)) }
-            Button(onClick = onRemove, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.continue_remove)) }
+        // El diálogo es otra "pantalla": su primer botón recibe el foco al abrirse.
+        ProvideScreenInitialFocus {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surface, TvCardShape)
+                    .padding(24.dp)
+                    .width(360.dp),
+            ) {
+                Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Button(onClick = onResume, modifier = Modifier.fillMaxWidth().initialFocus()) { Text(stringResource(R.string.action_continue)) }
+                Button(onClick = onOpenDetails, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.continue_open_details)) }
+                Button(onClick = onRemove, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.continue_remove)) }
+            }
         }
     }
 }

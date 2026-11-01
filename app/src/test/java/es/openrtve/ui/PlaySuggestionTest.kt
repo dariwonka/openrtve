@@ -1,5 +1,7 @@
 package es.openrtve.ui
 
+import es.openrtve.domain.ProgramStructure
+
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ContentKind
@@ -46,7 +48,7 @@ class PlaySuggestionTest {
         history.updateProgress(trailer.id, 60_000, 180_000)
 
         val suggestion = suggestPlay(history, "p", listOf(film, trailer) + episodes) {
-            it.contentTab(ProgramContents.EPISODES) == ProgramTab.EPISODES
+            it.contentTab(ProgramStructure.EPISODIC) == ProgramTab.EPISODES
         }
         assertTrue(suggestion is PlaySuggestion.Continue)
         assertEquals(episodes[2].id, suggestion!!.item.id)

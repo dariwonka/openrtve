@@ -1,5 +1,7 @@
 package es.openrtve.ui
 
+import es.openrtve.domain.ProgramStructure
+
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.testing.catalogItem
 import org.junit.Assert.assertEquals
@@ -7,7 +9,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class ProgramContentsTest {
+class ProgramStructureTest {
     private val film = catalogItem("film").copy(mediaSubtypeName = "Película")
     private val episode = catalogItem("episode").copy(episode = 1)
     private val base = ProgramUiState("program", "Colección")
@@ -19,25 +21,25 @@ class ProgramContentsTest {
     @Test
     fun `a film cycle is a collection before its videos arrive`() {
         val state = state("Contenedor Películas")
-        assertEquals(ProgramContents.MOVIES, state.contents)
-        assertTrue(state.opensItemDetails(film))
+        assertEquals(ProgramStructure.MOVIES, state.structure)
+        assertTrue(film.opensDetailsIn(state.structure))
         // Entrevistas y otras piezas del ciclo también se eligen en su propia ficha.
-        assertTrue(state.opensItemDetails(episode))
+        assertTrue(episode.opensDetailsIn(state.structure))
     }
 
     @Test
     fun `other containers are video collections rather than episodes`() {
-        assertEquals(ProgramContents.DOCUMENTARIES, state("Contenedor Documentales").contents)
-        assertTrue(state("Contenedor Documentales").opensItemDetails(episode))
+        assertEquals(ProgramStructure.DOCUMENTARIES, state("Contenedor Documentales").structure)
+        assertTrue(episode.opensDetailsIn(state("Contenedor Documentales").structure))
     }
 
     @Test
     fun `the page of videos never reclassifies its parent program`() {
-        assertEquals(ProgramContents.EPISODES, base.copy(episodes = listOf(film)).contents)
-        assertEquals(ProgramContents.EPISODES, base.contents)
+        assertEquals(ProgramStructure.EPISODIC, base.copy(episodes = PagedItemsState(listOf(film))).structure)
+        assertEquals(ProgramStructure.EPISODIC, base.structure)
         assertEquals(
-            ProgramContents.EPISODES,
-            state("Entrevistas").copy(title = "Cine de siempre", episodes = listOf(film)).contents,
+            ProgramStructure.EPISODIC,
+            state("Entrevistas").copy(title = "Cine de siempre", episodes = PagedItemsState(listOf(film))).structure,
         )
     }
 
@@ -46,15 +48,15 @@ class ProgramContentsTest {
         val state = base.copy(detail = ProgramDetail(
             "program", "Programa", null, null, null, emptyList(), programTypeId = "137310",
         ))
-        assertEquals(ProgramContents.MOVIES, state.contents)
-        assertTrue(base.opensItemDetails(episode.copy(mediaSubtypeId = "130734")))
+        assertEquals(ProgramStructure.MOVIES, state.structure)
+        assertTrue(episode.copy(mediaSubtypeId = "130734").opensDetailsIn(base.structure))
     }
 
     @Test
     fun `series keep direct playback but standalone films open their sheet`() {
-        val state = state("Serie Documental").copy(episodes = listOf(episode, film))
-        assertEquals(ProgramContents.EPISODES, state.contents)
-        assertFalse(state.opensItemDetails(episode))
-        assertTrue(state.opensItemDetails(film))
+        val state = state("Serie Documental").copy(episodes = PagedItemsState(listOf(episode, film)))
+        assertEquals(ProgramStructure.EPISODIC, state.structure)
+        assertFalse(episode.opensDetailsIn(state.structure))
+        assertTrue(film.opensDetailsIn(state.structure))
     }
 }

@@ -52,7 +52,7 @@ data class PortadaUiState(
 }
 
 /**
- * Una portada (`index_apps.json`): la principal, una temática o la de radio.
+ * Una portada (`index_apps.json`): la principal o una temática.
  * Cada fila se carga por separado para que una lenta no bloquee al resto.
  */
 class PortadaViewModel(
