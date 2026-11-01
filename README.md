@@ -29,9 +29,9 @@ de la Corporación de Radio y Televisión Española.
     catálogo: cada película o documental abre su propia ficha;
   - un **vídeo o película** lleva sinopsis y ficha técnica (reparto, dirección,
     idioma, disponibilidad) y el enlace a su programa o colección ("Más en Cine
-    de siempre"). Debajo, solo
-    lo que no está en la cabecera: los capítulos de su temporada si es un
-    episodio, o similares si es una película o un documental.
+    de siempre"). Debajo, solo lo que no está en la cabecera: los capítulos de
+    su temporada si es un episodio, o similares si es una película o un
+    documental.
 
   En el móvil, las colecciones van en pestañas Material 3; en la TV, la ficha
   sigue la página de detalles de Google TV, con una fila por sección.
@@ -51,9 +51,12 @@ de la Corporación de Radio y Televisión Española.
   "Compartir → OpenRTVE" en cualquier app.
 - **Ajustes**: imagen en imagen, calidad máxima,
   reproducción automática, subtítulos por defecto y borrado de caché.
-- Caché con revalidación por ETag y tope de tamaño, un solo cliente HTTP/2 para
-  catálogo, imágenes y vídeo, allowlist estricta de hosts para la API e imágenes
-  pedidas al tamaño en que se pintan.
+- **Rápida y ligera**: catálogo en caché con revalidación por ETag (la portada
+  aparece al instante con la última copia), todas las imágenes pedidas al
+  tamaño en que se pintan, caché de imágenes ajustada a la cuota que Android da
+  a la app, un solo cliente HTTP/2 para catálogo, imágenes y vídeo, y Baseline
+  Profile para un arranque en frío rápido. Allowlist estricta de hosts para la
+  API y las imágenes.
 
 Todo se deduce de los feeds públicos de RTVE: no hay listas compiladas de
 canales, categorías ni filtros.

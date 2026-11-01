@@ -81,8 +81,12 @@ class BaselineProfileGenerator {
             device.waitForIdle()
         }
         device.wait(Until.hasObject(By.textContains("Reproducir")), 10_000)
+        // waitForIdle no espera a la inercia de la lista: un toque mientras aún se
+        // desplaza solo la frena y no pulsa el botón.
+        Thread.sleep(1_500)
         device.findObject(By.textContains("Reproducir"))?.click()
-        check(device.wait(Until.hasObject(By.res(PACKAGE, "player_settings")), 15_000)) {
+        // El marco de vídeo siempre está; los controles se ocultan solos a los pocos segundos.
+        check(device.wait(Until.hasObject(By.res(PACKAGE, "exo_content_frame")), 15_000)) {
             "El recorrido no ha llegado al reproductor"
         }
         Thread.sleep(6_000)
