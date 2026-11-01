@@ -8,6 +8,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -106,8 +107,20 @@ class SafeHttpsClient(
         val USER_AGENT = "OpenRTVE-Android/${BuildConfig.VERSION_NAME}"
         private const val MAX_REDIRECTS = 3
 
+        /**
+         * Peticiones simultáneas por host. Los de RTVE sirven HTTP/2 y admiten 100 flujos
+         * por conexión (`MAX_CONCURRENT_STREAMS`, el mínimo que recomienda RFC 9113): el
+         * límite de OkHttp (5, pensado para HTTP/1.1, como los 6 de los navegadores) solo
+         * hace esperar turno. Con imágenes pequeñas manda la latencia: las 34 de Explorar,
+         * recién redimensionadas, tardan ~2,4 s con 5, ~0,8 s con 16 y ~0,4 s con 32
+         * (medido el 01-11-2026). 32 cubre una pantalla entera sin acercarse al techo del
+         * servidor ni al global de OkHttp (64), que comparten catálogo, imágenes y vídeo.
+         */
+        private const val MAX_REQUESTS_PER_HOST = 32
+
         /** Cliente base de la app: timeouts y allowlist en cada salto. Lo comparten catálogo e imágenes. */
         fun buildOkHttpClient(hostPolicy: RtveHostPolicy): OkHttpClient = OkHttpClient.Builder()
+            .dispatcher(Dispatcher().apply { maxRequestsPerHost = MAX_REQUESTS_PER_HOST })
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .addNetworkInterceptor(HostPolicyInterceptor(hostPolicy))

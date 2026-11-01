@@ -332,11 +332,16 @@ data class ExploreCategory(
      * propia no carga: RTVE deja a veces imágenes rotas en una de las dos.
      */
     val fallbackImageUrl: String? = null,
+    /**
+     * Lo que emite ahora un canal temático ([isLive]): su tarjeta es la de un directo,
+     * como en la portada, y al tocarla se reproduce. `null` hasta que llega o si falla.
+     */
+    val nowPlaying: CatalogItem? = null,
 )
 
 /**
- * Sección de Explorar. Sin [title] es el bloque principal del menú, que la app
- * oficial lista sin cabecera; [isKids] es el bloque infantil (`infantil: true`).
+ * Sección de Explorar. Sin [title] es el bloque principal del menú (se presenta como
+ * "Temáticas", la pareja de "Otras temáticas"); [isKids] es el bloque infantil (`infantil: true`).
  */
 data class ExploreGroup(
     val title: String?,

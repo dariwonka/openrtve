@@ -148,7 +148,7 @@ class RootActionsTest {
                                 when (nav.tab) {
                                     Tab.HOME -> PortadaScreen(repository, "https://www.rtve.es/play/index_apps.json", "", null, {}, { _, _ -> }, reselectRequest = nav.rootRequests.getValue(Tab.HOME))
                                     Tab.SEARCH -> SearchScreen(repository, {}, reselectRequest = nav.rootRequests.getValue(Tab.SEARCH))
-                                    Tab.EXPLORE -> ExploreScreen(repository, {}, {}, reselectRequest = nav.rootRequests.getValue(Tab.EXPLORE))
+                                    Tab.EXPLORE -> ExploreScreen(repository, {}, {}, {}, reselectRequest = nav.rootRequests.getValue(Tab.EXPLORE))
                                 }
                             }
                         }

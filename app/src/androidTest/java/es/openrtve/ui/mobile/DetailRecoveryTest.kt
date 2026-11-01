@@ -32,7 +32,7 @@ class DetailRecoveryTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val history = WatchHistory(File(context.cacheDir, "detail-test-${System.nanoTime()}.json"))
 
-    @Test fun theMobileFilmSheetShowsOtherPiecesFromItsCycle() {
+    @Test fun theMobileFilmSheetLinksToItsCycleInsteadOfRepeatingIt() {
         val film = catalogItem("film", programId = "cycle").copy(mediaSubtypeId = RtveTypes.MOVIE, programTypeId = RtveTypes.MOVIE_CONTAINER)
         val other = film.copy(id = "other", title = "Otra película del ciclo")
         val repo = FakeCatalogRepository().apply {
@@ -40,13 +40,14 @@ class DetailRecoveryTest {
                 ageRating = null, genres = emptyList(), director = null, cast = emptyList(), originalLanguage = null, expirationDate = null, webUrl = null)) }
             programVideos = { _, _, _, _, _ -> page(listOf(film, other)) }
         }
-        val opened = mutableListOf<CatalogItem>()
+        val openedPrograms = mutableListOf<Pair<String, String>>()
         compose.setContent {
-            OpenRtveTheme { VideoScreen(repo, history, film, {}, { _, _ -> }, { opened += it }, { _, _ -> }) }
+            OpenRtveTheme { VideoScreen(repo, history, film, {}, { _, _ -> }, {}, { id, title -> openedPrograms += id to title }) }
         }
         compose.waitForIdle()
-        compose.onNodeWithText(other.title).performScrollTo().performClick()
-        assertEquals(listOf("other"), opened.map { it.id })
+        compose.onNodeWithText(context.getString(R.string.collection_more_in, "Ciclo de cine")).performClick()
+        assertEquals(listOf("cycle" to "Ciclo de cine"), openedPrograms)
+        compose.onNodeWithText(other.title).assertDoesNotExist()
     }
 
     @Test fun theProgramSheetCanRecoverMetadataWhileKeepingItsEpisodes() {

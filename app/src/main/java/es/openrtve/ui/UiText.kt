@@ -99,8 +99,25 @@ private fun minutesLabel(context: Context, durationMs: Long): String? =
  * el bloque principal se lista sin título; el infantil se nombra y los submenús
  * traen título editorial.
  */
-fun ExploreGroup.header(context: Context): String? =
-    if (isKids) context.getString(R.string.explore_kids) else title
+/**
+ * Título de una portada abierta desde el menú. El menú lo da en mayúsculas ("LA REVUELTA")
+ * y el feed con un nombre interno que lo contiene bien escrito ("Portada RTVE Play La
+ * Revuelta"): se toma esa grafía. Si el feed no lo contiene, mayúscula inicial ("70 años"),
+ * como el resto de cabeceras. Un título ya escrito con minúsculas se respeta.
+ */
+fun portadaTitle(given: String, feedTitle: String): String {
+    if (given.isBlank()) return feedTitle
+    if (given != given.uppercase()) return given
+    val start = feedTitle.indexOf(given, ignoreCase = true)
+    if (start >= 0) return feedTitle.substring(start, start + given.length)
+    return given.lowercase().replaceFirstChar { it.uppercase() }
+}
+
+/** Todos los grupos llevan cabecera: el bloque principal, "Temáticas"; el infantil, "Infantil". */
+fun ExploreGroup.header(context: Context): String = when {
+    isKids -> context.getString(R.string.explore_kids)
+    else -> title ?: context.getString(R.string.explore_topics)
+}
 
 /**
  * Línea de datos de la cabecera, como en Google TV: "2018 · 108 min · +12 ·

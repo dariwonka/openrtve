@@ -171,6 +171,15 @@ recarga al volver a primer plano si tiene más de dos minutos y, mientras está
 visible, las filas de directos se recargan cada minuto (con ETag, un 304 si no
 hay cambios).
 
+En Explorar, los canales temáticos (`portadaCanalTematico`) son directos 24 h: se
+pinta lo que emite cada uno con la misma tarjeta que en la portada, se renueva
+cada minuto en pantalla y al tocarlo se reproduce. Los canales del menú
+(el submenú cuyas entradas traen `logo`) salen solo en su grupo: RTVE los repite
+en el bloque principal y en "Otras temáticas", a veces con otra URL. Al abrir
+una categoría, su cabecera toma del feed la grafía del nombre ("LA REVUELTA" del
+menú pasa a "La Revuelta"); las barras de las pantallas secundarias se funden con
+el fondo y se tiñen al desplazar, como la de las fichas.
+
 ## Enlaces
 
 `parseDeepLink` es una función pura sobre la URL (formatos del manifiesto de
@@ -219,9 +228,17 @@ User-Agent) sin la allowlist: `ztnr` redirige a un CDN y la licencia la sirve
 Axinom, fuera de rtve.es; el texto plano lo prohíbe `network_security_config`.
 El token de licencia se pide al recibir la orden de reproducir, en paralelo a la
 conexión con `PlaybackService`; se usa una vez y se descarta al salir.
-Las imágenes de `img.rtve.es/p|v` se piden al tamaño en que se pintan
-(`RtveImageSizing`), y la caché de documentos mantiene una contabilidad de tamaño
-y se poda por antigüedad cada vez que supera 32 MB. Sus operaciones se serializan para que el
+Todas las imágenes de `img.rtve.es` se piden al tamaño en que se pintan
+(`RtveImageSizing`): `/p` y `/v` con `w`/`h`, y los originales de `/imagenes` y
+`/css` (cabeceras, Explorar) a través del redimensionador `img.rtve.es/i/`; si
+este fallase, se pide el original. La caché de imágenes se ajusta a la cuota de
+caché que Android da a la app (`getCacheQuotaBytes`, por debajo de la cual sus
+ficheros son los últimos en borrarse y que crece con el uso y el almacenamiento),
+menos la de documentos, entre 32 y 250 MB. Los hosts de RTVE sirven HTTP/2, así
+que el cliente admite 32 peticiones simultáneas por host en vez de 5 (el servidor
+acepta 100 por conexión).
+La caché de documentos mantiene una contabilidad de tamaño y se poda por
+antigüedad cada vez que supera 32 MB. Sus operaciones se serializan para que el
 cuerpo y el ETag no se mezclen entre escrituras. Un fallo al persistir la caché
 no impide mostrar una respuesta válida de la red.
 

@@ -100,7 +100,7 @@ class RawDocumentCache(
 
     private fun etagFileFor(key: String): File = File(directory, "${digest(key)}.etag")
 
-    private companion object {
+    companion object {
         const val DEFAULT_MAX_BYTES = 32L * 1024 * 1024
     }
 

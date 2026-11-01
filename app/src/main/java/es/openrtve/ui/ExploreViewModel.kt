@@ -3,6 +3,8 @@ package es.openrtve.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import es.openrtve.data.CatalogRepository
+import es.openrtve.domain.CatalogItem
+import es.openrtve.domain.ContentKind
 import es.openrtve.domain.ExploreCategory
 import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.liveRow
@@ -39,16 +41,18 @@ class ExploreViewModel(
     fun retry() = load()
 
     private var job: Job? = null
+    private var liveJob: Job? = null
 
     private fun load() {
         job?.cancel()
+        liveJob?.cancel()
         job = viewModelScope.launch {
             mutableUiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val groups = repository.loadExplore(tv = tv).value
                 mutableUiState.update { it.copy(groups = groups, isLoading = false) }
                 // Fuera de `update`: la red no puede ir dentro de un bucle compare-and-set.
-                val enriched = withLiveImages(groups)
+                val enriched = withNowPlaying(groups, forceRefresh = false)
                 mutableUiState.update { it.copy(groups = enriched) }
             } catch (error: CancellationException) {
                 throw error
@@ -58,23 +62,38 @@ class ExploreViewModel(
         }
     }
 
-    /**
-     * Los canales temáticos llegan sin imagen en el menú; su feed de directo sí la
-     * trae. Se piden en paralelo tras pintar el menú y un fallo deja la tarjeta sin imagen.
-     */
-    private suspend fun withLiveImages(groups: List<ExploreGroup>): List<ExploreGroup> {
-        val pending = groups.flatMap { it.categories }.filter { it.isLive && it.imageUrl == null }
-        if (pending.isEmpty()) return groups
-        val images = coroutineScope { pending.map { async { it.contentUrl to it.liveImage() } }.awaitAll() }
-            .mapNotNull { (url, image) -> image?.let { url to it } }
-            .toMap()
-        return groups.map { group ->
-            group.copy(categories = group.categories.map { it.copy(imageUrl = it.imageUrl ?: images[it.contentUrl]) })
+    /** Lo que emiten los canales temáticos cambia: se renueva mientras se ve Explorar. */
+    fun refreshLive() {
+        if (job?.isActive == true || liveJob?.isActive == true) return
+        liveJob = viewModelScope.launch {
+            val refreshed = withNowPlaying(mutableUiState.value.groups, forceRefresh = true)
+            mutableUiState.update { it.copy(groups = refreshed) }
         }
     }
 
-    private suspend fun ExploreCategory.liveImage(): String? = try {
-        repository.loadModule(liveRow(contentUrl, title)).value.items.firstNotNullOfOrNull { it.imageUrl }
+    /**
+     * Cada canal temático con lo que emite ahora, de su feed de directo (que también
+     * trae la imagen que el menú no tiene). Se piden en paralelo tras pintar el menú;
+     * un fallo conserva lo que ya había y, sin nada, queda la tarjeta de categoría.
+     */
+    private suspend fun withNowPlaying(groups: List<ExploreGroup>, forceRefresh: Boolean): List<ExploreGroup> {
+        val channels = groups.flatMap { it.categories }.filter { it.isLive }
+        if (channels.isEmpty()) return groups
+        val playing = coroutineScope { channels.map { async { it.contentUrl to it.currentBroadcast(forceRefresh) } }.awaitAll() }
+            .mapNotNull { (url, item) -> item?.let { url to it } }
+            .toMap()
+        return groups.map { group ->
+            group.copy(
+                categories = group.categories.map { category ->
+                    val now = playing[category.contentUrl] ?: category.nowPlaying
+                    category.copy(nowPlaying = now, imageUrl = category.imageUrl ?: now?.imageUrl)
+                },
+            )
+        }
+    }
+
+    private suspend fun ExploreCategory.currentBroadcast(forceRefresh: Boolean): CatalogItem? = try {
+        repository.loadModule(liveRow(contentUrl, title), forceRefresh).value.items.firstOrNull { it.kind == ContentKind.LIVE }
     } catch (error: CancellationException) {
         throw error
     } catch (error: Exception) {

@@ -63,6 +63,9 @@ import es.openrtve.ui.SectionState
 import es.openrtve.ui.rememberPortadaScreen
 import es.openrtve.ui.RootReselectionEffect
 import es.openrtve.ui.text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import es.openrtve.ui.portadaTitle
 
 /**
  * Portada al estilo Findroid: lista vertical de secciones, cada una con su propio
@@ -92,9 +95,10 @@ fun PortadaScreen(
     val resumable = screen.resumable
     val isRoot = onBack == null
 
-    Column(Modifier.fillMaxSize()) {
+    val topBarScroll = TopAppBarDefaults.pinnedScrollBehavior()
+    Column(Modifier.fillMaxSize().nestedScroll(topBarScroll.nestedScrollConnection)) {
         if (!isRoot) {
-            ScreenTopBar(title = title.ifBlank { state.title }, onBack = onBack)
+            ScreenTopBar(title = portadaTitle(title, state.title), onBack = onBack, scrollBehavior = topBarScroll)
         }
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,

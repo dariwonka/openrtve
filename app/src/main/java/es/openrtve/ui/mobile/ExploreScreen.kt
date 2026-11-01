@@ -28,17 +28,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import es.openrtve.R
 import es.openrtve.data.CatalogRepository
+import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ExploreCategory
 import es.openrtve.ui.header
 import es.openrtve.ui.RootReselectionEffect
 import es.openrtve.ui.rememberExploreScreen
 import es.openrtve.ui.text
 
-/** Categorías del menú oficial como rejilla de tarjetas con imagen. */
+/**
+ * Categorías del menú oficial como rejilla de tarjetas con imagen, cada grupo con su
+ * cabecera. Los canales temáticos son directos: su tarjeta es la de la portada y se
+ * reproducen al tocarlos ([onOpenItem]).
+ */
 @Composable
 fun ExploreScreen(
     repository: CatalogRepository,
     onOpenCategory: (ExploreCategory) -> Unit,
+    onOpenItem: (CatalogItem) -> Unit,
     onOpenSettings: () -> Unit,
     reselectRequest: Int = 0,
 ) {
@@ -79,19 +85,21 @@ fun ExploreScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 state.groups.forEachIndexed { groupIndex, group ->
-                    group.header(context)?.let { title ->
-                        item(key = "group-$groupIndex", span = { GridItemSpan(maxLineSpan) }) {
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                            )
-                        }
+                    item(key = "group-$groupIndex", span = { GridItemSpan(maxLineSpan) }, contentType = "header") {
+                        Text(
+                            text = group.header(context),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                        )
                     }
-                    // Una misma portada puede estar en dos grupos (TDP en Temáticas y en Canales).
-                    items(group.categories, key = { "$groupIndex/${it.contentUrl}" }) { category ->
-                        ImageTile(category.title, category.imageUrl, { onOpenCategory(category) }, Modifier.fillMaxWidth(), category.fallbackImageUrl)
+                    items(group.categories, key = { "$groupIndex/${it.contentUrl}" }, contentType = { if (it.nowPlaying != null) "live" else "tile" }) { category ->
+                        val live = category.nowPlaying
+                        if (live != null) {
+                            ItemCard(live, { onOpenItem(live) }, Modifier.fillMaxWidth())
+                        } else {
+                            ImageTile(category.title, category.imageUrl, { onOpenCategory(category) }, Modifier.fillMaxWidth(), category.fallbackImageUrl)
+                        }
                     }
                 }
             }

@@ -172,11 +172,12 @@ class RtveJsonParserTest {
         // Solo el bloque marcado `infantil` se señala como tal; los nombres internos de bloque no se muestran.
         assertEquals(listOf(false, false, false, false, true), groups.map { it.isKids })
         // Orden del JSON, como la app oficial; el enlace a la app de Clan pasa a ser su portada, el resto de apps se omite.
-        assertEquals(listOf("CLAN", "TDP"), groups[0].categories.map { it.title })
+        // TDP está también en Canales: se queda allí, con los demás canales.
+        assertEquals(listOf("CLAN"), groups[0].categories.map { it.title })
         assertEquals("https://www.rtve.es/play/clan/index_apps.json", groups[0].categories[0].contentUrl)
         // Play+ se filtra también dentro de los submenús.
         assertEquals(listOf("COCINA"), groups[1].categories.map { it.title })
-        // La misma portada puede repetirse entre grupos, como en el menú oficial; los logos no son fondos.
+        // Los logos no son fondos.
         assertEquals(listOf("LA 1", "TELEDEPORTE"), groups[2].categories.map { it.title })
         assertEquals(null, groups[2].categories.first().imageUrl)
         // Un canal temático es un directo, no una portada.
@@ -184,6 +185,33 @@ class RtveJsonParserTest {
         assertTrue(groups[3].categories.single().isLive)
         assertEquals("https://api.rtve.es/api/lives/broadcasts/1.json", groups[3].categories.single().contentUrl)
         assertEquals(listOf("JUNIOR"), groups[4].categories.map { it.title })
+    }
+
+    @Test
+    fun `channels appear only in their group and keep an image, other aliases stay`() {
+        val groups = parser.parseExplore(
+            """{"television":{"menuBloques":[{"title":"Bloque de contenidos","menuItems":[
+              {"title":"CINE","tipo":"portada","urlContent":"https://www.rtve.es/play/cine/index_apps.json"},
+              {"title":"70 AÑOS","tipo":"portada","urlContent":"https://www.rtve.es/play/archivo/index_apps.json"},
+              {"title":"LA 2 CAT","tipo":"portada","imgBackground":"https://img.rtve.es/css/la2cat.jpg","urlContent":"https://www.rtve.es/play/la-2-cat/index_apps.json"},
+              {"title":"OTRAS TEMÁTICAS","tipo":"submenu","menuItems":[
+                {"title":"ARCHIVO","tipo":"portada","urlContent":"https://www.rtve.es/play/archivo/index_apps.json"},
+                {"title":"PLAYZ","tipo":"portada","urlContent":"https://www.rtve.es/play/playz/index_apps.json"}
+              ]},
+              {"title":"CANALES","tipo":"submenu","menuItems":[
+                {"title":"LA 2 CAT","tipo":"portada","logo":"https://img.rtve.es/rtve.png","urlContent":"https://www.rtve.es/play/la2cat/index_apps.json"},
+                {"title":"PLAYZ","tipo":"portada","urlContent":"https://www.rtve.es/play/playz/index_apps.json"}
+              ]}
+            ]}]}}""",
+        )
+
+        assertEquals(listOf(null, "Otras temáticas", "Canales"), groups.map { it.title })
+        // La 2 Cat llega con otra URL en el bloque principal: el mismo nombre basta.
+        assertEquals(listOf("CINE", "70 AÑOS"), groups[0].categories.map { it.title })
+        // "70 años" y "Archivo" llevan al mismo sitio, pero son accesos editoriales distintos.
+        assertEquals(listOf("ARCHIVO"), groups[1].categories.map { it.title })
+        assertEquals(listOf("LA 2 CAT", "PLAYZ"), groups[2].categories.map { it.title })
+        assertEquals("https://img.rtve.es/css/la2cat.jpg", groups[2].categories[0].imageUrl)
     }
 
     @Test

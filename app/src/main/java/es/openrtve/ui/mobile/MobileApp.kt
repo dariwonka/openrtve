@@ -165,6 +165,7 @@ fun MobileApp(
                                 Tab.EXPLORE -> ExploreScreen(
                                     repository = repository,
                                     onOpenCategory = actions.openCategory,
+                                    onOpenItem = actions.openItem,
                                     onOpenSettings = actions.openSettings,
                                     reselectRequest = nav.rootRequests.getValue(Tab.EXPLORE),
                                 )

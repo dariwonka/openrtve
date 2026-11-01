@@ -15,7 +15,9 @@ de la Corporación de Radio y Televisión Española.
 ## Qué hace
 
 - **Inicio, Buscar y Explorar**: barra inferior Material 3 en el móvil y
-  panel de navegación lateral en la TV.
+  panel de navegación lateral en la TV. Explorar agrupa el menú de RTVE
+  (temáticas, canales, canales temáticos e infantil) sin repetir canales, y
+  los canales temáticos se ven y se reproducen como directos.
 - **Portadas** (principal y temáticas) con la presentación que dicta
   cada fila: carrusel destacado, pósters, cuadradas o apaisadas.
 - **Fichas** organizadas según los tipos de la API de RTVE, sin deducir nada

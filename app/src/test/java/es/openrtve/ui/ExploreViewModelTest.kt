@@ -42,7 +42,7 @@ class ExploreViewModelTest {
     }
 
     @Test
-    fun `thematic channels take their image from the live feed and survive its failure`() = runTest(mainDispatcher.dispatcher) {
+    fun `thematic channels show what they broadcast now, survive its failure and refresh`() = runTest(mainDispatcher.dispatcher) {
         val cocina = ExploreCategory("RTVE COCINA", null, "https://api.rtve.es/api/lives/broadcasts/1.json", isLive = true)
         val moda = ExploreCategory("RTVE MODA", null, "https://api.rtve.es/api/lives/broadcasts/2.json", isLive = true)
         val cine = ExploreCategory("CINE", "https://img.rtve.es/cine.jpg", "https://www.rtve.es/play/cine/index_apps.json")
@@ -55,11 +55,26 @@ class ExploreViewModelTest {
         advanceUntilIdle()
 
         val groups = viewModel.uiState.value.groups
+        // Su tarjeta es la del directo: se reproduce al tocarla, sin pasar por una página con una sola tarjeta.
+        assertEquals("1", groups[0].categories[0].nowPlaying?.id)
         assertEquals("https://img.rtve.es/live1.jpg", groups[0].categories[0].imageUrl)
+        // Sin directo queda la tarjeta de categoría, que abre su página.
+        assertNull(groups[0].categories[1].nowPlaying)
         assertNull(groups[0].categories[1].imageUrl)
         assertEquals(listOf(cine), groups[1].categories)
-        // Las portadas con imagen no generan peticiones.
+        // Las portadas no generan peticiones.
         assertEquals(2, repository.calls.count { it.startsWith("module(") })
+
+        // Cada minuto en pantalla se renueva lo que emiten; un fallo conserva lo que había.
+        repository.module = { row, force, _ ->
+            check(force) { "el refresco no puede servir la copia de caché" }
+            if (row.contentUrl == moda.contentUrl) loaded(CatalogModule("", listOf(liveItem("2", "https://img.rtve.es/live2.jpg"))))
+            else throw UnknownHostException()
+        }
+        viewModel.refreshLive()
+        advanceUntilIdle()
+        val refreshed = viewModel.uiState.value.groups[0].categories
+        assertEquals(listOf("1", "2"), refreshed.map { it.nowPlaying?.id })
     }
 
     private fun liveItem(id: String, imageUrl: String) = CatalogItem(

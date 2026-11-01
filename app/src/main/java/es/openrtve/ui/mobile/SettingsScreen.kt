@@ -29,7 +29,11 @@ import es.openrtve.AppContainer
 import es.openrtve.R
 import es.openrtve.ui.rememberSettingsScreen
 import es.openrtve.ui.formatBytes
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     container: AppContainer,
@@ -43,8 +47,9 @@ fun SettingsScreen(
     val versionName = screen.versionName
     val cleared = stringResource(R.string.settings_cache_cleared)
 
-    Column(Modifier.fillMaxSize()) {
-        ScreenTopBar(title = stringResource(R.string.settings_title), onBack = onBack)
+    val topBarScroll = TopAppBarDefaults.pinnedScrollBehavior()
+    Column(Modifier.fillMaxSize().nestedScroll(topBarScroll.nestedScrollConnection)) {
+        ScreenTopBar(title = stringResource(R.string.settings_title), onBack = onBack, scrollBehavior = topBarScroll)
         Column(Modifier.verticalScroll(rememberScrollState())) {
             SectionLabel(stringResource(R.string.settings_playback))
             SwitchRow(

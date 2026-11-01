@@ -21,6 +21,8 @@ import es.openrtve.domain.RowLayout
 import es.openrtve.ui.rememberModuleScreen
 import es.openrtve.ui.text
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 /** Rejilla completa de una fila ("Ver todo"). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,8 +39,9 @@ fun ModuleScreen(
     val viewModel = screen.viewModel
     val state = screen.state
 
-    Column(Modifier.fillMaxSize()) {
-        ScreenTopBar(title = state.title, onBack = onBack)
+    val topBarScroll = TopAppBarDefaults.pinnedScrollBehavior()
+    Column(Modifier.fillMaxSize().nestedScroll(topBarScroll.nestedScrollConnection)) {
+        ScreenTopBar(title = state.title, onBack = onBack, scrollBehavior = topBarScroll)
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = viewModel::refresh,

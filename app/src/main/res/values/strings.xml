@@ -27,6 +27,7 @@
     <string name="settings_about_summary">Cliente independiente para el catálogo público de RTVE Play. No está afiliado a RTVE.</string>
 
     <string name="explore_kids">Infantil</string>
+    <string name="explore_topics">Temáticas</string>
 
     <string name="action_back">Atrás</string>
     <string name="action_retry">Reintentar</string>

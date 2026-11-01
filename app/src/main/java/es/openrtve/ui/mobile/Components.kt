@@ -57,6 +57,8 @@ import es.openrtve.ui.CategoryArtwork
 import es.openrtve.ui.metaLine
 import androidx.compose.ui.text.TextStyle
 import es.openrtve.ui.scheduleLabel
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 
 internal val CardShape = RoundedCornerShape(10.dp)
 internal val FeaturedShape = RoundedCornerShape(14.dp)
@@ -72,10 +74,17 @@ internal val ScreenPadding = 16.dp
 internal fun ScreenTopBar(
     title: String,
     onBack: (() -> Unit)? = null,
+    /** Con él, la barra se funde con la página en reposo y se tiñe al desplazar, como en las fichas. */
+    scrollBehavior: TopAppBarScrollBehavior? = null,
     actions: @Composable () -> Unit = {},
 ) {
     TopAppBar(
         title = { Text(text = title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            scrolledContainerColor = MaterialTheme.colorScheme.surface,
+        ),
+        scrollBehavior = scrollBehavior,
         navigationIcon = {
             if (onBack != null) {
                 IconButton(onClick = onBack) {

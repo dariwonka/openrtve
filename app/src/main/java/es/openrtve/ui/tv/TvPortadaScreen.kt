@@ -57,6 +57,7 @@ import es.openrtve.ui.SectionState
 import es.openrtve.ui.rememberPortadaScreen
 import es.openrtve.ui.RootReselectionEffect
 import es.openrtve.ui.text
+import es.openrtve.ui.portadaTitle
 
 /**
  * Portada de TV como en JetStream: carrusel destacado arriba y filas horizontales
@@ -132,7 +133,7 @@ fun TvPortadaScreen(
             modifier = Modifier.fillMaxSize().tvTopFade(),
         ) {
             if (title.isNotBlank()) {
-                item(key = "title") { TvScreenTitle(title) }
+                item(key = "title") { TvScreenTitle(portadaTitle(title, state.title)) }
             } else {
                 item(key = "top") { Spacer(Modifier.height(TvVerticalMargin)) }
             }

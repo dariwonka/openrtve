@@ -27,7 +27,9 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import es.openrtve.R
 import es.openrtve.data.CatalogRepository
+import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ExploreCategory
+import es.openrtve.domain.RowLayout
 import es.openrtve.ui.header
 import es.openrtve.ui.RootReselectionEffect
 import es.openrtve.ui.rememberExploreScreen
@@ -38,6 +40,8 @@ import androidx.compose.ui.res.stringResource
 fun TvExploreScreen(
     repository: CatalogRepository,
     onOpenCategory: (ExploreCategory) -> Unit,
+    /** Los canales temáticos son directos: se reproducen al pulsarlos. */
+    onOpenItem: (CatalogItem) -> Unit,
     reselectRequest: Int = 0,
 ) {
     val screen = rememberExploreScreen(repository, tv = true)
@@ -70,24 +74,30 @@ fun TvExploreScreen(
             modifier = Modifier.fillMaxSize().tvTopFade(TvFocusScaleRoom),
         ) {
             state.groups.forEachIndexed { groupIndex, group ->
-                group.header(context)?.let { title ->
-                    item(key = "group-$groupIndex", span = { GridItemSpan(maxLineSpan) }) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(top = 12.dp),
-                        )
-                    }
+                item(key = "group-$groupIndex", span = { GridItemSpan(maxLineSpan) }, contentType = "header") {
+                    Text(
+                        text = group.header(context),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
                 }
-                // Una misma portada puede estar en dos grupos (TDP en Temáticas y en Canales).
-                itemsIndexed(group.categories, key = { _, it -> "$groupIndex/${it.contentUrl}" }) { index, category ->
+                itemsIndexed(
+                    group.categories,
+                    key = { _, it -> "$groupIndex/${it.contentUrl}" },
+                    contentType = { _, it -> if (it.nowPlaying != null) "live" else "tile" },
+                ) { index, category ->
                     val focus = if (index == 0 && groupIndex == 0) {
                         Modifier.initialFocus().focusRequester(firstTile).onFocusChanged { firstTileFocused = it.isFocused }
                     } else {
                         Modifier
                     }
-                    TvImageTile(category.title, category.imageUrl, { onOpenCategory(category) }, focus.fillMaxWidth(), category.fallbackImageUrl)
+                    val live = category.nowPlaying
+                    if (live != null) {
+                        TvItemCard(live, RowLayout.LANDSCAPE, { onOpenItem(live) }, focus.fillMaxWidth())
+                    } else {
+                        TvImageTile(category.title, category.imageUrl, { onOpenCategory(category) }, focus.fillMaxWidth(), category.fallbackImageUrl)
+                    }
                 }
             }
         } }

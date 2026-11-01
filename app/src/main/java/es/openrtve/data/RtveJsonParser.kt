@@ -131,7 +131,48 @@ class RtveJsonParser(
         val blocks = root.obj("television")?.array("menuBloques").orEmpty().mapNotNull { it as? JsonObject }
         val clanPortada = root.obj("television")?.obj("secciones")?.obj("portadaInfantil")
             ?.text("urlContent")?.let(hostPolicy::sanitize)
-        return blocks.flatMap { block -> exploreGroups(block.flag("infantil") == true, block.array("menuItems"), clanPortada) }
+        val groups = blocks.flatMap { block -> exploreGroups(block.flag("infantil") == true, block.array("menuItems"), clanPortada) }
+        // El grupo de canales es el submenú cuyas entradas traen logo ("CANALES").
+        val channelGroups = blocks
+            .flatMap { it.array("menuItems").orEmpty() }
+            .mapNotNull { it as? JsonObject }
+            .filter { menu -> menu.text("tipo") == "submenu" && menu.array("menuItems").orEmpty().any { (it as? JsonObject)?.text("logo") != null } }
+            .mapNotNull { it.text("title")?.let(::sentenceCase) }
+            .toSet()
+        return withChannelsTogether(groups, channelGroups)
+    }
+
+    /**
+     * El menú oficial repite los canales: Clan, TDP o La 2 Cat están también en el
+     * bloque principal, y Playz en "Otras temáticas". Cada canal sale solo en su
+     * grupo; fuera de él se quita lo que lleva a la misma portada o tiene el mismo
+     * nombre (La 2 Cat llega con dos URLs). Si la copia del canal no trae fondo,
+     * conserva el de la que se quita. El resto de entradas no se toca: "70 años" y
+     * "Archivo" llevan al mismo sitio, pero son dos accesos editoriales.
+     */
+    private fun withChannelsTogether(groups: List<ExploreGroup>, channelGroups: Set<String>): List<ExploreGroup> {
+        val channels = groups.filter { it.title in channelGroups }.flatMap { it.categories }
+        if (channels.isEmpty()) return groups
+        val urls = channels.map { it.contentUrl }.toSet()
+        val names = channels.map { it.title.lowercase().trim() }.toSet()
+        fun ExploreCategory.isChannel() = contentUrl in urls || title.lowercase().trim() in names
+        val repeatedImages = groups.filter { it.title !in channelGroups }.flatMap { it.categories }
+            .filter { it.isChannel() && it.imageUrl != null }
+        return groups.mapNotNull { group ->
+            if (group.title in channelGroups) {
+                group.copy(
+                    categories = group.categories.map { channel ->
+                        channel.copy(
+                            imageUrl = channel.imageUrl ?: repeatedImages.firstOrNull {
+                                it.contentUrl == channel.contentUrl || it.title.lowercase().trim() == channel.title.lowercase().trim()
+                            }?.imageUrl,
+                        )
+                    },
+                )
+            } else {
+                group.copy(categories = group.categories.filterNot { it.isChannel() }).takeIf { it.categories.isNotEmpty() }
+            }
+        }
     }
 
     /** Imagen de cada portada del menú, por su URL; sirve de reserva para la otra configuración. */
