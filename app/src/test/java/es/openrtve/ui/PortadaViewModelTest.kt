@@ -198,6 +198,9 @@ class PortadaViewModelTest {
     )
 
     private class FakeRepository : CatalogRepository {
+        override suspend fun loadChannelPrograms(channelId: String, cachedOnly: Boolean): CatalogLoad<List<CatalogItem>> =
+            CatalogLoad(emptyList(), false)
+
         var feed = CompletableDeferred<CatalogLoad<HomeFeed>>()
         val modules = (0 until 3).associateWith { CompletableDeferred<CatalogLoad<CatalogModule>>() }
 
