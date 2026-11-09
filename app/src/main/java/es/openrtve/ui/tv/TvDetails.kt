@@ -277,7 +277,7 @@ internal fun TvFactsPanel(facts: FichaFacts) {
 }
 
 @Composable
-private fun TvEpisodeCard(
+internal fun TvEpisodeCard(
     item: CatalogItem,
     onClick: () -> Unit,
     modifier: Modifier,

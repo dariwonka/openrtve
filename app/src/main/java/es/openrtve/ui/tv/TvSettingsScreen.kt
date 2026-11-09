@@ -28,7 +28,7 @@ import es.openrtve.ui.rememberSettingsScreen
 import es.openrtve.ui.formatBytes
 
 @Composable
-fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit, onChangeAge: () -> Unit) {
+fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit) {
     val screen = rememberSettingsScreen(container)
     val viewModel = screen.viewModel
     val settings = screen.settings
@@ -46,14 +46,8 @@ fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit, onCha
     ) {
         Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
-        TvSettingsLabel(stringResource(R.string.settings_age))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(onClick = onChangeAge, modifier = Modifier.initialFocus()) { Text(stringResource(R.string.settings_change_age)) }
-            Text(settings.ageTitle ?: stringResource(R.string.age_all), style = MaterialTheme.typography.bodyLarge)
-        }
-        Spacer(Modifier.height(8.dp))
         TvSettingsLabel(stringResource(R.string.settings_playback))
-        TvSwitchRow(stringResource(R.string.settings_autoplay), stringResource(R.string.settings_autoplay_summary), settings.autoplayNext) { v ->
+        TvSwitchRow(stringResource(R.string.settings_autoplay), stringResource(R.string.settings_autoplay_summary), settings.autoplayNext, Modifier.initialFocus()) { v ->
             viewModel.update { it.copy(autoplayNext = v) }
         }
         Text(stringResource(R.string.settings_max_quality), style = MaterialTheme.typography.titleMedium)

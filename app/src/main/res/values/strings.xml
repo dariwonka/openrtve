@@ -26,11 +26,9 @@
     <string name="settings_version">Versión %1$s</string>
     <string name="settings_about_summary">Cliente independiente para el catálogo infantil público de RTVE (Clan). No está afiliado a RTVE. Basado en OpenRTVE, bajo licencia GPL-3.0.</string>
 
-    <string name="age_title">¿Quién va a ver la tele?</string>
-    <string name="age_summary">Elige una edad. Se puede cambiar después en Ajustes.</string>
-    <string name="age_all">Todas las edades</string>
-    <string name="settings_age">Edad</string>
-    <string name="settings_change_age">Cambiar edad</string>
+    <string name="catalog_series">Series</string>
+    <string name="catalog_movies">Películas</string>
+    <string name="catalog_empty">No hay títulos ahora mismo</string>
 
     <string name="explore_kids">Infantil</string>
     <string name="explore_topics">Temáticas</string>

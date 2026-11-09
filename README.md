@@ -9,26 +9,33 @@ son marcas de la Corporación de Radio y Televisión Española.
 
 ## Qué cambia respecto a OpenRTVE
 
-- **Solo Clan.** El inicio es la portada de Clan. No hay Buscar ni Explorar, la
-  sección "Similares" (que sale del recomendador general de RTVE) está oculta y
-  la app no abre enlaces externos de `rtve.es`. Todo el catálogo pasa por
-  `ClanCatalogRepository`, que es quien cierra esas puertas.
-- **Filtro por edad.** En el primer arranque se elige una franja; las franjas
-  son las portadas del bloque infantil de la configuración remota de RTVE, sin
-  lista compilada. "Todas las edades" es la portada completa de Clan. Se cambia
-  en *Ajustes → Cambiar edad*, sin PIN.
-- **Solo Android TV.** No hay interfaz de móvil. También aparece en lanzadores
-  sin Leanback.
-- Se instala junto a OpenRTVE (`es.clanpeques`), con su propio nombre e icono.
+- **Inicio = todos los títulos.** La app abre directamente una cuadrícula de
+  cuatro columnas con los títulos de Clan en orden alfabético, sin filas
+  editoriales ("Princesas", "Para descubrir dinosaurios"…). Cada título sale
+  una sola vez.
+- **Series y Películas.** Dos botones en la barra superior cambian de lista. A
+  su derecha, Inicio y Ajustes. No hay menú lateral.
+- **Página de una serie:** solo su título y sus vídeos completos en cuadrícula,
+  hasta el final (las páginas siguientes se cargan solas). Cada vídeo muestra
+  título, temporada y episodio, fecha y duración, y se reproduce al pulsarlo.
+  Una película se reproduce directamente desde el inicio.
+- **Solo Clan.** No hay Buscar ni Explorar, los "Similares" del recomendador
+  general están cerrados y la app no abre enlaces externos de `rtve.es`
+  (`ClanCatalogRepository`).
+- **Solo Android TV**, con identidad propia (`es.clanpeques`): se instala junto
+  a OpenRTVE.
 
-El reproductor, la caché, "Seguir viendo" y el resto del comportamiento son los
-de OpenRTVE.
+El reproductor, la caché y el historial de lo visto son los de OpenRTVE.
 
-## Pendiente de comprobar
+## De dónde sale el catálogo
 
-- Qué franjas de edad publica hoy RTVE y si cada una tiene portada propia.
-- Si el buscador de RTVE filtra por perfil infantil en el servidor
-  (`context=clan`, `isChild=true`). Hasta comprobarlo, la búsqueda está cerrada.
+De la portada de Clan (`/play/clan/index_apps.json`): se descargan todas sus
+filas y `buildClanCatalog` las funde en dos listas de títulos únicos. Un
+capítulo aporta su serie; son películas los vídeos que RTVE clasifica así, las
+piezas de un contenedor de cine y lo que venga en una fila titulada como
+películas o cine. Un título que Clan no enseñe en ninguna fila de su portada no
+aparece: falta enlazar el listado A-Z oficial, cuya URL está en la
+configuración remota de RTVE.
 
 ## Instalar
 

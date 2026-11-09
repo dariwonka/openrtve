@@ -1,149 +1,100 @@
 package es.openrtve.ui.tv
 
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.runtime.Composable
-import androidx.compose.foundation.lazy.items
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Button
-import androidx.tv.material3.Text
 import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
-import es.openrtve.ui.ProgramUiState
-import es.openrtve.ui.ProgramViewModel
-import es.openrtve.ui.facts
-import es.openrtve.ui.structure
-import es.openrtve.ui.contentSections
-import es.openrtve.ui.ProgramTab
-import es.openrtve.ui.label
-import es.openrtve.ui.metaLine
 import es.openrtve.ui.rememberProgramScreen
 import es.openrtve.ui.text
-import es.openrtve.ui.titleRes
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 
 /**
- * Ficha de programa en TV (ver [TvDetailsScaffold]): cabecera con el botón de
- * reproducir y, debajo, Capítulos (con las temporadas como pestañas), Extras,
- * Similares y Detalles, una fila por sección, como la página de detalles de Google TV.
+ * Página de una serie: su título y, debajo, todos sus vídeos completos en una
+ * cuadrícula que baja hasta el final (las páginas siguientes se piden solas al
+ * acercarse). Sin sinopsis, temporadas, extras ni similares: cada tarjeta lleva
+ * sus datos y se reproduce al pulsarla.
  */
 @Composable
 fun TvProgramScreen(
     repository: CatalogRepository,
     history: WatchHistory,
     program: CatalogItem,
-    /** Capítulos y extras se reproducen al pulsarlos. */
-    onOpenItem: (CatalogItem) -> Unit,
-    /** Los similares y las piezas de una colección abren su ficha. */
-    onOpenRelated: (CatalogItem) -> Unit = onOpenItem,
+    onPlay: (CatalogItem) -> Unit,
 ) {
     val screen = rememberProgramScreen(repository, history, program)
     val viewModel = screen.viewModel
     val state = screen.state
-    val suggestion = screen.suggestion
-    val structure = state.structure
-    val sections = state.contentSections
+    val episodes = state.episodes
+    val error = episodes.error
+    val context = LocalContext.current
+    val gridState = rememberLazyGridState()
 
-    TvDetailsScaffold(
-        backdropUrl = state.detail?.imageUrl ?: program.imageUrl,
-        header = {
-            TvDetailsHeaderText(
-                title = state.title,
-                meta = state.detail?.metaLine(),
-                claim = state.detail?.emission,
-                synopsis = state.detail?.description,
-            )
-            state.detailError?.let { error ->
-                Spacer(Modifier.height(12.dp))
-                Text(error.text(LocalContext.current))
-                Button(onClick = viewModel::retry) { Text(stringResource(R.string.action_retry)) }
-            }
-            if (!structure.isCollection) {
-                Spacer(Modifier.height(20.dp))
-                Button(
-                    onClick = { suggestion?.let { onOpenItem(it.item) } },
-                    enabled = suggestion != null,
-                    // Deshabilitado no admite el foco: se concede en cuanto hay qué reproducir.
-                    modifier = Modifier.initialFocus(enabled = suggestion != null),
+    // Dos filas antes del final ya se pide la página siguiente; un fallo espera a su reintento.
+    LaunchedEffect(gridState, episodes.page, episodes.hasMore, error) {
+        if (!episodes.hasMore || error != null) return@LaunchedEffect
+        snapshotFlow {
+            val info = gridState.layoutInfo
+            (info.visibleItemsInfo.lastOrNull()?.index ?: -1) to info.totalItemsCount
+        }
+            .distinctUntilChanged()
+            .filter { (last, total) -> total > 0 && last >= total - 1 - 2 * TvGridColumns }
+            .collect { viewModel.loadMore() }
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        TvScreenTitle(state.title)
+        when {
+            episodes.items.isNotEmpty() -> ProvideTvVerticalScroll(top = TvFocusScaleRoom) {
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Fixed(TvGridColumns),
+                    contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, top = TvFocusScaleRoom, bottom = TvVerticalMargin),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp),
+                    modifier = Modifier.fillMaxSize().tvTopFade(TvFocusScaleRoom),
                 ) {
-                    Text(
-                        text = suggestion?.label(LocalContext.current) ?: stringResource(R.string.action_play),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    itemsIndexed(episodes.items, key = { _, it -> it.id }) { index, item ->
+                        val entry = screen.entriesById[item.id]
+                        TvEpisodeCard(
+                            item = item,
+                            onClick = { onPlay(item) },
+                            modifier = if (index == 0) Modifier.initialFocus() else Modifier,
+                            progress = entry?.takeIf { it.inProgress }?.progress,
+                            badge = if (entry?.finished == true) stringResource(R.string.episode_watched) else null,
+                        )
+                    }
+                    if (episodes.hasMore || error != null) {
+                        item(key = "more", span = { GridItemSpan(maxLineSpan) }) {
+                            TvInlineMessage(
+                                message = error?.text(context) ?: stringResource(R.string.state_loading),
+                                onRetry = if (error != null) ({ viewModel.retry() }) else null,
+                                modifier = Modifier.padding(vertical = 8.dp),
+                            )
+                        }
+                    }
                 }
             }
-        },
-    ) {
-        sections.forEachIndexed { index, section ->
-            tvDetailsSection(section.tab.name, { stringResource(section.tab.titleRes) }) {
-                if (section.tab == ProgramTab.EPISODES) SeasonChips(state, viewModel)
-                TvContentSection(
-                    section,
-                    onSelect = { item ->
-                        if (section.opensDetails(item, state.structure)) onOpenRelated(item) else onOpenItem(item)
-                    },
-                    onLoadMore = { viewModel.loadMore(section) },
-                    onRetry = { viewModel.retry(section) },
-                    entriesById = screen.entriesById,
-                    suggestion = suggestion,
-                    // Un contenedor no tiene botón de reproducir: el foco empieza en su catálogo.
-                    takesInitialFocus = structure.isCollection && index == 0,
-                )
-            }
-        }
-        if (!structure.isCollection && state.related.isNotEmpty()) {
-            tvDetailsSection("related", { stringResource(R.string.tab_related) }) {
-                TvRelatedRow(state.related, onOpenRelated)
-            }
-        }
-        if (!structure.isCollection) {
-            state.detail?.facts?.takeIf { it.hasDetails }?.let { facts ->
-                tvDetailsSection("details", { stringResource(R.string.tab_details) }) { TvFactsPanel(facts) }
-            }
-        }
-    }
-}
-
-/**
- * Temporadas como chips de filtro de TV: se elige al pulsar, así recorrerlas con
- * el mando no lanza una carga por cada una. Al entrar en la fila el foco vuelve a
- * la temporada elegida.
- */
-@Composable
-private fun SeasonChips(state: ProgramUiState, viewModel: ProgramViewModel) {
-    val seasons = state.detail?.seasons.orEmpty()
-    if (seasons.isEmpty()) return
-    val options = listOf<Pair<String?, String>>(null to stringResource(R.string.program_all_seasons)) + seasons.map { it.id to it.title }
-    val selectedChip = remember { FocusRequester() }
-    TvLazyRow(
-        contentPadding = TvRowPadding,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
-            .padding(bottom = 16.dp)
-            .focusProperties { onEnter = { selectedChip.requestFocus() } }
-            .focusGroup(),
-    ) {
-        items(options, key = { it.first ?: "all" }) { (seasonId, title) ->
-            val selected = seasonId == state.selectedSeasonId
-            TvChoiceButton(
-                label = title,
-                selected = selected,
-                onClick = { viewModel.selectSeason(seasonId) },
-                modifier = if (selected) Modifier.focusRequester(selectedChip) else Modifier,
-            )
+            error != null -> TvCenterMessage(error.text(context)) { viewModel.retry() }
+            episodes.isLoading || episodes.hasMore -> TvCenterMessage(stringResource(R.string.state_loading))
+            else -> TvCenterMessage(stringResource(R.string.program_empty))
         }
     }
 }

@@ -17,12 +17,6 @@ data class Settings(
     val subtitlesByDefault: Boolean = false,
     /** Encadenar el siguiente episodio al terminar. */
     val autoplayNext: Boolean = true,
-    /** Falso hasta que un adulto elige la franja de edad en el primer arranque. */
-    val ageChosen: Boolean = false,
-    /** Portada de la franja elegida; `null` es Clan completo (todas las edades). */
-    val agePortadaUrl: String? = null,
-    /** Nombre de la franja tal como lo da RTVE, para enseñarlo en Ajustes. */
-    val ageTitle: String? = null,
 )
 
 /**
@@ -43,9 +37,6 @@ class AppSettings(context: Context) {
             putInt(KEY_MAX_HEIGHT, updated.maxVideoHeight)
             putBoolean(KEY_SUBTITLES, updated.subtitlesByDefault)
             putBoolean(KEY_AUTOPLAY, updated.autoplayNext)
-            putBoolean(KEY_AGE_CHOSEN, updated.ageChosen)
-            putString(KEY_AGE_URL, updated.agePortadaUrl)
-            putString(KEY_AGE_TITLE, updated.ageTitle)
         }
         mutableSettings.update { updated }
     }
@@ -55,9 +46,6 @@ class AppSettings(context: Context) {
         maxVideoHeight = prefs.getInt(KEY_MAX_HEIGHT, 0),
         subtitlesByDefault = prefs.getBoolean(KEY_SUBTITLES, false),
         autoplayNext = prefs.getBoolean(KEY_AUTOPLAY, true),
-        ageChosen = prefs.getBoolean(KEY_AGE_CHOSEN, false),
-        agePortadaUrl = prefs.getString(KEY_AGE_URL, null),
-        ageTitle = prefs.getString(KEY_AGE_TITLE, null),
     )
 
     private companion object {
@@ -66,8 +54,5 @@ class AppSettings(context: Context) {
         const val KEY_MAX_HEIGHT = "max_video_height"
         const val KEY_AUTOPLAY = "autoplay_next"
         const val KEY_SUBTITLES = "subtitles_by_default"
-        const val KEY_AGE_CHOSEN = "age_chosen"
-        const val KEY_AGE_URL = "age_portada_url"
-        const val KEY_AGE_TITLE = "age_title"
     }
 }
