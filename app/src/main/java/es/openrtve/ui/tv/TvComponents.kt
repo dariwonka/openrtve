@@ -124,6 +124,8 @@ internal val TvHorizontalMargin = 48.dp
 internal val TvVerticalMargin = 27.dp
 internal val TvRowPadding = PaddingValues(horizontal = TvHorizontalMargin)
 internal val TvCardShape = RoundedCornerShape(12.dp)
+/** Color del selector: el borde de la tarjeta enfocada. */
+internal val TvFocusColor = Color(0xFFFF1744)
 internal val TvLandscapeWidth = 260.dp
 /** Degradado de las tarjetas con el título sobre la imagen. */
 private val TvTitleScrim = Brush.verticalGradient(0.3f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.85f))
@@ -156,7 +158,7 @@ internal fun RowLayout.cardWidth(): Dp = when (this) {
 
 /**
  * Superficie enfocable con la respuesta al foco que piden las guías de TV:
- * escala 1.08, borde claro y un ligero brillo. Es la base de todas las tarjetas.
+ * escala 1.08 y borde rojo. Es la base de todas las tarjetas.
  */
 @Composable
 internal fun TvFocusSurface(
@@ -176,11 +178,10 @@ internal fun TvFocusSurface(
             focusedContainerColor = MaterialTheme.colorScheme.surface,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f, pressedScale = 1.08f),
+        // Borde rojo y grueso: se distingue sobre cualquier carátula, también las claras.
+        // Sin brillo alrededor: su sombra es lo más caro de pintar al mover el foco.
         border = ClickableSurfaceDefaults.border(
-            focusedBorder = Border(BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface), shape = shape),
-        ),
-        glow = ClickableSurfaceDefaults.glow(
-            focusedGlow = Glow(elevationColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), elevation = 12.dp),
+            focusedBorder = Border(BorderStroke(4.dp, TvFocusColor), shape = shape),
         ),
         modifier = modifier,
         content = content,

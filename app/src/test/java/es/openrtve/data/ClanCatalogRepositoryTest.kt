@@ -78,4 +78,15 @@ class ClanCatalogRepositoryTest {
         assertEquals("siguiente", clan.loadNextVideo("1")?.id)
         assertEquals(listOf("nextVideo(1)"), general.calls)
     }
+
+    @Test
+    fun `the A-Z listing of a channel is a list of programmes even without a declared type`() {
+        val page = RtveJsonParser().parsePrograms(
+            """{"page":{"items":[{"id":"123","name":"Bluey"},{"id":456,"name":"Pocoyó"},{"name":"Sin id"},{"id":"123","name":"Bluey"}],"number":1,"totalPages":2}}""",
+        )
+
+        assertEquals(listOf("123" to "Bluey", "456" to "Pocoyó"), page.items.map { it.id to it.title })
+        assertTrue(page.items.all { it.kind == es.openrtve.domain.ContentKind.PROGRAM && it.imageUrl?.contains("/p/${it.id}") == true })
+        assertTrue(page.hasMore)
+    }
 }

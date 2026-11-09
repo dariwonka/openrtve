@@ -38,6 +38,8 @@ open class FakeCatalogRepository : CatalogRepository {
     var program: suspend (programId: String, forceRefresh: Boolean) -> CatalogLoad<ProgramDetail> = { _, _ -> unsupported() }
     var video: suspend (videoId: String, forceRefresh: Boolean) -> CatalogLoad<VideoDetail> = { _, _ -> unsupported() }
     var nextVideo: suspend (videoId: String) -> CatalogItem? = { null }
+    /** Sin configurar, la cadena no tiene listado A-Z. */
+    var channelPrograms: suspend (channelId: String, cachedOnly: Boolean) -> CatalogLoad<List<CatalogItem>> = { _, _ -> CatalogLoad(emptyList(), false) }
     var previewSprite: suspend (videoId: String) -> PreviewSprite? = { null }
     var programVideos: suspend (programId: String, seasonId: String?, page: Int, completeOnly: Boolean, forceRefresh: Boolean) -> CatalogLoad<CatalogPage> =
         { _, _, _, _, _ -> unsupported() }
@@ -57,6 +59,11 @@ open class FakeCatalogRepository : CatalogRepository {
     override suspend fun loadExplore(forceRefresh: Boolean, tv: Boolean): CatalogLoad<List<ExploreGroup>> {
         calls += "explore(force=$forceRefresh)"
         return explore(forceRefresh)
+    }
+
+    override suspend fun loadChannelPrograms(channelId: String, cachedOnly: Boolean): CatalogLoad<List<CatalogItem>> {
+        calls += "channelPrograms($channelId, cached=$cachedOnly)"
+        return channelPrograms(channelId, cachedOnly)
     }
 
     override suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>> {

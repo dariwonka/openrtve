@@ -39,7 +39,7 @@ import es.openrtve.ui.text
 import kotlinx.coroutines.delay
 
 /**
- * Raíz de la app: una barra superior fija (Series, Películas, Inicio y Ajustes)
+ * Raíz de la app: una barra superior fija (Series, Películas y Ajustes)
  * y, debajo, la pantalla actual. No hay menú lateral. Atrás lo maneja el mando.
  */
 @Composable
@@ -52,7 +52,7 @@ fun TvApp(container: AppContainer) {
     // Un solo catálogo para toda la sesión: volver al inicio no lo descarga otra vez.
     val catalogViewModel: ClanCatalogViewModel = viewModel(
         key = "clan-catalog",
-        factory = viewModelFactory { initializer { ClanCatalogViewModel(repository) } },
+        factory = viewModelFactory { initializer { ClanCatalogViewModel(repository, container.clanCatalogStore) } },
     )
     val catalog by catalogViewModel.uiState.collectAsStateWithLifecycle()
     var section by rememberSaveable { mutableStateOf(ClanSection.SERIES) }
@@ -85,7 +85,6 @@ fun TvApp(container: AppContainer) {
             TvTopBar(
                 section = section.takeIf { destination == null },
                 onSection = showSection,
-                onHome = { showSection(ClanSection.SERIES) },
                 onSettings = { if (destination != GlobalDestination.Settings) actions.openSettings() },
             )
             Box(Modifier.fillMaxWidth().weight(1f)) {

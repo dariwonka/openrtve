@@ -39,6 +39,12 @@ interface CatalogRepository {
     /** Página [page] de un bloque de búsqueda, a partir de su `query` relativo (ver [SearchResults.videosQuery]). */
     suspend fun searchPage(relativeQuery: String, page: Int): CatalogPage
 
+    /**
+     * Todos los programas de una cadena con contenido en RTVE Play, de la A a la Z
+     * (el listado del buscador A-Z de la app oficial). Con [cachedOnly] no toca la red.
+     */
+    suspend fun loadChannelPrograms(channelId: String, cachedOnly: Boolean = false): CatalogLoad<List<CatalogItem>>
+
     /** "Similares" según RTVE (`recomsys`), sin el propio item ni contenido de pago. */
     suspend fun loadRelated(kind: RelatedKind, id: String): CatalogLoad<List<CatalogItem>>
     suspend fun loadProgram(programId: String, forceRefresh: Boolean = false): CatalogLoad<ProgramDetail>
@@ -162,6 +168,27 @@ class DefaultCatalogRepository(
                 .take(MAX_RELATED)
         },
     )
+
+    override suspend fun loadChannelPrograms(channelId: String, cachedOnly: Boolean): CatalogLoad<List<CatalogItem>> {
+        val programs = mutableListOf<CatalogItem>()
+        var stale = false
+        var page = 1
+        do {
+            val load = loadDocument(
+                url = "$CHANNELS_BASE/${encode(channelId)}/programas.json?inazlist=true&play=true&size=$AZ_PAGE_SIZE&order=name,ASC&small=true&page=$page",
+                forceRefresh = false,
+                freshForMillis = CONFIG_FRESH_MS,
+                staleForMillis = CONFIG_STALE_MS,
+                cachedOnly = cachedOnly,
+                parse = parser::parsePrograms,
+            )
+            programs += load.value.items
+            stale = stale || load.isStale
+            val more = load.value.hasMore && load.value.items.isNotEmpty()
+            page++
+        } while (more && page <= AZ_MAX_PAGES)
+        return CatalogLoad(programs.distinctBy(CatalogItem::id), stale)
+    }
 
     override suspend fun loadModule(
         row: HomeRow,
@@ -320,5 +347,8 @@ class DefaultCatalogRepository(
         const val VIDEOS_BASE = "https://api.rtve.es/api/videos"
         const val PREVIEWS_BASE = "https://videopreviews.rtve.es/tiivii-previews/api"
         const val MAX_RELATED = 24
+        const val CHANNELS_BASE = "https://api2.rtve.es/api/cadenas"
+        const val AZ_PAGE_SIZE = 500
+        const val AZ_MAX_PAGES = 6
     }
 }

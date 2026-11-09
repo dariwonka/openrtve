@@ -5,9 +5,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Firma de release desde keystore.properties (fuera del repositorio). Sin él,
-// Gradle genera un APK release sin firmar: nunca se sustituye silenciosamente
-// por la clave de depuración.
+// Firma de release desde keystore.properties (fuera del repositorio) si existe;
+// si no, con la clave "sideload" del repositorio (ver signingConfigs).
 val keystoreProperties = rootProject.file("keystore.properties")
     .takeIf { it.isFile }
     ?.let { file -> Properties().apply { file.inputStream().use(::load) } }
@@ -26,6 +25,14 @@ android {
     }
 
     signingConfigs {
+        // Clave del repositorio para instalar a mano: no es secreta y solo sirve para que
+        // cada APK de la CI lleve la misma firma y se instale encima del anterior.
+        create("sideload") {
+            storeFile = rootProject.file("signing/sideload.jks")
+            storePassword = "clanpeques"
+            keyAlias = "clanpeques"
+            keyPassword = "clanpeques"
+        }
         keystoreProperties?.let { props ->
             create("release") {
                 storeFile = rootProject.file(props.getProperty("storeFile"))
@@ -44,7 +51,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfigs.findByName("release")?.let { signingConfig = it }
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("sideload")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("sideload")
         }
     }
 

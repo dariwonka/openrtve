@@ -32,7 +32,7 @@ WORKDIR /workspace
 FROM android-sdk AS verify
 COPY . .
 RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
+    ./gradlew --no-daemon testDebugUnitTest lintDebug assembleRelease
 
 FROM scratch AS artifact
-COPY --from=verify /workspace/app/build/outputs/apk/debug/app-debug.apk /clan-peques-debug.apk
+COPY --from=verify /workspace/app/build/outputs/apk/release/app-release.apk /clan-peques.apk

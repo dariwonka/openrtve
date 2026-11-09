@@ -13,8 +13,10 @@ son marcas de la Corporación de Radio y Televisión Española.
   cuatro columnas con los títulos de Clan en orden alfabético, sin filas
   editoriales ("Princesas", "Para descubrir dinosaurios"…). Cada título sale
   una sola vez.
-- **Series y Películas.** Dos botones en la barra superior cambian de lista. A
-  su derecha, Inicio y Ajustes. No hay menú lateral.
+- **Series y Películas.** Dos botones en la barra superior cambian de lista
+  (Series es también el inicio). A la derecha, Ajustes. No hay menú lateral.
+- **Selector.** La tarjeta enfocada lleva un borde rojo y su fila se mantiene en
+  el centro de la pantalla, salvo la primera y la última.
 - **Página de una serie:** solo su título y sus vídeos completos en cuadrícula,
   hasta el final (las páginas siguientes se cargan solas). Cada vídeo muestra
   título, temporada y episodio, fecha y duración, y se reproduce al pulsarlo.
@@ -29,31 +31,37 @@ El reproductor, la caché y el historial de lo visto son los de OpenRTVE.
 
 ## De dónde sale el catálogo
 
-De la portada de Clan (`/play/clan/index_apps.json`): se descargan todas sus
-filas y `buildClanCatalog` las funde en dos listas de títulos únicos. Un
-capítulo aporta su serie; son películas los vídeos que RTVE clasifica así, las
-piezas de un contenedor de cine y lo que venga en una fila titulada como
-películas o cine. Un título que Clan no enseñe en ninguna fila de su portada no
-aparece: falta enlazar el listado A-Z oficial, cuya URL está en la
-configuración remota de RTVE.
+- **Series:** del listado A-Z de la cadena Clan
+  (`api2.rtve.es/api/cadenas/417/programas.json?inazlist=true&play=true`, el
+  patrón que la configuración de RTVE da para el buscador A-Z de cada cadena),
+  más las series que aparezcan en las filas de la portada de Clan.
+- **Películas:** los vídeos que RTVE clasifica como película, las piezas de un
+  contenedor de cine y lo que venga en una fila titulada como películas o cine
+  ("Todo el cine", "Cine para ver en familia").
+
+`buildClanCatalog` lo funde todo en dos listas de títulos únicos. La última copia
+se guarda (`ClanCatalogStore`) y es lo que se pinta al abrir la app; la versión
+nueva se descarga después y la sustituye solo si ha cambiado.
 
 ## Instalar
 
-Descarga el APK de la última ejecución de *Actions* (artefacto
-`clan-peques-debug`) e instálalo en la tele, por ejemplo con *Downloader* o
-`adb install`.
+Descarga el APK de la última ejecución de *Actions* (artefacto `clan-peques`) e
+instálalo en la tele, por ejemplo con *Downloader* o `adb install`.
+
+La CI compila la variante *release* (optimizada con R8), que es la que va
+fluida en una tele; la de depuración es varias veces más lenta. Todos los APK
+van firmados con `signing/sideload.jks`, una clave que está en el repositorio a
+propósito: no es secreta y solo sirve para que cada APK se instale encima del
+anterior. No vale para publicar en una tienda.
 
 ## Compilar
 
 ```bash
-./gradlew assembleDebug
+./gradlew assembleRelease
 ./gradlew testDebugUnitTest lintDebug
 ```
 
 Sin SDK en el host, con Docker: `docker build --output type=local,dest=build/docker .`
-
-El Baseline Profile de OpenRTVE recorría la interfaz de móvil y se ha retirado
-junto con su módulo.
 
 ## Documentación heredada
 

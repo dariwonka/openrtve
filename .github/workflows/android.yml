@@ -19,8 +19,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Tests, lint y APK de depuración
-        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
+      - name: Tests, lint y APK
+        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleRelease
 
       - name: Informes de tests y lint
         if: always()
@@ -32,8 +32,8 @@ jobs:
             app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
-      - name: APK de depuración
+      - name: APK
         uses: actions/upload-artifact@v4
         with:
-          name: clan-peques-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: clan-peques
+          path: app/build/outputs/apk/release/app-release.apk

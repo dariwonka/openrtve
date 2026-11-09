@@ -21,6 +21,7 @@ import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.ProgramSeason
 import es.openrtve.domain.RtveHostPolicy
 import es.openrtve.domain.programStructure
+import es.openrtve.domain.referenceItem
 import es.openrtve.domain.seasonsInDisplayOrder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -306,6 +307,25 @@ class RtveJsonParser(
             page = page?.number("number") ?: 1,
             totalPages = page?.number("totalPages") ?: 1,
         )
+    }
+
+    /**
+     * Listado A-Z de una cadena (`cadenas/{id}/programas.json`). Todo lo que trae son
+     * programas, aunque `small=true` omita su `contentType`; las imágenes salen del
+     * servicio por id, como en el resto de programas.
+     */
+    fun parsePrograms(raw: String): CatalogPage {
+        val page = json.parseToJsonElement(raw).jsonObject.obj("page")
+        val items = page?.array("items").orEmpty()
+            .mapNotNull { it as? JsonObject }
+            .mapNotNull { item ->
+                val id = item.text("id", "uid") ?: return@mapNotNull null
+                val title = item.text("name", "title", "longTitle", "shortTitle") ?: return@mapNotNull null
+                referenceItem(id, ContentKind.PROGRAM, title, derivedImage("p", id, "imgPortada", LANDSCAPE_WIDTH))
+                    .copy(posterUrl = derivedImage("p", id, "imgPoster", POSTER_WIDTH))
+            }
+            .distinctBy(CatalogItem::id)
+        return CatalogPage(items, page?.number("number") ?: 1, page?.number("totalPages") ?: 1)
     }
 
     /**

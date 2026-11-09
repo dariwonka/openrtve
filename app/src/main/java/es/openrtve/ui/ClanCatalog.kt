@@ -3,6 +3,8 @@ package es.openrtve.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import es.openrtve.data.CatalogRepository
+import es.openrtve.data.ClanCatalogStore
+import es.openrtve.data.StoredCatalog
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ContentKind
 import es.openrtve.domain.LinkKind
@@ -37,6 +39,8 @@ data class ClanCatalog(
     val series: List<CatalogItem> = emptyList(),
     val movies: List<CatalogItem> = emptyList(),
 ) {
+    val isEmpty: Boolean get() = series.isEmpty() && movies.isEmpty()
+
     fun titles(section: ClanSection): List<CatalogItem> = if (section == ClanSection.SERIES) series else movies
 }
 
@@ -112,16 +116,26 @@ private val DIACRITICS = Regex("\\p{Mn}+")
 data class ClanCatalogUiState(
     val catalog: ClanCatalog = ClanCatalog(),
     val isLoading: Boolean = true,
-    /** Solo si no se pudo reunir ningún título. */
+    /** Solo si no hay ningún título que enseñar. */
     val error: LoadError? = null,
 )
 
 /**
- * Catálogo del inicio: descarga la portada de Clan y todas sus filas (seis a la
- * vez) y las funde con [buildClanCatalog]. Una fila que falla no impide mostrar
- * el resto; si fallan todas, se explica y se puede reintentar.
+ * Catálogo del inicio. Primero pinta la última copia guardada ([ClanCatalogStore]),
+ * sin red: la app abre con los títulos ya en pantalla. Después lo rehace en segundo
+ * plano y lo sustituye solo si ha cambiado:
+ *
+ * - el listado A-Z de la cadena Clan aporta todas las series;
+ * - las filas de la portada (seis a la vez) aportan las películas y las series que
+ *   el listado no traiga.
+ *
+ * Una fuente que falla no impide usar las demás; si no hay nada que enseñar, se
+ * explica y se puede reintentar.
  */
-class ClanCatalogViewModel(private val repository: CatalogRepository) : ViewModel() {
+class ClanCatalogViewModel(
+    private val repository: CatalogRepository,
+    private val store: ClanCatalogStore? = null,
+) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ClanCatalogUiState())
     val uiState: StateFlow<ClanCatalogUiState> = mutableUiState.asStateFlow()
     private var job: Job? = null
@@ -135,47 +149,67 @@ class ClanCatalogViewModel(private val repository: CatalogRepository) : ViewMode
     private fun load() {
         job?.cancel()
         job = viewModelScope.launch {
-            mutableUiState.update { it.copy(isLoading = true, error = null) }
+            mutableUiState.update { it.copy(isLoading = it.catalog.isEmpty, error = null) }
+            if (mutableUiState.value.catalog.isEmpty) {
+                store?.read()?.let { saved ->
+                    mutableUiState.update { it.copy(catalog = ClanCatalog(saved.series, saved.movies), isLoading = false) }
+                }
+            }
             try {
-                val feed = repository.loadPortada(RtveUrls.CLAN_HOME).value
-                // Los accesos directos de una fila `links` ya vienen en la portada.
-                val linked = feed.rows.filter { it.isInline }.map { row ->
-                    LoadedRow(row.title, row.links.filter { it.kind == LinkKind.PROGRAM }.mapNotNull { link ->
-                        link.apiId?.let { referenceItem(it, ContentKind.PROGRAM, link.title, link.imageUrl) }
-                    })
+                val fresh = download()
+                if (fresh.isEmpty) {
+                    mutableUiState.update { it.copy(isLoading = false) }
+                } else if (fresh != mutableUiState.value.catalog) {
+                    mutableUiState.update { it.copy(catalog = fresh, isLoading = false) }
+                    store?.write(StoredCatalog(fresh.series, fresh.movies))
+                } else {
+                    mutableUiState.update { it.copy(isLoading = false) }
                 }
-                val remote = feed.rows.filter { !it.isInline && !it.isLive && it.contentUrl != null }
-                val permits = Semaphore(MAX_PARALLEL_ROWS)
-                var firstFailure: Exception? = null
-                val loaded = coroutineScope {
-                    remote.map { row ->
-                        async {
-                            permits.withPermit {
-                                try {
-                                    LoadedRow(row.title, repository.loadModule(row).value.items)
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (error: Exception) {
-                                    if (firstFailure == null) firstFailure = error
-                                    null
-                                }
-                            }
-                        }
-                    }.awaitAll().filterNotNull()
-                }
-                val catalog = buildClanCatalog(linked + loaded)
-                val failure = firstFailure
-                if (catalog.series.isEmpty() && catalog.movies.isEmpty() && failure != null) throw failure
-                mutableUiState.update { it.copy(catalog = catalog, isLoading = false) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                mutableUiState.update { it.copy(isLoading = false, error = error.toLoadError()) }
+                // Con la copia guardada en pantalla, un fallo de red no se enseña.
+                mutableUiState.update { it.copy(isLoading = false, error = error.toLoadError().takeIf { _ -> it.catalog.isEmpty }) }
             }
         }
     }
 
+    /** Lanza el primer fallo solo si ninguna fuente ha dado títulos. */
+    private suspend fun download(): ClanCatalog = coroutineScope {
+        var firstFailure: Exception? = null
+        suspend fun <T> orNull(block: suspend () -> T): T? = try {
+            block()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            if (firstFailure == null) firstFailure = error
+            null
+        }
+
+        val listing = async { orNull { repository.loadChannelPrograms(RtveUrls.CLAN_CHANNEL_ID).value } }
+        val feed = orNull { repository.loadPortada(RtveUrls.CLAN_HOME).value }
+        val rows = feed?.rows.orEmpty()
+        // Los accesos directos de una fila `links` ya vienen en la portada.
+        val linked = rows.filter { it.isInline }.map { row ->
+            LoadedRow(row.title, row.links.filter { it.kind == LinkKind.PROGRAM }.mapNotNull { link ->
+                link.apiId?.let { referenceItem(it, ContentKind.PROGRAM, link.title, link.imageUrl) }
+            })
+        }
+        val permits = Semaphore(MAX_PARALLEL_ROWS)
+        val loaded = rows.filter { !it.isInline && !it.isLive && it.contentUrl != null }
+            .map { row -> async { permits.withPermit { orNull { LoadedRow(row.title, repository.loadModule(row).value.items) } } } }
+            .awaitAll()
+            .filterNotNull()
+        // El listado va al final: la imagen y el nombre de una portada mandan sobre los suyos.
+        val catalog = buildClanCatalog(linked + loaded + LoadedRow(AZ_ROW_TITLE, listing.await().orEmpty()))
+        val failure = firstFailure
+        if (catalog.isEmpty && failure != null) throw failure
+        catalog
+    }
+
     private companion object {
         const val MAX_PARALLEL_ROWS = 6
+        /** Nombre interno de la "fila" del listado A-Z; no es de películas. */
+        const val AZ_ROW_TITLE = "A-Z"
     }
 }

@@ -84,6 +84,30 @@ internal fun WithTvRowScroll(content: @Composable () -> Unit) {
     if (rowSpec == null) content() else CompositionLocalProvider(LocalBringIntoViewSpec provides rowSpec, content = content)
 }
 
+/**
+ * Las cuadrículas de [content] mantienen la fila enfocada en el centro de la
+ * pantalla: se ve la anterior y la siguiente. Solo la primera fila (y la última)
+ * quedan en el borde, porque la lista no puede desplazarse más allá.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun ProvideTvCenteredScroll(content: @Composable () -> Unit) {
+    val rowSpec = LocalTvRowSpec.current ?: LocalBringIntoViewSpec.current
+    val spec = remember { CenteredSpec() }
+    CompositionLocalProvider(
+        LocalTvRowSpec provides rowSpec,
+        LocalBringIntoViewSpec provides spec,
+        content = content,
+    )
+}
+
+/** Centra lo enfocado en el contenedor; los extremos de la lista los limita el propio scroll. */
+@OptIn(ExperimentalFoundationApi::class)
+private class CenteredSpec : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
+        offset - (containerSize - size) / 2f
+}
+
 /** Lleva lo enfocado a [topPx] del borde; el final de la lista lo limita el propio scroll. */
 @OptIn(ExperimentalFoundationApi::class)
 private class TopAlignedSpec(private val topPx: Float) : BringIntoViewSpec {

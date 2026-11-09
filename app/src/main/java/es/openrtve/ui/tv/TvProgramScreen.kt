@@ -62,16 +62,16 @@ fun TvProgramScreen(
     Column(Modifier.fillMaxSize()) {
         TvScreenTitle(state.title)
         when {
-            episodes.items.isNotEmpty() -> ProvideTvVerticalScroll(top = TvFocusScaleRoom) {
+            episodes.items.isNotEmpty() -> ProvideTvCenteredScroll {
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(TvGridColumns),
                     contentPadding = PaddingValues(start = TvHorizontalMargin, end = TvHorizontalMargin, top = TvFocusScaleRoom, bottom = TvVerticalMargin),
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
                     verticalArrangement = Arrangement.spacedBy(24.dp),
-                    modifier = Modifier.fillMaxSize().tvTopFade(TvFocusScaleRoom),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    itemsIndexed(episodes.items, key = { _, it -> it.id }) { index, item ->
+                    itemsIndexed(episodes.items, key = { _, it -> it.id }, contentType = { _, _ -> "video" }) { index, item ->
                         val entry = screen.entriesById[item.id]
                         TvEpisodeCard(
                             item = item,

@@ -135,4 +135,51 @@ class ClanCatalogTest {
         assertNull(viewModel.uiState.value.error)
         assertFalse(viewModel.uiState.value.isLoading)
     }
+
+    @Test
+    fun `the A-Z listing completes the series without overriding what the portada shows`() = runTest(mainDispatcher.dispatcher) {
+        val repository = FakeCatalogRepository()
+        repository.portada = { _, _, _ ->
+            loaded(HomeFeed(null, "Clan", listOf(HomeRow(id = 0, title = "Todo el cine", order = 0, moduleType = "Collection", presentation = "ColeccionPoster", contentUrl = "https://www.rtve.es/c.json"))))
+        }
+        repository.module = { row, _, _ -> loaded(CatalogModule(row.title, listOf(program("9", "El Cid, la leyenda")))) }
+        repository.channelPrograms = { channel, _ ->
+            assertEquals(RtveUrls.CLAN_CHANNEL_ID, channel)
+            loaded(listOf(program("3", "Peppa Pig"), program("9", "El Cid, la leyenda"), program("2", "Bluey")))
+        }
+
+        val viewModel = ClanCatalogViewModel(repository)
+        advanceUntilIdle()
+
+        assertEquals(listOf("Bluey", "Peppa Pig"), viewModel.uiState.value.catalog.series.map { it.title })
+        assertEquals(listOf("El Cid, la leyenda"), viewModel.uiState.value.catalog.movies.map { it.title })
+    }
+
+    @Test
+    fun `the saved copy opens the app at once and is replaced when the catalogue changes`() = runTest(mainDispatcher.dispatcher) {
+        val file = java.io.File(java.nio.file.Files.createTempDirectory("clan").toFile(), "catalog.json")
+        val store = es.openrtve.data.ClanCatalogStore(file, mainDispatcher.dispatcher)
+        store.write(es.openrtve.data.StoredCatalog(listOf(program("2", "Bluey").copy(subtitle = null)), listOf(movie("50", "Tadeo Jones"))))
+
+        // Sin red: se enseña la copia y el fallo no se muestra.
+        val offline = FakeCatalogRepository()
+        offline.portada = { _, _, _ -> throw UnknownHostException() }
+        offline.channelPrograms = { _, _ -> throw UnknownHostException() }
+        val first = ClanCatalogViewModel(offline, store)
+        advanceUntilIdle()
+        assertEquals(listOf("Bluey"), first.uiState.value.catalog.series.map { it.title })
+        assertEquals(listOf("50"), first.uiState.value.catalog.movies.map { it.id })
+        assertTrue(first.uiState.value.catalog.movies.single().let { it.kind == ContentKind.VIDEO && it.playbackId == "50" })
+        assertNull(first.uiState.value.error)
+        assertFalse(first.uiState.value.isLoading)
+
+        // Con red: llega el catálogo nuevo y queda guardado para el siguiente arranque.
+        val online = FakeCatalogRepository()
+        online.portada = { _, _, _ -> loaded(HomeFeed(null, "Clan", emptyList())) }
+        online.channelPrograms = { _, _ -> loaded(listOf(program("2", "Bluey"), program("3", "Peppa Pig"))) }
+        val second = ClanCatalogViewModel(online, store)
+        advanceUntilIdle()
+        assertEquals(listOf("Bluey", "Peppa Pig"), second.uiState.value.catalog.series.map { it.title })
+        assertEquals(listOf("Bluey", "Peppa Pig"), store.read()?.series?.map { it.title })
+    }
 }

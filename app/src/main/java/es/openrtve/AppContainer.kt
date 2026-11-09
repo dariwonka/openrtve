@@ -4,6 +4,7 @@ import android.content.Context
 import es.openrtve.data.AppSettings
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.ClanCatalogRepository
+import es.openrtve.data.ClanCatalogStore
 import es.openrtve.data.DeepLinkResolver
 import es.openrtve.data.DefaultCatalogRepository
 import es.openrtve.data.DrmTokenClient
@@ -37,6 +38,8 @@ class AppContainer(context: Context) {
         ),
     )
     val settings = AppSettings(context)
+    /** Copia del catálogo del inicio: con ella la app abre sin esperar a la red. */
+    val clanCatalogStore = ClanCatalogStore(context.filesDir.resolve("clan-catalog.json"))
     val deepLinkResolver = DeepLinkResolver(catalogRepository)
     val watchHistory = WatchHistory(context.filesDir.resolve("watch-history.json"))
     val playbackResolver = PlaybackResolver()
