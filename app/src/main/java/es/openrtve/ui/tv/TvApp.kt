@@ -71,10 +71,14 @@ fun TvApp(container: AppContainer) {
     val destination = nav.current
     // Elegir una lista o Inicio vuelve a la raíz desde cualquier pantalla.
     val showSection: (ClanSection) -> Unit = { chosen ->
-        val atRoot = destination == null
+        val atRoot = destination == null && nav.tab == Tab.HOME
         val changed = section != chosen
         section = chosen
-        if (!atRoot || !changed) navigation.selectTab(Tab.HOME)
+        if (!atRoot || !changed) {
+            navigation.selectTab(Tab.HOME)
+            // Si al volver a Inicio quedaba una serie abierta, se cierra: el botón lleva a la lista.
+            if (navigation.state.value.current != null) navigation.selectTab(Tab.HOME)
+        }
     }
     ProvideClock {
         Column(
@@ -83,8 +87,9 @@ fun TvApp(container: AppContainer) {
                 .background(MaterialTheme.colorScheme.background),
         ) {
             TvTopBar(
-                section = section.takeIf { destination == null },
+                section = section.takeIf { destination == null && nav.tab == Tab.HOME },
                 onSection = showSection,
+                onSearch = { navigation.selectTab(Tab.SEARCH) },
                 onSettings = { if (destination != GlobalDestination.Settings) actions.openSettings() },
             )
             Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -120,8 +125,12 @@ fun TvApp(container: AppContainer) {
                             onOpenItem = actions.openItem,
                         )
                         GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage)
-                        // Única raíz: los títulos de Clan. Una serie abre su página; una película se reproduce.
-                        null -> TvCatalogScreen(
+                        // Dos raíces: el buscador y los títulos de Clan. Una serie abre su página; un vídeo se reproduce.
+                        null -> if (nav.tab == Tab.SEARCH) TvSearchScreen(
+                            repository = repository,
+                            onOpenItem = { item -> if (item.kind == ContentKind.VIDEO) actions.play(item) else actions.openItem(item) },
+                            reselectRequest = nav.rootRequests.getValue(Tab.SEARCH),
+                        ) else TvCatalogScreen(
                             state = catalog,
                             section = section,
                             onOpen = { item -> if (item.kind == ContentKind.VIDEO) actions.play(item) else actions.openItem(item) },

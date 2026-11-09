@@ -35,6 +35,7 @@ class AppContainer(context: Context) {
             httpClient = httpClient,
             parser = RtveJsonParser(),
             cache = documentCache,
+            childProfile = true,
         ),
     )
     val settings = AppSettings(context)

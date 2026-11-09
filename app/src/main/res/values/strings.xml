@@ -6,7 +6,7 @@
     <string name="tab_search">Buscar</string>
     <string name="tab_explore">Explorar</string>
 
-    <string name="search_hint">Programas, series, películas…</string>
+    <string name="search_hint">Busca dibujos, series, películas…</string>
     <string name="search_clear">Borrar</string>
     <string name="search_empty">No hay resultados</string>
     <string name="search_programs">Programas</string>
@@ -26,6 +26,7 @@
     <string name="settings_version">Versión %1$s</string>
     <string name="settings_about_summary">Cliente independiente para el catálogo infantil público de RTVE (Clan). No está afiliado a RTVE. Basado en OpenRTVE, bajo licencia GPL-3.0.</string>
 
+    <string name="search_min_length">Escribe al menos tres letras</string>
     <string name="catalog_series">Series</string>
     <string name="catalog_movies">Películas</string>
     <string name="catalog_empty">No hay títulos ahora mismo</string>

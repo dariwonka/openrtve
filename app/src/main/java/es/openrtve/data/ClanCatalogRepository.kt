@@ -2,25 +2,24 @@ package es.openrtve.data
 
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.CatalogLoad
-import es.openrtve.domain.CatalogPage
 import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.QuickFilter
 import es.openrtve.domain.RelatedKind
-import es.openrtve.domain.SearchResults
 
 /**
- * Catálogo limitado a Clan. Envuelve el repositorio general y cierra las tres
- * puertas por las que se llegaría al resto de RTVE Play:
+ * Catálogo limitado al público infantil. Envuelve el repositorio general y cierra
+ * las puertas por las que se llegaría al resto de RTVE Play:
  *
- * - el menú solo conserva el bloque infantil de la configuración (las portadas
- *   por edad), sin temáticas, canales ni canales temáticos en directo;
+ * - el menú solo conserva el bloque infantil de la configuración, sin temáticas,
+ *   canales ni canales temáticos en directo;
  * - "Similares" sale del recomendador general, que no distingue público: se
  *   devuelve vacío y las fichas ocultan la sección;
- * - el buscador general no se expone: sin comprobar que RTVE filtra por perfil
- *   infantil en el servidor, no devuelve nada.
+ * - las búsquedas predefinidas del buscador general ("Más buscados", "Series TV")
+ *   no se ofrecen.
  *
- * Portadas, fichas, capítulos y siguiente episodio pasan tal cual: solo se
- * llega a ellos desde una portada de Clan.
+ * La búsqueda por texto sí pasa, porque el repositorio de dentro la hace con el
+ * perfil infantil (`isChild=true`, ver `DefaultCatalogRepository.childProfile`).
+ * Portadas, fichas, capítulos y siguiente episodio pasan tal cual.
  */
 class ClanCatalogRepository(private val delegate: CatalogRepository) : CatalogRepository by delegate {
     /**
@@ -40,13 +39,6 @@ class ClanCatalogRepository(private val delegate: CatalogRepository) : CatalogRe
         CatalogLoad(emptyList(), isStale = false)
 
     override suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>> = CatalogLoad(emptyList(), isStale = false)
-
-    override suspend fun search(query: String): SearchResults = SearchResults(
-        programs = emptyList(),
-        videos = emptyList(),
-    )
-
-    override suspend fun searchPage(relativeQuery: String, page: Int): CatalogPage = CatalogPage(emptyList(), page, page)
 
     private fun List<ExploreGroup>.kidsOnly(): List<ExploreGroup> = filter { it.isKids }
         .map { group -> group.copy(categories = group.categories.filterNot { it.isLive }) }

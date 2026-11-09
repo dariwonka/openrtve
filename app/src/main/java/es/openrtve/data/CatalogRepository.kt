@@ -84,6 +84,11 @@ class DefaultCatalogRepository(
     private val parser: RtveJsonParser,
     private val cache: RawDocumentCache,
     private val nowMillis: () -> Long = System::currentTimeMillis,
+    /**
+     * Perfil infantil del buscador (`isChild=true`), el que usa la app oficial de Clan:
+     * RTVE devuelve solo contenido infantil, de Clan o del resto del catálogo.
+     */
+    private val childProfile: Boolean = false,
 ) : CatalogRepository {
     override suspend fun loadPortada(
         url: String,
@@ -150,7 +155,8 @@ class DefaultCatalogRepository(
 
     // Las búsquedas no se persisten: solo interesa el resultado del momento.
     override suspend fun search(query: String): SearchResults {
-        val url = "${RtveUrls.SEARCH}?search=${encode(query)}&context=tve&tipology=video&type=completo"
+        val url = "${RtveUrls.SEARCH}?search=${encode(query)}&context=tve&tipology=video&type=completo" +
+            if (childProfile) "&isChild=true" else ""
         return fetchParsed(url, parser::parseSearch)
     }
 

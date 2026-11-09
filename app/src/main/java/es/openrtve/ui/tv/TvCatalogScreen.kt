@@ -13,11 +13,19 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -36,13 +44,14 @@ internal const val TvGridColumns = 4
 
 /**
  * Barra superior, la única navegación de la app: a la izquierda, Series (que es
- * también el inicio) y Películas; a la derecha, Ajustes. Está en todas las pantallas.
+ * también el inicio) y Películas; a la derecha, Buscar y Ajustes. Está en todas las pantallas.
  */
 @Composable
 internal fun TvTopBar(
     /** Lista que se está viendo; `null` fuera del inicio (una serie, Ajustes). */
     section: ClanSection?,
     onSection: (ClanSection) -> Unit,
+    onSearch: () -> Unit,
     onSettings: () -> Unit,
 ) {
     Row(
@@ -56,7 +65,28 @@ internal fun TvTopBar(
         TvChoiceButton(stringResource(R.string.catalog_series), section == ClanSection.SERIES) { onSection(ClanSection.SERIES) }
         TvChoiceButton(stringResource(R.string.catalog_movies), section == ClanSection.MOVIES) { onSection(ClanSection.MOVIES) }
         Spacer(Modifier.weight(1f))
+        IconButton(onClick = onSearch) { Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.tab_search)) }
         IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title)) }
+    }
+}
+
+/**
+ * En una cuadrícula, la derecha en la última columna pasa a la primera tarjeta de
+ * la fila siguiente y la izquierda en la primera columna, a la última de la fila
+ * anterior: la lista se recorre de corrido, como un texto.
+ */
+@Composable
+internal fun Modifier.wrapRowFocus(index: Int, count: Int, columns: Int = TvGridColumns): Modifier {
+    val focusManager = LocalFocusManager.current
+    return onPreviewKeyEvent { event ->
+        when {
+            event.type != KeyEventType.KeyDown -> false
+            event.key == Key.DirectionRight && index % columns == columns - 1 && index < count - 1 ->
+                focusManager.moveFocus(FocusDirection.Next)
+            event.key == Key.DirectionLeft && index % columns == 0 && index > 0 ->
+                focusManager.moveFocus(FocusDirection.Previous)
+            else -> false
+        }
     }
 }
 
@@ -94,7 +124,10 @@ private fun TvTitleGrid(titles: List<CatalogItem>, onOpen: (CatalogItem) -> Unit
             modifier = Modifier.fillMaxSize(),
         ) {
             itemsIndexed(titles, key = { _, it -> it.id }, contentType = { _, _ -> "title" }) { index, item ->
-                TvItemCard(item, RowLayout.LANDSCAPE, { onOpen(item) }, if (index == 0) Modifier.initialFocus() else Modifier)
+                TvItemCard(
+                    item, RowLayout.LANDSCAPE, { onOpen(item) },
+                    (if (index == 0) Modifier.initialFocus() else Modifier).wrapRowFocus(index, titles.size),
+                )
             }
         }
     }

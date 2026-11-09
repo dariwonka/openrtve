@@ -76,7 +76,7 @@ fun TvProgramScreen(
                         TvEpisodeCard(
                             item = item,
                             onClick = { onPlay(item) },
-                            modifier = if (index == 0) Modifier.initialFocus() else Modifier,
+                            modifier = (if (index == 0) Modifier.initialFocus() else Modifier).wrapRowFocus(index, episodes.items.size),
                             progress = entry?.takeIf { it.inProgress }?.progress,
                             badge = if (entry?.finished == true) stringResource(R.string.episode_watched) else null,
                         )

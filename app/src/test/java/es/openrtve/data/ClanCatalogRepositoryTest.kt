@@ -60,15 +60,30 @@ class ClanCatalogRepositoryTest {
     }
 
     @Test
-    fun `the general search is closed`() = runTest {
-        general.search = { error("no debe consultarse el buscador general") }
-        general.searchPage = { _, _ -> error("no debe consultarse el buscador general") }
-        general.quickFilters = { error("no debe consultarse el buscador general") }
+    fun `text search goes through, the general quick searches do not`() = runTest {
+        general.search = { query -> es.openrtve.domain.SearchResults(listOf(catalogItem(query)), emptyList()) }
+        general.quickFilters = { error("no deben consultarse las búsquedas predefinidas") }
 
-        assertTrue(clan.search("telediario").isEmpty)
-        assertTrue(clan.searchPage("/videos?search=telediario", 2).items.isEmpty())
+        assertEquals(listOf("corona"), clan.search("corona").programs.map { it.id })
         assertTrue(clan.loadQuickFilters().value.isEmpty())
-        assertTrue(general.calls.isEmpty())
+        assertEquals(listOf("search(corona)"), general.calls)
+    }
+
+    @Test
+    fun `the child profile is what the official Clan app sends`() = runTest {
+        val requested = mutableListOf<String>()
+        val client = object : TextHttpClient {
+            override fun get(url: String): String {
+                requested += url
+                return """{"programs":{"page":{"items":[]}},"videos":{"page":{"items":[]}}}"""
+            }
+            override fun fetch(url: String, etag: String?): TextResponse = error("la búsqueda no se cachea")
+        }
+        val repository = DefaultCatalogRepository(client, RtveJsonParser(), RawDocumentCache(java.nio.file.Files.createTempDirectory("clan-search").toFile()), childProfile = true)
+
+        repository.search("corona mágica")
+
+        assertEquals("https://api.rtve.es/api/search/results?search=corona+m%C3%A1gica&context=tve&tipology=video&type=completo&isChild=true", requested.single())
     }
 
     @Test

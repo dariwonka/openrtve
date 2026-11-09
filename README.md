@@ -14,15 +14,21 @@ son marcas de la Corporación de Radio y Televisión Española.
   editoriales ("Princesas", "Para descubrir dinosaurios"…). Cada título sale
   una sola vez.
 - **Series y Películas.** Dos botones en la barra superior cambian de lista
-  (Series es también el inicio). A la derecha, Ajustes. No hay menú lateral.
+  (Series es también el inicio). A la derecha, Buscar y Ajustes. No hay menú lateral.
 - **Selector.** La tarjeta enfocada lleva un borde rojo y su fila se mantiene en
   el centro de la pantalla, salvo la primera y la última.
 - **Página de una serie:** solo su título y sus vídeos completos en cuadrícula,
   hasta el final (las páginas siguientes se cargan solas). Cada vídeo muestra
   título, temporada y episodio, fecha y duración, y se reproduce al pulsarlo.
   Una película se reproduce directamente desde el inicio.
-- **Solo Clan.** No hay Buscar ni Explorar, los "Similares" del recomendador
-  general están cerrados y la app no abre enlaces externos de `rtve.es`
+- **Buscador infantil.** Busca con el perfil infantil de RTVE (`isChild=true`),
+  el mismo que usa la app oficial de Clan para Android TV: encuentra también
+  dibujos del archivo de RTVE que no están en la portada de Clan.
+- **Recorrido de corrido.** En las cuadrículas, la derecha en la última columna
+  pasa a la fila siguiente y la izquierda en la primera, a la anterior.
+- **Audio en español** por defecto cuando el vídeo lo trae.
+- **Solo infantil.** No hay Explorar, los "Similares" del recomendador general
+  están cerrados y la app no abre enlaces externos de `rtve.es`
   (`ClanCatalogRepository`).
 - **Solo Android TV**, con identidad propia (`es.clanpeques`): se instala junto
   a OpenRTVE.

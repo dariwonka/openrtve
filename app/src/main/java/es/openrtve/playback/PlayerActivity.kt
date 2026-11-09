@@ -456,6 +456,9 @@ class PlayerActivity : ComponentActivity() {
             .apply {
                 if (prefs.maxVideoHeight > 0) setMaxVideoSize(Int.MAX_VALUE, prefs.maxVideoHeight) else clearVideoSizeConstraints()
                 setPreferredTextLanguages(*if (prefs.subtitlesByDefault) arrayOf("es", "spa") else emptyArray())
+                // Siempre en español cuando el vídeo lo trae: muchas series llegan con la versión
+                // original (`qaa`) como primera pista. Elegir otra en el panel sigue funcionando.
+                setPreferredAudioLanguages("es", "spa")
             }
             .build()
     }
