@@ -4,6 +4,17 @@ object RtveUrls {
     const val TV_HOME = "https://www.rtve.es/play/index_apps.json"
     /** Portada de Clan con todas las edades (`television.secciones.portadaInfantil` de la configuración). */
     const val CLAN_HOME = "https://www.rtve.es/play/clan/index_apps.json"
+    /**
+     * Las demás portadas del menú de la app oficial de Clan (`estructuraClanNativa.json`,
+     * `television.menuBloques`): sus tres franjas de edad. Sus títulos se suman al catálogo.
+     */
+    val CLAN_AGE_PORTADAS = listOf(
+        "https://www.rtve.es/play/clan/preescolar/index_apps.json",
+        "https://www.rtve.es/play/clan/infantil/index_apps.json",
+        "https://www.rtve.es/play/clan/junior/index_apps.json",
+    )
+    /** Portada "PELÍCULAS" del mismo menú: todo lo que trae es cine infantil. */
+    const val CLAN_MOVIES_PORTADA = "https://www.rtve.es/play/clan/peliculas-infantiles/index_apps.json"
     /** Cadena Clan en la API (`cadenas/417`), la misma que usa su portada en "Para ver hoy". */
     const val CLAN_CHANNEL_ID = "417"
     const val REMOTE_CONFIG = "https://www.rtve.es/m/configs/rtve_play/2026/estructura2.json"

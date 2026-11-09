@@ -100,8 +100,11 @@ class ClanCatalogTest {
         val repository = FakeCatalogRepository()
         fun row(id: Int, title: String, url: String?) = HomeRow(id = id, title = title, order = id, moduleType = "Collection", presentation = "ColeccionPoster", contentUrl = url)
         repository.portada = { url, _, _ ->
-            assertEquals(RtveUrls.CLAN_HOME, url)
-            loaded(HomeFeed(null, "Clan", listOf(row(0, "Princesas", "https://www.rtve.es/a.json"), row(1, "Rota", "https://www.rtve.es/b.json"), row(2, "Cine", "https://www.rtve.es/c.json"))))
+            if (url == RtveUrls.CLAN_HOME) {
+                loaded(HomeFeed(null, "Clan", listOf(row(0, "Princesas", "https://www.rtve.es/a.json"), row(1, "Rota", "https://www.rtve.es/b.json"), row(2, "Cine", "https://www.rtve.es/c.json"))))
+            } else {
+                loaded(HomeFeed(null, "Otra", emptyList()))
+            }
         }
         repository.module = { row, _, _ ->
             when (row.id) {
@@ -181,5 +184,45 @@ class ClanCatalogTest {
         advanceUntilIdle()
         assertEquals(listOf("Bluey", "Peppa Pig"), second.uiState.value.catalog.series.map { it.title })
         assertEquals(listOf("Bluey", "Peppa Pig"), store.read()?.series?.map { it.title })
+    }
+
+    @Test
+    fun `age portadas add series and the films portada decides what is a film`() = runTest(mainDispatcher.dispatcher) {
+        val repository = FakeCatalogRepository()
+        fun row(id: Int, title: String, url: String) = HomeRow(id = id, title = title, order = id, moduleType = "Collection", presentation = "ColeccionPoster", contentUrl = url)
+        repository.portada = { url, _, _ ->
+            loaded(
+                HomeFeed(
+                    null, url,
+                    when (url) {
+                        RtveUrls.CLAN_HOME -> listOf(row(0, "Favoritas", "https://www.rtve.es/shared.json"))
+                        RtveUrls.CLAN_AGE_PORTADAS.first() -> listOf(row(0, "Para los más peques", "https://www.rtve.es/peques.json"))
+                        // Sin "cine" ni "películas" en el título, y con una colección que también está en la principal.
+                        RtveUrls.CLAN_MOVIES_PORTADA -> listOf(row(0, "Aventuras", "https://www.rtve.es/aventuras.json"), row(1, "Favoritas", "https://www.rtve.es/shared.json"))
+                        else -> emptyList()
+                    },
+                ),
+            )
+        }
+        repository.module = { row, _, _ ->
+            loaded(
+                CatalogModule(
+                    row.title,
+                    when (row.contentUrl) {
+                        "https://www.rtve.es/peques.json" -> listOf(program("3", "Peppa Pig"))
+                        "https://www.rtve.es/aventuras.json" -> listOf(catalogItem("51", title = "Atrapa la bandera"))
+                        else -> listOf(catalogItem("52", title = "Tadeo Jones"))
+                    },
+                ),
+            )
+        }
+
+        val viewModel = ClanCatalogViewModel(repository)
+        advanceUntilIdle()
+
+        assertEquals(listOf("Peppa Pig"), viewModel.uiState.value.catalog.series.map { it.title })
+        assertEquals(listOf("Atrapa la bandera", "Tadeo Jones"), viewModel.uiState.value.catalog.movies.map { it.title })
+        // La colección compartida se descarga una sola vez.
+        assertEquals(1, repository.calls.count { it.startsWith("module(https://www.rtve.es/shared.json") })
     }
 }

@@ -40,10 +40,16 @@ El reproductor, la caché y el historial de lo visto son los de OpenRTVE.
 - **Series:** del listado A-Z de la cadena Clan
   (`api2.rtve.es/api/cadenas/417/programas.json?inazlist=true&play=true`, el
   patrón que la configuración de RTVE da para el buscador A-Z de cada cadena),
-  más las series que aparezcan en las filas de la portada de Clan.
+  más las series que aparezcan en las filas de las portadas del menú de la app
+  oficial de Clan: la principal y las de preescolar, infantil y junior.
 - **Películas:** los vídeos que RTVE clasifica como película, las piezas de un
-  contenedor de cine y lo que venga en una fila titulada como películas o cine
-  ("Todo el cine", "Cine para ver en familia").
+  contenedor de cine, lo que venga en una fila titulada como películas o cine
+  ("Todo el cine", "Cine para ver en familia") y todo lo de la portada
+  "PELÍCULAS" de Clan (`/play/clan/peliculas-infantiles/`).
+
+Lo infantil del archivo de RTVE que no sale en ninguna de esas portadas (por
+ejemplo, "La corona mágica") solo se encuentra con el buscador: falta saber qué
+campo de la API lo marca como infantil para poder listarlo.
 
 `buildClanCatalog` lo funde todo en dos listas de títulos únicos. La última copia
 se guarda (`ClanCatalogStore`) y es lo que se pinta al abrir la app; la versión

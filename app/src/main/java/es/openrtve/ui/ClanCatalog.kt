@@ -45,7 +45,12 @@ data class ClanCatalog(
 }
 
 /** Una fila de la portada ya descargada: su título editorial y sus piezas. */
-data class LoadedRow(val title: String, val items: List<CatalogItem>)
+data class LoadedRow(
+    val title: String,
+    val items: List<CatalogItem>,
+    /** Viene de la portada de películas: lo que trae es cine aunque su título no lo diga. */
+    val isMovies: Boolean = false,
+)
 
 /**
  * Reúne las filas editoriales de la portada de Clan ("Princesas", "Para descubrir
@@ -63,7 +68,7 @@ fun buildClanCatalog(rows: List<LoadedRow>): ClanCatalog {
     val fromEpisodes = linkedMapOf<String, CatalogItem>()
     val movies = linkedMapOf<String, CatalogItem>()
     for (row in rows) {
-        val movieRow = row.title.isMovieRowTitle()
+        val movieRow = row.isMovies || row.title.isMovieRowTitle()
         for (item in row.items) {
             when (item.kind) {
                 ContentKind.PROGRAM -> (if (movieRow) movies else programs).addTitle(item.copy(subtitle = null))
@@ -125,9 +130,10 @@ data class ClanCatalogUiState(
  * sin red: la app abre con los títulos ya en pantalla. Después lo rehace en segundo
  * plano y lo sustituye solo si ha cambiado:
  *
- * - el listado A-Z de la cadena Clan aporta todas las series;
- * - las filas de la portada (seis a la vez) aportan las películas y las series que
- *   el listado no traiga.
+ * - el listado A-Z de la cadena Clan aporta sus series;
+ * - las filas de las cinco portadas del menú de Clan (la principal, las tres franjas
+ *   de edad y la de películas; seis filas a la vez) aportan las películas y las
+ *   series que el listado no traiga.
  *
  * Una fuente que falla no impide usar las demás; si no hay nada que enseñar, se
  * explica y se puede reintentar.
@@ -187,17 +193,34 @@ class ClanCatalogViewModel(
         }
 
         val listing = async { orNull { repository.loadChannelPrograms(RtveUrls.CLAN_CHANNEL_ID).value } }
-        val feed = orNull { repository.loadPortada(RtveUrls.CLAN_HOME).value }
-        val rows = feed?.rows.orEmpty()
+        // La portada de Clan, sus tres franjas de edad y la de películas, a la vez.
+        val portadas = listOf(RtveUrls.CLAN_HOME to false) + RtveUrls.CLAN_AGE_PORTADAS.map { it to false } + (RtveUrls.CLAN_MOVIES_PORTADA to true)
+        val feeds = portadas
+            .map { (url, isMovies) -> async { orNull { repository.loadPortada(url).value }?.let { it to isMovies } } }
+            .awaitAll()
+            .filterNotNull()
         // Los accesos directos de una fila `links` ya vienen en la portada.
-        val linked = rows.filter { it.isInline }.map { row ->
-            LoadedRow(row.title, row.links.filter { it.kind == LinkKind.PROGRAM }.mapNotNull { link ->
-                link.apiId?.let { referenceItem(it, ContentKind.PROGRAM, link.title, link.imageUrl) }
-            })
+        val linked = feeds.flatMap { (feed, isMovies) ->
+            feed.rows.filter { it.isInline }.map { row ->
+                LoadedRow(
+                    row.title,
+                    row.links.filter { it.kind == LinkKind.PROGRAM }.mapNotNull { link ->
+                        link.apiId?.let { referenceItem(it, ContentKind.PROGRAM, link.title, link.imageUrl) }
+                    },
+                    isMovies,
+                )
+            }
         }
+        // Las portadas comparten colecciones: cada una se descarga una vez, y es de cine
+        // si alguna de las que la enseñan es la de películas.
+        val remote = feeds
+            .flatMap { (feed, isMovies) -> feed.rows.filter { !it.isInline && !it.isLive && it.contentUrl != null }.map { it to isMovies } }
+            .groupBy({ it.first.contentUrl }, { it })
+            .values
+            .map { same -> same.first().first to same.any { it.second } }
         val permits = Semaphore(MAX_PARALLEL_ROWS)
-        val loaded = rows.filter { !it.isInline && !it.isLive && it.contentUrl != null }
-            .map { row -> async { permits.withPermit { orNull { LoadedRow(row.title, repository.loadModule(row).value.items) } } } }
+        val loaded = remote
+            .map { (row, isMovies) -> async { permits.withPermit { orNull { LoadedRow(row.title, repository.loadModule(row).value.items, isMovies) } } } }
             .awaitAll()
             .filterNotNull()
         // El listado va al final: la imagen y el nombre de una portada mandan sobre los suyos.
