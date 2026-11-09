@@ -14,6 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "OpenRTVE"
+rootProject.name = "ClanPeques"
 include(":app")
-include(":baselineprofile")

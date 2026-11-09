@@ -11,13 +11,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.focusGroup
@@ -50,8 +51,6 @@ import es.openrtve.ui.rememberCatalogActions
 import es.openrtve.ui.ProvideClock
 import es.openrtve.ui.text
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * Raíz de TV según las guías de Compose for TV: `NavigationDrawer` en el borde
@@ -59,7 +58,7 @@ import kotlinx.coroutines.flow.emptyFlow
  * derecha. Atrás lo maneja el mando; no hay botones de "Atrás" en pantalla.
  */
 @Composable
-fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
+fun TvApp(container: AppContainer) {
     val repository = container.catalogRepository
     val navigation: NavigationViewModel = viewModel()
     val nav by navigation.state.collectAsStateWithLifecycle()
@@ -67,6 +66,27 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
     val actions = rememberCatalogActions(container, navigation)
 
     BackHandler(enabled = nav.canGoBack, onBack = navigation::pop)
+
+    // Filtro por edad: sin franja elegida (primer arranque) o al cambiarla desde
+    // Ajustes, la app solo enseña el selector. Atrás cancela un cambio; en el
+    // primer arranque sale de la app.
+    val settings by container.settings.settings.collectAsStateWithLifecycle()
+    var changingAge by rememberSaveable { mutableStateOf(false) }
+    if (!settings.ageChosen || changingAge) {
+        BackHandler(enabled = settings.ageChosen) { changingAge = false }
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            ProvideScreenInitialFocus {
+                TvAgeScreen(repository) { url, title ->
+                    container.settings.update { it.copy(ageChosen = true, agePortadaUrl = url, ageTitle = title) }
+                    changingAge = false
+                    navigation.selectTab(Tab.HOME)
+                }
+            }
+        }
+        return
+    }
+    // Inicio es la portada de la franja elegida o, sin franja, Clan completo.
+    val homeUrl = settings.agePortadaUrl ?: RtveUrls.CLAN_HOME
 
     val message = nav.message?.text(context)
     val pending = nav.message
@@ -76,10 +96,6 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
             delay(MESSAGE_VISIBLE_MS)
             navigation.dismissMessage(pending)
         }
-    }
-
-    LaunchedEffect(incomingLinks, actions) {
-        incomingLinks.collect(actions::openIncomingLink)
     }
 
     val destination = nav.current
@@ -98,9 +114,7 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
                         .focusGroup(),
                 ) {
                     Spacer(Modifier.height(TvVerticalMargin))
-                    DrawerEntry(Icons.Filled.Home, stringResource(R.string.tab_home), nav.global == null && nav.tab == Tab.HOME, selectedEntry) { navigation.selectTab(Tab.HOME) }
-                    DrawerEntry(Icons.Filled.Search, stringResource(R.string.tab_search), nav.global == null && nav.tab == Tab.SEARCH, selectedEntry) { navigation.selectTab(Tab.SEARCH) }
-                    DrawerEntry(Icons.Filled.Menu, stringResource(R.string.tab_explore), nav.global == null && nav.tab == Tab.EXPLORE, selectedEntry) { navigation.selectTab(Tab.EXPLORE) }
+                    DrawerEntry(Icons.Filled.Home, stringResource(R.string.tab_home), nav.global == null, selectedEntry) { navigation.selectTab(Tab.HOME) }
                     DrawerEntry(Icons.Filled.Settings, stringResource(R.string.settings_title), destination == GlobalDestination.Settings, selectedEntry) {
                         if (destination != GlobalDestination.Settings) actions.openSettings()
                     }
@@ -143,23 +157,20 @@ fun TvApp(container: AppContainer, incomingLinks: Flow<String> = emptyFlow()) {
                             onOpenProgram = actions.openProgram,
                             onOpenItem = actions.openItem,
                         )
-                        GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage)
-                        null -> when (nav.tab) {
-                            Tab.HOME -> TvPortadaScreen(
-                                repository = repository,
-                                url = RtveUrls.TV_HOME,
-                                title = "",
-                                history = container.watchHistory,
-                                onOpenItem = actions.openItem,
-                                onOpenRow = actions.openRow,
-                                onOpenLink = actions.openLink,
-                                onResume = actions.playItem,
-                                onRemoveFromHistory = actions.removeFromHistory,
-                                reselectRequest = nav.rootRequests.getValue(Tab.HOME),
-                            )
-                            Tab.SEARCH -> TvSearchScreen(repository, actions.openItem, reselectRequest = nav.rootRequests.getValue(Tab.SEARCH))
-                            Tab.EXPLORE -> TvExploreScreen(repository, actions.openCategory, actions.openItem, reselectRequest = nav.rootRequests.getValue(Tab.EXPLORE))
-                        }
+                        GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage, onChangeAge = { changingAge = true })
+                        // Única raíz: no hay Buscar ni Explorar, que llevarían fuera de Clan.
+                        null -> TvPortadaScreen(
+                            repository = repository,
+                            url = homeUrl,
+                            title = "",
+                            history = container.watchHistory,
+                            onOpenItem = actions.openItem,
+                            onOpenRow = actions.openRow,
+                            onOpenLink = actions.openLink,
+                            onResume = actions.playItem,
+                            onRemoveFromHistory = actions.removeFromHistory,
+                            reselectRequest = nav.rootRequests.getValue(Tab.HOME),
+                        )
                     } }
                 }
                 if (message != null) {

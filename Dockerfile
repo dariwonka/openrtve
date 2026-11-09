@@ -35,4 +35,4 @@ RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
 
 FROM scratch AS artifact
-COPY --from=verify /workspace/app/build/outputs/apk/debug/app-debug.apk /openrtve-debug.apk
+COPY --from=verify /workspace/app/build/outputs/apk/debug/app-debug.apk /clan-peques-debug.apk

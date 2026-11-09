@@ -2,6 +2,8 @@ package es.openrtve
 
 import android.content.Context
 import es.openrtve.data.AppSettings
+import es.openrtve.data.CatalogRepository
+import es.openrtve.data.ClanCatalogRepository
 import es.openrtve.data.DeepLinkResolver
 import es.openrtve.data.DefaultCatalogRepository
 import es.openrtve.data.DrmTokenClient
@@ -26,10 +28,13 @@ class AppContainer(context: Context) {
     val mediaHttpClient: OkHttpClient = okHttpClient.newBuilder().apply { networkInterceptors().clear() }.build()
     private val httpClient = SafeHttpsClient(okHttpClient, hostPolicy)
     val documentCache = RawDocumentCache(context.cacheDir.resolve("catalog"))
-    val catalogRepository = DefaultCatalogRepository(
-        httpClient = httpClient,
-        parser = RtveJsonParser(),
-        cache = documentCache,
+    /** Todo el catálogo pasa por el filtro infantil: la UI no tiene otra entrada. */
+    val catalogRepository: CatalogRepository = ClanCatalogRepository(
+        DefaultCatalogRepository(
+            httpClient = httpClient,
+            parser = RtveJsonParser(),
+            cache = documentCache,
+        ),
     )
     val settings = AppSettings(context)
     val deepLinkResolver = DeepLinkResolver(catalogRepository)

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OpenRTVE</string>
+    <string name="app_name">Clan Peques</string>
 
     <string name="tab_home">Inicio</string>
     <string name="tab_search">Buscar</string>
@@ -24,7 +24,13 @@
     <string name="settings_cache_cleared">Caché borrada</string>
     <string name="settings_about">Acerca de</string>
     <string name="settings_version">Versión %1$s</string>
-    <string name="settings_about_summary">Cliente independiente para el catálogo público de RTVE Play. No está afiliado a RTVE.</string>
+    <string name="settings_about_summary">Cliente independiente para el catálogo infantil público de RTVE (Clan). No está afiliado a RTVE. Basado en OpenRTVE, bajo licencia GPL-3.0.</string>
+
+    <string name="age_title">¿Quién va a ver la tele?</string>
+    <string name="age_summary">Elige una edad. Se puede cambiar después en Ajustes.</string>
+    <string name="age_all">Todas las edades</string>
+    <string name="settings_age">Edad</string>
+    <string name="settings_change_age">Cambiar edad</string>
 
     <string name="explore_kids">Infantil</string>
     <string name="explore_topics">Temáticas</string>

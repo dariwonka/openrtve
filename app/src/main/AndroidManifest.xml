@@ -39,8 +39,8 @@
             tools:ignore="DiscouragedApi"
             tools:targetApi="o" />
 
-        <!-- Launcher exclusivo de Android TV: su checklist exige landscape;
-             no se aplica a la actividad móvil ni al reproductor adaptable. -->
+        <!-- Única entrada de la app, pensada para Android TV: su checklist exige landscape.
+             No hay filtros VIEW ni SEND: un enlace externo abriría contenido ajeno a Clan. -->
         <activity
             android:name=".ui.tv.TvActivity"
             android:exported="true"
@@ -51,43 +51,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
-        </activity>
-
-        <activity
-            android:name=".ui.mobile.MainActivity"
-            android:exported="true"
-            android:launchMode="singleTask">
+            <!-- Algunas teles y cajas Android sin Leanback solo listan las apps con LAUNCHER. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <!-- Enlaces de RTVE Play: play.rtve.es/pr|v|d/{id} y las URL web de rtve.es/play/...
-                 Sin autoVerify: RTVE no publica assetlinks para terceros (ver README). -->
-            <intent-filter android:autoVerify="false">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" />
-                <data android:host="play.rtve.es" />
-                <data android:pathPrefix="/pr/" />
-                <data android:pathPrefix="/v/" />
-                <data android:pathPrefix="/d/" />
-                <data android:pathPrefix="/content" />
-            </intent-filter>
-            <intent-filter android:autoVerify="false">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" />
-                <data android:host="www.rtve.es" />
-                <data android:host="rtve.es" />
-                <data android:pathPrefix="/play/videos/" />
-            </intent-filter>
-            <!-- "Compartir con OpenRTVE" desde el navegador o cualquier app: no depende de verificar el dominio. -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
 

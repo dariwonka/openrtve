@@ -2,6 +2,8 @@ package es.openrtve.domain
 
 object RtveUrls {
     const val TV_HOME = "https://www.rtve.es/play/index_apps.json"
+    /** Portada de Clan con todas las edades (`television.secciones.portadaInfantil` de la configuración). */
+    const val CLAN_HOME = "https://www.rtve.es/play/clan/index_apps.json"
     const val REMOTE_CONFIG = "https://www.rtve.es/m/configs/rtve_play/2026/estructura2.json"
     /** La que lee la app oficial de Android TV: su propio menú y sus propias imágenes. */
     const val REMOTE_CONFIG_TV = "https://www.rtve.es/m/configs/rtve_play/2026/estructuraAndroidTV2.json"

@@ -104,7 +104,7 @@ class SafeHttpsClient(
     }
 
     companion object {
-        val USER_AGENT = "OpenRTVE-Android/${BuildConfig.VERSION_NAME}"
+        val USER_AGENT = "ClanPeques-AndroidTV/${BuildConfig.VERSION_NAME}"
         private const val MAX_REDIRECTS = 3
 
         /**
