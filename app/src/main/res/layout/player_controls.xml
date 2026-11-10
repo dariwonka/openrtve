@@ -8,7 +8,6 @@
     android:id="@+id/player_controls"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#8A000000"
     tools:ignore="Overdraw">
 
     <LinearLayout
@@ -56,12 +55,6 @@
             style="@style/PlayerIconButton"
             android:contentDescription="@string/player_pip"
             android:src="@drawable/ic_player_pip" />
-
-        <ImageButton
-            android:id="@+id/player_lock"
-            style="@style/PlayerIconButton"
-            android:contentDescription="@string/player_lock"
-            android:src="@drawable/ic_player_lock" />
     </LinearLayout>
 
     <LinearLayout

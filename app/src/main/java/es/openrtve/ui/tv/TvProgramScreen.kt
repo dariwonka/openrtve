@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -43,6 +44,8 @@ fun TvProgramScreen(
     val viewModel = screen.viewModel
     val state = screen.state
     val episodes = state.episodes
+    // Los vídeos de menos de 4 minutos (avances, cortes) no se enseñan.
+    val shown = remember(episodes.items) { episodes.items.filter { it.durationMs?.let { ms -> ms >= MIN_EPISODE_MS } != false } }
     val error = episodes.error
     val context = LocalContext.current
     val gridState = rememberLazyGridState()
@@ -62,7 +65,7 @@ fun TvProgramScreen(
     Column(Modifier.fillMaxSize()) {
         TvScreenTitle(state.title)
         when {
-            episodes.items.isNotEmpty() -> ProvideTvCenteredScroll {
+            shown.isNotEmpty() -> ProvideTvCenteredScroll {
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(TvGridColumns),
@@ -71,12 +74,12 @@ fun TvProgramScreen(
                     verticalArrangement = Arrangement.spacedBy(24.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    itemsIndexed(episodes.items, key = { _, it -> it.id }, contentType = { _, _ -> "video" }) { index, item ->
+                    itemsIndexed(shown, key = { _, it -> it.id }, contentType = { _, _ -> "video" }) { index, item ->
                         val entry = screen.entriesById[item.id]
                         TvEpisodeCard(
                             item = item,
                             onClick = { onPlay(item) },
-                            modifier = (if (index == 0) Modifier.initialFocus() else Modifier).wrapRowFocus(index, episodes.items.size),
+                            modifier = (if (index == 0) Modifier.initialFocus() else Modifier).wrapRowFocus(index, shown.size),
                             progress = entry?.takeIf { it.inProgress }?.progress,
                             badge = if (entry?.finished == true) stringResource(R.string.episode_watched) else null,
                         )
@@ -98,3 +101,5 @@ fun TvProgramScreen(
         }
     }
 }
+
+private const val MIN_EPISODE_MS = 4 * 60_000L

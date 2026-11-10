@@ -58,6 +58,10 @@ import es.openrtve.domain.PreviewSprite
 internal fun PlayerSettingsPanel(menu: PlayerMenu, onSelect: (PlayerOption) -> Unit, onDismiss: () -> Unit) {
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density * 0.75f, density.fontScale),
+    ) {
     Box(
         Modifier
             .fillMaxSize()
@@ -86,9 +90,10 @@ internal fun PlayerSettingsPanel(menu: PlayerMenu, onSelect: (PlayerOption) -> U
                     val focus = if (sectionIndex == 0 && index == 0) Modifier.focusRequester(firstFocus) else Modifier
                     OptionRow(option, focus) { onSelect(option) }
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
             }
         }
+    }
     }
 }
 
@@ -110,7 +115,7 @@ private fun OptionRow(option: PlayerOption, modifier: Modifier, onClick: () -> U
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
     ) {
         Text(
             text = option.label,

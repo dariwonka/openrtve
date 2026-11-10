@@ -11,11 +11,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,12 +108,14 @@ internal fun TvCatalogScreen(
     section: ClanSection,
     onOpen: (CatalogItem) -> Unit,
     onRetry: () -> Unit,
+    gridState: LazyGridState,
+    focusId: String?,
     reselectRequest: Int = 0,
 ) {
     val titles = state.catalog.titles(section)
     val error = state.error
     when {
-        titles.isNotEmpty() -> key(section) { TvTitleGrid(titles, onOpen, reselectRequest) }
+        titles.isNotEmpty() -> key(section) { TvTitleGrid(titles, onOpen, gridState, focusId, reselectRequest) }
         state.isLoading -> TvCenterMessage(stringResource(R.string.state_loading))
         error != null -> TvCenterMessage(error.text(LocalContext.current), onRetry)
         else -> TvCenterMessage(stringResource(R.string.catalog_empty), onRetry)
@@ -110,10 +123,29 @@ internal fun TvCatalogScreen(
 }
 
 @Composable
-private fun TvTitleGrid(titles: List<CatalogItem>, onOpen: (CatalogItem) -> Unit, reselectRequest: Int) {
-    val gridState = rememberLazyGridState()
+private fun TvTitleGrid(
+    titles: List<CatalogItem>,
+    onOpen: (CatalogItem) -> Unit,
+    gridState: LazyGridState,
+    focusId: String?,
+    reselectRequest: Int,
+) {
+    val scope = rememberCoroutineScope()
+    val first = remember { FocusRequester() }
+    var focusedIndex by remember { mutableIntStateOf(-1) }
+    // Al volver de una serie, el foco es de la serie que se abrió; si no, del primer título.
+    val target = titles.indexOfFirst { it.id == focusId }.coerceAtLeast(0)
+    val toStart: () -> Unit = {
+        scope.launch {
+            gridState.scrollToItem(0)
+            withFrameNanos { }
+            runCatching { first.requestFocus() }
+        }
+    }
     // Repetir Inicio vuelve al principio de la lista.
     RootReselectionEffect(reselectRequest) { gridState.scrollToItem(0) }
+    // Atrás desde un título lleva al primero; desde el primero sale de la app.
+    BackHandler(enabled = focusedIndex > 0, onBack = toStart)
     ProvideTvCenteredScroll {
         LazyVerticalGrid(
             state = gridState,
@@ -124,9 +156,16 @@ private fun TvTitleGrid(titles: List<CatalogItem>, onOpen: (CatalogItem) -> Unit
             modifier = Modifier.fillMaxSize(),
         ) {
             itemsIndexed(titles, key = { _, it -> it.id }, contentType = { _, _ -> "title" }) { index, item ->
+                val start = when {
+                    index == target -> Modifier.initialFocus(requester = if (index == 0) first else null)
+                    index == 0 -> Modifier.focusRequester(first)
+                    else -> Modifier
+                }
                 TvItemCard(
                     item, RowLayout.LANDSCAPE, { onOpen(item) },
-                    (if (index == 0) Modifier.initialFocus() else Modifier).wrapRowFocus(index, titles.size),
+                    start
+                        .onFocusChanged { if (it.hasFocus) focusedIndex = index else if (focusedIndex == index) focusedIndex = -1 }
+                        .wrapRowFocus(index, titles.size),
                 )
             }
         }

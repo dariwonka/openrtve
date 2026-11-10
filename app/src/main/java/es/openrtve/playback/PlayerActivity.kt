@@ -817,10 +817,6 @@ private fun PlaybackScreen(
                         if (l != oldL || t != oldT || r != oldR || b != oldB) activity.refreshPictureInPictureParams()
                     }
                     view.findViewById<ImageButton>(R.id.player_back).setOnClickListener { onBack() }
-                    view.findViewById<ImageButton>(R.id.player_lock).setOnClickListener {
-                        view.hideController()
-                        onLock()
-                    }
                     view.findViewById<ImageButton>(R.id.player_pip).apply {
                         visibility = if (canPictureInPicture) View.VISIBLE else View.GONE
                         setOnClickListener { onPictureInPicture() }

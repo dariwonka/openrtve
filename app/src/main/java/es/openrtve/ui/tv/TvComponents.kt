@@ -91,9 +91,9 @@ internal fun ProvideScreenInitialFocus(content: @Composable () -> Unit) {
  * Solo lo obtiene el primero que lo consigue en cada pantalla.
  */
 @Composable
-internal fun Modifier.initialFocus(enabled: Boolean = true): Modifier {
+internal fun Modifier.initialFocus(enabled: Boolean = true, requester: FocusRequester? = null): Modifier {
     val screen = LocalScreenInitialFocus.current ?: remember { ScreenInitialFocus() }
-    val requester = remember { FocusRequester() }
+    val requester = requester ?: remember { FocusRequester() }
     LaunchedEffect(screen, enabled) {
         if (enabled) requestFocusUntilGranted(requester) { screen.granted }
     }

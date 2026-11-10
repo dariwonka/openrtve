@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,10 @@ fun TvApp(container: AppContainer) {
     )
     val catalog by catalogViewModel.uiState.collectAsStateWithLifecycle()
     var section by rememberSaveable { mutableStateOf(ClanSection.SERIES) }
+    // El desplazamiento de cada lista y la serie abierta sobreviven a entrar en una serie y volver.
+    val seriesGrid = rememberLazyGridState()
+    val moviesGrid = rememberLazyGridState()
+    var lastOpened by rememberSaveable { mutableStateOf<String?>(null) }
 
     BackHandler(enabled = nav.canGoBack, onBack = navigation::pop)
 
@@ -74,6 +79,7 @@ fun TvApp(container: AppContainer) {
         val atRoot = destination == null && nav.tab == Tab.HOME
         val changed = section != chosen
         section = chosen
+        if (changed) lastOpened = null
         if (!atRoot || !changed) {
             navigation.selectTab(Tab.HOME)
             // Si al volver a Inicio quedaba una serie abierta, se cierra: el botón lleva a la lista.
@@ -133,7 +139,12 @@ fun TvApp(container: AppContainer) {
                         ) else TvCatalogScreen(
                             state = catalog,
                             section = section,
-                            onOpen = { item -> if (item.kind == ContentKind.VIDEO) actions.play(item) else actions.openItem(item) },
+                            onOpen = { item ->
+                                lastOpened = item.id
+                                if (item.kind == ContentKind.VIDEO) actions.play(item) else actions.openItem(item)
+                            },
+                            gridState = if (section == ClanSection.SERIES) seriesGrid else moviesGrid,
+                            focusId = lastOpened,
                             onRetry = catalogViewModel::retry,
                             reselectRequest = nav.rootRequests.getValue(Tab.HOME),
                         )

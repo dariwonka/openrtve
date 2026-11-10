@@ -36,6 +36,11 @@ fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit) {
     val versionName = screen.versionName
     val cleared = stringResource(R.string.settings_cache_cleared)
 
+    // Todo el menú a ~80 %: más ajustado, sin que parezca para un cartel.
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density * 0.8f, density.fontScale),
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -72,6 +77,7 @@ fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit) {
         TvSettingsLabel(stringResource(R.string.settings_about))
         Text(stringResource(R.string.settings_version, versionName), style = MaterialTheme.typography.bodyLarge)
         Text(stringResource(R.string.settings_about_summary), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+    }
     }
 }
 
