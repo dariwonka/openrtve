@@ -141,6 +141,8 @@ data class ClanCatalogUiState(
 class ClanCatalogViewModel(
     private val repository: CatalogRepository,
     private val store: ClanCatalogStore? = null,
+    /** Programas infantiles de RTVE (género Infantil) que se suman al catálogo de Clan. */
+    private val seed: List<CatalogItem> = emptyList(),
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ClanCatalogUiState())
     val uiState: StateFlow<ClanCatalogUiState> = mutableUiState.asStateFlow()
@@ -157,9 +159,9 @@ class ClanCatalogViewModel(
         job = viewModelScope.launch {
             mutableUiState.update { it.copy(isLoading = it.catalog.isEmpty, error = null) }
             if (mutableUiState.value.catalog.isEmpty) {
-                store?.read()?.let { saved ->
-                    mutableUiState.update { it.copy(catalog = ClanCatalog(saved.series, saved.movies), isLoading = false) }
-                }
+                val saved = store?.read()
+                val start = if (saved != null) ClanCatalog(saved.series, saved.movies) else buildClanCatalog(listOf(LoadedRow(SEED_ROW_TITLE, seed)))
+                if (!start.isEmpty) mutableUiState.update { it.copy(catalog = start, isLoading = false) }
             }
             try {
                 val fresh = download()
@@ -224,7 +226,7 @@ class ClanCatalogViewModel(
             .awaitAll()
             .filterNotNull()
         // El listado va al final: la imagen y el nombre de una portada mandan sobre los suyos.
-        val catalog = buildClanCatalog(linked + loaded + LoadedRow(AZ_ROW_TITLE, listing.await().orEmpty()))
+        val catalog = buildClanCatalog(listOf(LoadedRow(SEED_ROW_TITLE, seed)) + linked + loaded + LoadedRow(AZ_ROW_TITLE, listing.await().orEmpty()))
         val failure = firstFailure
         if (catalog.isEmpty && failure != null) throw failure
         catalog
@@ -234,5 +236,6 @@ class ClanCatalogViewModel(
         const val MAX_PARALLEL_ROWS = 6
         /** Nombre interno de la "fila" del listado A-Z; no es de películas. */
         const val AZ_ROW_TITLE = "A-Z"
+        const val SEED_ROW_TITLE = "Infantil"
     }
 }

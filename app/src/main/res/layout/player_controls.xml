@@ -65,40 +65,6 @@
     </LinearLayout>
 
     <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:gravity="center"
-        android:orientation="horizontal">
-
-        <ImageButton
-            android:id="@id/exo_rew"
-            style="@style/PlayerIconButton"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:contentDescription="@string/player_rewind"
-            android:src="@drawable/ic_player_rewind" />
-
-        <ImageButton
-            android:id="@id/exo_play_pause"
-            style="@style/PlayerIconButton"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:layout_marginStart="24dp"
-            android:layout_marginEnd="24dp"
-            android:contentDescription="@string/player_play_pause"
-            android:scaleType="fitCenter" />
-
-        <ImageButton
-            android:id="@id/exo_ffwd"
-            style="@style/PlayerIconButton"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:contentDescription="@string/player_forward"
-            android:src="@drawable/ic_player_forward" />
-    </LinearLayout>
-
-    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
@@ -152,11 +118,28 @@
                 android:visibility="gone" />
         </LinearLayout>
 
-        <androidx.media3.ui.DefaultTimeBar
-            android:id="@id/exo_progress"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="26dp"
-            app:played_color="@color/openrtve_accent"
-            app:scrubber_color="@color/openrtve_accent" />
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@id/exo_play_pause"
+                style="@style/PlayerIconButton"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:contentDescription="@string/player_play_pause"
+                android:scaleType="fitCenter" />
+
+            <androidx.media3.ui.DefaultTimeBar
+                android:id="@id/exo_progress"
+                android:layout_width="0dp"
+                android:layout_height="26dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                app:played_color="@color/openrtve_accent"
+                app:scrubber_color="@color/openrtve_accent" />
+        </LinearLayout>
     </LinearLayout>
 </FrameLayout>

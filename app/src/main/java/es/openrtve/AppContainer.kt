@@ -16,7 +16,7 @@ import es.openrtve.domain.PlaybackResolver
 import es.openrtve.domain.RtveHostPolicy
 import okhttp3.OkHttpClient
 
-class AppContainer(context: Context) {
+class AppContainer(private val context: Context) {
     private val hostPolicy = RtveHostPolicy()
     /** Único cliente de red de la app: lo comparten catálogo, licencias DRM e imágenes. */
     val okHttpClient: OkHttpClient = SafeHttpsClient.buildOkHttpClient(hostPolicy)
@@ -40,9 +40,25 @@ class AppContainer(context: Context) {
     )
     val settings = AppSettings(context)
     /** Copia del catálogo del inicio: con ella la app abre sin esperar a la red. */
+    /** Programas con género Infantil en RTVE (recogidos de su catálogo), que se suman a Clan. */
+    val infantilSeed: List<es.openrtve.domain.CatalogItem> by lazy { loadInfantilSeed(context) }
     val clanCatalogStore = ClanCatalogStore(context.filesDir.resolve("clan-catalog.json"))
     val deepLinkResolver = DeepLinkResolver(catalogRepository)
     val watchHistory = WatchHistory(context.filesDir.resolve("watch-history.json"))
     val playbackResolver = PlaybackResolver()
     val drmTokenClient = DrmTokenClient(httpClient)
+}
+
+private fun loadInfantilSeed(context: Context): List<es.openrtve.domain.CatalogItem> = try {
+    val raw = context.assets.open("infantil.json").bufferedReader().use { it.readText() }
+    kotlinx.serialization.json.Json.parseToJsonElement(raw).let { it as kotlinx.serialization.json.JsonArray }.mapNotNull { element ->
+        val obj = element as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+        fun field(name: String) = (obj[name] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+        val id = field("i") ?: return@mapNotNull null
+        val title = field("t") ?: return@mapNotNull null
+        es.openrtve.domain.referenceItem(id, es.openrtve.domain.ContentKind.PROGRAM, title, field("p"))
+            .copy(posterUrl = field("q"))
+    }
+} catch (error: Exception) {
+    emptyList()
 }

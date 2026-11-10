@@ -169,6 +169,7 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, hideControlsOnBack)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
@@ -229,6 +230,66 @@ class PlayerActivity : ComponentActivity() {
      * Compose: se reenvían al PlayerView para que muestre los controles y, una
      * vez visibles, el foco pasa a sus botones.
      */
+    private val hideControlsOnBack = object : androidx.activity.OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            playerView?.hideController()
+        }
+    }
+
+    private var seekTarget = 0L
+    private var seekHoldStart = 0L
+    private var seekLastStep = 0L
+
+    /**
+     * Con los controles a la vista, izquierda/derecha saltan un minuto por pulsación y,
+     * manteniendo la tecla, el salto crece poco a poco; el botón central pausa/reanuda.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val view = playerView
+        if (view != null && menu == null && !locked && view.useController && view.isControllerFullyVisible) {
+            val focused = currentFocus?.id
+            val onBar = focused == null || focused == androidx.media3.ui.R.id.exo_progress ||
+                focused == androidx.media3.ui.R.id.exo_play_pause
+            val key = event.keyCode
+            if (onBar && (key == android.view.KeyEvent.KEYCODE_DPAD_LEFT || key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)) {
+                if (event.action == android.view.KeyEvent.ACTION_DOWN) seekByKey(view, key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT, event.repeatCount)
+                return true
+            }
+            if (focused == androidx.media3.ui.R.id.exo_progress &&
+                (key == android.view.KeyEvent.KEYCODE_DPAD_CENTER || key == android.view.KeyEvent.KEYCODE_ENTER)
+            ) {
+                if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    view.player?.let { if (it.isPlaying) it.pause() else it.play() }
+                    view.showController()
+                }
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun seekByKey(view: PlayerView, forward: Boolean, repeat: Int) {
+        val player = view.player ?: return
+        val now = android.os.SystemClock.uptimeMillis()
+        if (repeat == 0) {
+            seekTarget = player.currentPosition
+            seekHoldStart = now
+            seekLastStep = 0L
+        } else if (now - seekLastStep < SEEK_REPEAT_INTERVAL_MS || now - seekHoldStart < SEEK_HOLD_DELAY_MS) {
+            return
+        }
+        val heldSeconds = if (repeat == 0) 0L else (now - seekHoldStart) / 1000
+        val step = SEEK_STEP_MS * (1 + heldSeconds).coerceAtMost(SEEK_MAX_FACTOR)
+        val duration = player.duration
+        var target = seekTarget + if (forward) step else -step
+        target = target.coerceAtLeast(0L)
+        if (duration > 0) target = target.coerceAtMost(duration)
+        seekTarget = target
+        seekLastStep = now
+        player.seekTo(target)
+        view.showController()
+    }
+
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
         if (menu != null) return super.onKeyDown(keyCode, event)
         val view = playerView
@@ -678,6 +739,10 @@ class PlayerActivity : ComponentActivity() {
     }
 
     companion object {
+        private const val SEEK_STEP_MS = 60_000L
+        private const val SEEK_MAX_FACTOR = 10L
+        private const val SEEK_HOLD_DELAY_MS = 450L
+        private const val SEEK_REPEAT_INTERVAL_MS = 300L
         private const val SAVED_REQUEST = "active-playback"
         private const val EXTRA_URI = "playback_uri"
         private const val EXTRA_MIME_TYPE = "playback_mime_type"
@@ -783,6 +848,18 @@ private fun PlaybackScreen(
                         }
                     }
                     activity.playerView = view
+                    view.setControllerVisibilityListener(
+                        PlayerView.ControllerVisibilityListener { visibility ->
+                            activity.hideControlsOnBack.isEnabled = visibility == View.VISIBLE
+                            if (visibility == View.VISIBLE) {
+                                view.post {
+                                    if (view.isControllerFullyVisible) {
+                                        view.findViewById<View>(androidx.media3.ui.R.id.exo_progress)?.requestFocus()
+                                    }
+                                }
+                            }
+                        },
+                    )
                     view.setOnTouchListener(
                         PlayerGestures(
                             playerView = view,

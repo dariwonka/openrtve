@@ -4,6 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     app:animation_enabled="true"
+    app:auto_show="false"
+    app:show_timeout="5000"
     app:controller_layout_id="@layout/player_controls"
     app:show_buffering="when_playing"
     app:surface_type="surface_view"
