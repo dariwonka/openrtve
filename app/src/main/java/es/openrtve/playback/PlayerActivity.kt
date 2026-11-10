@@ -230,7 +230,7 @@ class PlayerActivity : ComponentActivity() {
      * Compose: se reenvían al PlayerView para que muestre los controles y, una
      * vez visibles, el foco pasa a sus botones.
      */
-    private val hideControlsOnBack = object : androidx.activity.OnBackPressedCallback(false) {
+    internal val hideControlsOnBack = object : androidx.activity.OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
             playerView?.hideController()
         }
