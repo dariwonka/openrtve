@@ -197,9 +197,17 @@ class ClanCatalogViewModel(
             null
         }
 
+        // Las fuentes extra de películas no cuentan como fallo: el catálogo ya tiene su copia fija.
+        suspend fun <T> quiet(block: suspend () -> T): T? = try {
+            block()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            null
+        }
         // Películas: la lista de RTVE y todos los vídeos de sus programas de cine para niños.
         val topMovies = async {
-            orNull {
+            quiet {
                 repository.loadModule(
                     HomeRow(id = -1, title = SEED_ROW_TITLE, order = 0, moduleType = null, presentation = null, contentUrl = RtveUrls.CLAN_MOVIES_TOPS),
                 ).value.items
@@ -207,7 +215,7 @@ class ClanCatalogViewModel(
         }
         val containerMovies = RtveUrls.CLAN_MOVIE_PROGRAMS.map { programId ->
             async {
-                orNull {
+                quiet {
                     val all = mutableListOf<CatalogItem>()
                     var page = 1
                     do {
