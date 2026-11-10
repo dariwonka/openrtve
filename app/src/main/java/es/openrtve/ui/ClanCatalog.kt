@@ -6,6 +6,7 @@ import es.openrtve.data.CatalogRepository
 import es.openrtve.data.ClanCatalogStore
 import es.openrtve.data.StoredCatalog
 import es.openrtve.domain.CatalogItem
+import es.openrtve.domain.HomeRow
 import es.openrtve.domain.ContentKind
 import es.openrtve.domain.LinkKind
 import es.openrtve.domain.MediaForm
@@ -143,6 +144,8 @@ class ClanCatalogViewModel(
     private val store: ClanCatalogStore? = null,
     /** Programas infantiles de RTVE (género Infantil) que se suman al catálogo de Clan. */
     private val seed: List<CatalogItem> = emptyList(),
+    /** Películas infantiles conocidas, para tenerlas desde el primer segundo. */
+    private val movieSeed: List<CatalogItem> = emptyList(),
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ClanCatalogUiState())
     val uiState: StateFlow<ClanCatalogUiState> = mutableUiState.asStateFlow()
@@ -160,7 +163,7 @@ class ClanCatalogViewModel(
             mutableUiState.update { it.copy(isLoading = it.catalog.isEmpty, error = null) }
             if (mutableUiState.value.catalog.isEmpty) {
                 val saved = store?.read()
-                val start = if (saved != null) ClanCatalog(saved.series, saved.movies) else buildClanCatalog(listOf(LoadedRow(SEED_ROW_TITLE, seed)))
+                val start = if (saved != null) ClanCatalog(saved.series, saved.movies) else buildClanCatalog(listOf(LoadedRow(SEED_ROW_TITLE, seed), LoadedRow(SEED_ROW_TITLE, movieSeed, true)))
                 if (!start.isEmpty) mutableUiState.update { it.copy(catalog = start, isLoading = false) }
             }
             try {
@@ -194,6 +197,28 @@ class ClanCatalogViewModel(
             null
         }
 
+        // Películas: la lista de RTVE y todos los vídeos de sus programas de cine para niños.
+        val topMovies = async {
+            orNull {
+                repository.loadModule(
+                    HomeRow(id = -1, title = SEED_ROW_TITLE, order = 0, moduleType = null, presentation = null, contentUrl = RtveUrls.CLAN_MOVIES_TOPS),
+                ).value.items
+            }.orEmpty()
+        }
+        val containerMovies = RtveUrls.CLAN_MOVIE_PROGRAMS.map { programId ->
+            async {
+                orNull {
+                    val all = mutableListOf<CatalogItem>()
+                    var page = 1
+                    do {
+                        val result = repository.loadProgramVideos(programId, page = page).value
+                        all += result.items
+                        page++
+                    } while (result.hasMore && page <= MAX_MOVIE_PAGES)
+                    all.toList()
+                }.orEmpty()
+            }
+        }
         val listing = async { orNull { repository.loadChannelPrograms(RtveUrls.CLAN_CHANNEL_ID).value } }
         // La portada de Clan, sus tres franjas de edad y la de películas, a la vez.
         val portadas = listOf(RtveUrls.CLAN_HOME to false) + RtveUrls.CLAN_AGE_PORTADAS.map { it to false } + (RtveUrls.CLAN_MOVIES_PORTADA to true)
@@ -226,7 +251,9 @@ class ClanCatalogViewModel(
             .awaitAll()
             .filterNotNull()
         // El listado va al final: la imagen y el nombre de una portada mandan sobre los suyos.
-        val catalog = buildClanCatalog(listOf(LoadedRow(SEED_ROW_TITLE, seed)) + linked + loaded + LoadedRow(AZ_ROW_TITLE, listing.await().orEmpty()))
+        val catalog = buildClanCatalog(
+            listOf(LoadedRow(SEED_ROW_TITLE, seed), LoadedRow(SEED_ROW_TITLE, movieSeed, true), LoadedRow(SEED_ROW_TITLE, topMovies.await(), true)) +
+                containerMovies.map { LoadedRow(SEED_ROW_TITLE, it.await(), true) } + linked + loaded + LoadedRow(AZ_ROW_TITLE, listing.await().orEmpty()))
         val failure = firstFailure
         if (catalog.isEmpty && failure != null) throw failure
         catalog
@@ -234,6 +261,7 @@ class ClanCatalogViewModel(
 
     private companion object {
         const val MAX_PARALLEL_ROWS = 6
+        const val MAX_MOVIE_PAGES = 8
         /** Nombre interno de la "fila" del listado A-Z; no es de películas. */
         const val AZ_ROW_TITLE = "A-Z"
         const val SEED_ROW_TITLE = "Infantil"

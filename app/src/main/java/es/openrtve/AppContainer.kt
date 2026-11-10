@@ -41,7 +41,8 @@ class AppContainer(private val context: Context) {
     val settings = AppSettings(context)
     /** Copia del catálogo del inicio: con ella la app abre sin esperar a la red. */
     /** Programas con género Infantil en RTVE (recogidos de su catálogo), que se suman a Clan. */
-    val infantilSeed: List<es.openrtve.domain.CatalogItem> by lazy { loadInfantilSeed(context) }
+    val infantilSeed: List<es.openrtve.domain.CatalogItem> by lazy { loadSeed(context, "infantil.json", es.openrtve.domain.ContentKind.PROGRAM) }
+    val movieSeed: List<es.openrtve.domain.CatalogItem> by lazy { loadSeed(context, "peliculas.json", es.openrtve.domain.ContentKind.VIDEO) }
     val clanCatalogStore = ClanCatalogStore(context.filesDir.resolve("clan-catalog.json"))
     val deepLinkResolver = DeepLinkResolver(catalogRepository)
     val watchHistory = WatchHistory(context.filesDir.resolve("watch-history.json"))
@@ -49,14 +50,14 @@ class AppContainer(private val context: Context) {
     val drmTokenClient = DrmTokenClient(httpClient)
 }
 
-private fun loadInfantilSeed(context: Context): List<es.openrtve.domain.CatalogItem> = try {
-    val raw = context.assets.open("infantil.json").bufferedReader().use { it.readText() }
+private fun loadSeed(context: Context, asset: String, kind: es.openrtve.domain.ContentKind): List<es.openrtve.domain.CatalogItem> = try {
+    val raw = context.assets.open(asset).bufferedReader().use { it.readText() }
     kotlinx.serialization.json.Json.parseToJsonElement(raw).let { it as kotlinx.serialization.json.JsonArray }.mapNotNull { element ->
         val obj = element as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
         fun field(name: String) = (obj[name] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
         val id = field("i") ?: return@mapNotNull null
         val title = field("t") ?: return@mapNotNull null
-        es.openrtve.domain.referenceItem(id, es.openrtve.domain.ContentKind.PROGRAM, title, field("p"))
+        es.openrtve.domain.referenceItem(id, kind, title, field("p"))
             .copy(posterUrl = field("q"))
     }
 } catch (error: Exception) {

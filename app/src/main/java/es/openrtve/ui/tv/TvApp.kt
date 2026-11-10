@@ -53,7 +53,7 @@ fun TvApp(container: AppContainer) {
     // Un solo catálogo para toda la sesión: volver al inicio no lo descarga otra vez.
     val catalogViewModel: ClanCatalogViewModel = viewModel(
         key = "clan-catalog",
-        factory = viewModelFactory { initializer { ClanCatalogViewModel(repository, container.clanCatalogStore, container.infantilSeed) } },
+        factory = viewModelFactory { initializer { ClanCatalogViewModel(repository, container.clanCatalogStore, container.infantilSeed, container.movieSeed) } },
     )
     val catalog by catalogViewModel.uiState.collectAsStateWithLifecycle()
     var section by rememberSaveable { mutableStateOf(ClanSection.SERIES) }
