@@ -18,8 +18,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +36,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.onFocusChanged
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.key
@@ -156,8 +159,6 @@ internal fun TvCatalogScreen(
     }
 }
 
-private const val CarouselFocus = Int.MAX_VALUE
-
 @Composable
 private fun TvTitleGrid(
     titles: List<CatalogItem>,
@@ -178,7 +179,9 @@ private fun TvTitleGrid(
     var focusedIndex by remember { mutableIntStateOf(-1) }
     var menuItem by remember { mutableStateOf<CatalogItem?>(null) }
     // Al volver de una serie, el foco es de la serie que se abrió; si no, del primer título.
-    val target = titles.indexOfFirst { it.id == focusId }.coerceAtLeast(0)
+    // Las novedades van arriba (dos filas) y no se repiten en el resto.
+    val shown = remember(titles, novelties) { novelties + titles.filter { t -> novelties.none { it.id == t.id } } }
+    val target = shown.indexOfFirst { it.id == focusId }.coerceAtLeast(0)
     val toStart: () -> Unit = {
         scope.launch {
             gridState.scrollToItem(0)
@@ -196,7 +199,7 @@ private fun TvTitleGrid(
     // Repetir Inicio vuelve al principio de la lista.
     RootReselectionEffect(reselectRequest) { gridState.scrollToItem(0) }
     // Atrás desde un título o del carrusel lleva al primero; desde el primero sale de la app.
-    BackHandler(enabled = focusedIndex != 0 && focusedIndex != -1 && menuItem == null, onBack = toStart)
+    BackHandler(enabled = focusedIndex > 0 && menuItem == null, onBack = toStart)
     ProvideTvCenteredScroll {
         LazyVerticalGrid(
             state = gridState,
@@ -208,16 +211,10 @@ private fun TvTitleGrid(
         ) {
             if (novelties.isNotEmpty()) {
                 item(key = "novelties", span = { GridItemSpan(maxLineSpan) }, contentType = "novelties") {
-                    TvNoveltiesRow(
-                        items = novelties,
-                        favoriteIds = favoriteIds,
-                        onOpen = onOpen,
-                        onMenu = { menuItem = it },
-                        onFocused = { focusedIndex = CarouselFocus },
-                    )
+                    Text(stringResource(R.string.catalog_novelties), style = MaterialTheme.typography.titleLarge)
                 }
             }
-            itemsIndexed(titles, key = { _, it -> it.id }, contentType = { _, _ -> "title" }) { index, item ->
+            itemsIndexed(shown, key = { _, it -> it.id }, contentType = { _, _ -> "title" }) { index, item ->
                 val start = when {
                     index == target -> Modifier.initialFocus(requester = if (index == 0) first else null)
                     index == 0 -> Modifier.focusRequester(first)
@@ -227,7 +224,7 @@ private fun TvTitleGrid(
                     item, RowLayout.LANDSCAPE, { onOpen(item) },
                     start
                         .onFocusChanged { if (it.hasFocus) focusedIndex = index else if (focusedIndex == index) focusedIndex = -1 }
-                        .wrapRowFocus(index, titles.size),
+                        .wrapRowFocus(index, shown.size),
                     onLongClick = { menuItem = item },
                     favorite = item.id in favoriteIds,
                 )
@@ -259,35 +256,6 @@ private fun TvTitleGrid(
     }
 }
 
-/** Carrusel de novedades: como mucho 10 tarjetas del mismo ancho que las de la cuadrícula. */
-@Composable
-private fun TvNoveltiesRow(
-    items: List<CatalogItem>,
-    favoriteIds: Set<String>,
-    onOpen: (CatalogItem) -> Unit,
-    onMenu: (CatalogItem) -> Unit,
-    onFocused: () -> Unit,
-) {
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    val cardWidth = (screenWidth - TvHorizontalMargin * 2 - 20.dp * (TvGridColumns - 1)) / TvGridColumns
-    Column {
-        Text(stringResource(R.string.catalog_novelties), style = MaterialTheme.typography.titleLarge)
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            contentPadding = PaddingValues(vertical = TvFocusScaleRoom),
-        ) {
-            items(items, key = { it.id }) { item ->
-                TvItemCard(
-                    item, RowLayout.LANDSCAPE, { onOpen(item) },
-                    Modifier.width(cardWidth).onFocusChanged { if (it.hasFocus) onFocused() },
-                    onLongClick = { onMenu(item) },
-                    favorite = item.id in favoriteIds,
-                )
-            }
-        }
-    }
-}
-
 /** Menú de pulsación larga: favoritos y eliminar de la lista. */
 @Composable
 private fun TvItemMenu(
@@ -298,11 +266,26 @@ private fun TvItemMenu(
     onDismiss: () -> Unit,
 ) {
     val firstOption = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { firstOption.requestFocus() } }
+    // La pulsación larga que abre el menú sigue apretada: su "soltar" no debe elegir la primera opción.
+    var armed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        runCatching { firstOption.requestFocus() }
+        kotlinx.coroutines.delay(MENU_ARM_FALLBACK_MS)
+        armed = true
+    }
     Dialog(onDismissRequest = onDismiss) {
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
+                .onPreviewKeyEvent { event ->
+                    val select = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                    if (!armed && select) {
+                        if (event.type == KeyEventType.KeyUp) armed = true
+                        true
+                    } else {
+                        false
+                    }
+                }
                 .width(380.dp)
                 .background(MaterialTheme.colorScheme.surface, TvCardShape)
                 .padding(24.dp),
@@ -317,3 +300,6 @@ private fun TvItemMenu(
         }
     }
 }
+
+/** Si no llega el "soltar" (se soltó antes de abrirse el menú), el menú se activa pasado este tiempo. */
+private const val MENU_ARM_FALLBACK_MS = 1_200L

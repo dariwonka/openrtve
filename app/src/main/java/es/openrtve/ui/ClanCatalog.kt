@@ -133,14 +133,14 @@ data class ClanCatalogUiState(
     /** Favoritos (series y películas), en orden alfabético. */
     val favorites: List<CatalogItem> = emptyList(),
     val favoriteIds: Set<String> = emptySet(),
-    /** Carrusel de novedades: como mucho [NOVELTIES_MAX], menos si no hay tantas. */
+    /** Carrusel de novedades: como mucho [NOVELTIES_MAX] (dos filas de 4), menos si no hay tantas. */
     val novelties: List<CatalogItem> = emptyList(),
     val isLoading: Boolean = true,
     /** Solo si no hay ningún título que enseñar. */
     val error: LoadError? = null,
 )
 
-const val NOVELTIES_MAX = 10
+const val NOVELTIES_MAX = 8
 /** Un título se queda en el carrusel 20 días desde que entra. */
 private const val NOVELTY_WINDOW_MS = 20L * 24 * 60 * 60 * 1000
 private const val BASELINE_KEY = "#baseline"
