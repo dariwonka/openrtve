@@ -138,7 +138,7 @@ fun TvApp(container: AppContainer) {
                             onOpenProgram = actions.openProgram,
                             onOpenItem = actions.openItem,
                         )
-                        GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage)
+                        GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage, removed = catalog.removed, onRestore = catalogViewModel::restore)
                         // Dos raíces: el buscador y los títulos de Clan. Una serie abre su página; un vídeo se reproduce.
                         null -> if (nav.tab == Tab.SEARCH) TvSearchScreen(
                             repository = repository,

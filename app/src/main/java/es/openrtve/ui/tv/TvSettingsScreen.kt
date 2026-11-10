@@ -28,7 +28,12 @@ import es.openrtve.ui.rememberSettingsScreen
 import es.openrtve.ui.formatBytes
 
 @Composable
-fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit) {
+fun TvSettingsScreen(
+    container: AppContainer,
+    onMessage: (String) -> Unit,
+    removed: List<es.openrtve.ui.RemovedTitle> = emptyList(),
+    onRestore: (String) -> Unit = {},
+) {
     val screen = rememberSettingsScreen(container)
     val viewModel = screen.viewModel
     val settings = screen.settings
@@ -70,6 +75,16 @@ fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(onClick = { viewModel.clearCache { onMessage(cleared) } }) { Text(stringResource(R.string.settings_clear_cache)) }
             Text(stringResource(R.string.settings_cache_size, cacheBytes?.let(::formatBytes) ?: "…"), style = MaterialTheme.typography.bodyLarge)
+        }
+        if (removed.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            TvSettingsLabel(stringResource(R.string.settings_removed))
+            Text(stringResource(R.string.settings_removed_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+            removed.forEach { title ->
+                Button(onClick = { onRestore(title.id) }, modifier = Modifier.fillMaxWidth(0.7f)) {
+                    Text(title.name ?: stringResource(R.string.removed_unnamed), maxLines = 1)
+                }
+            }
         }
     }
     }

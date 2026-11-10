@@ -287,4 +287,19 @@ class ClanCatalogTest {
         assertEquals(10, novelties.size)
         assertTrue(novelties.none { it.id == "1" })
     }
+
+    @Test
+    fun `a removed title is listed by name and can be restored`() = runTest(mainDispatcher.dispatcher) {
+        val store = tempStore()
+        val bluey = program("2", "Bluey")
+        val viewModel = ClanCatalogViewModel(online(bluey, program("3", "Peppa Pig")), store)
+        advanceUntilIdle()
+        viewModel.remove(bluey)
+        advanceUntilIdle()
+        assertEquals(listOf("Bluey"), viewModel.uiState.value.removed.map { it.name })
+        viewModel.restore("2")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.removed.isEmpty())
+        assertEquals(listOf("Bluey", "Peppa Pig"), viewModel.uiState.value.catalog.series.map { it.title })
+    }
 }

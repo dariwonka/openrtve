@@ -30,6 +30,8 @@ data class StoredCatalog(
     val favorites: Set<String> = emptySet(),
     /** Momento en que se descubrió un título nuevo de RTVE; 0 si ya estaba al instalar. */
     val firstSeen: Map<String, Long> = emptyMap(),
+    /** Los títulos eliminados, enteros, para poder restaurarlos aunque RTVE ya no los ofrezca. */
+    val removedItems: List<CatalogItem> = emptyList(),
 )
 
 /**
@@ -52,8 +54,9 @@ class ClanCatalogStore(
                 movies = root.items("movies"),
                 removed = (root["removed"] as? JsonObject).orEmpty().mapValues { (it.value as? JsonPrimitive)?.booleanOrNull ?: false },
                 favorites = (root["favorites"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
+                removedItems = root.items("removedItems"),
                 firstSeen = (root["firstSeen"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
-            ).takeIf { it.series.isNotEmpty() || it.movies.isNotEmpty() || it.removed.isNotEmpty() || it.favorites.isNotEmpty() }
+            ).takeIf { it.series.isNotEmpty() || it.movies.isNotEmpty() || it.removed.isNotEmpty() || it.favorites.isNotEmpty() || it.removedItems.isNotEmpty() }
         }.getOrNull()
     }
 
@@ -65,6 +68,7 @@ class ClanCatalogStore(
                 series = current.series.filter { it.id !in ids },
                 movies = current.movies.filter { it.id !in ids },
                 removed = current.removed + ids.associateWith { false },
+                removedItems = current.removedItems.filter { it.id !in ids } + (current.series + current.movies).filter { it.id in ids },
                 favorites = current.favorites - ids.toSet(),
             ),
         )
@@ -74,6 +78,7 @@ class ClanCatalogStore(
     suspend fun write(catalog: StoredCatalog) = withContext(io) {
         runCatching {
             val raw = buildJsonObject {
+                put("removedItems", catalog.removedItems.toJson())
                 put("series", catalog.series.toJson())
                 put("movies", catalog.movies.toJson())
                 put("removed", buildJsonObject { catalog.removed.forEach { (id, gone) -> put(id, gone) } })

@@ -124,8 +124,12 @@ private fun CatalogItem.sortKey(): String = title.trimStart { !it.isLetterOrDigi
 
 private val DIACRITICS = Regex("\\p{Mn}+")
 
+/** Un título eliminado a mano; [name] es `null` si no se conoce. */
+data class RemovedTitle(val id: String, val name: String?)
+
 data class ClanCatalogUiState(
     val catalog: ClanCatalog = ClanCatalog(),
+    val removed: List<RemovedTitle> = emptyList(),
     /** Favoritos (series y películas), en orden alfabético. */
     val favorites: List<CatalogItem> = emptyList(),
     val favoriteIds: Set<String> = emptySet(),
@@ -178,8 +182,11 @@ class ClanCatalogViewModel(
     private var stored = StoredCatalog(emptyList(), emptyList())
     private var highlights: List<CatalogItem> = emptyList()
     private var started = false
+    /** Todo título visto alguna vez (fijos y descargados), para dar nombre a los eliminados. */
+    private val known = mutableMapOf<String, CatalogItem>()
 
     init {
+        (seed + movieSeed).forEach { known[it.id] = it }
         load()
     }
 
@@ -191,10 +198,25 @@ class ClanCatalogViewModel(
             series = stored.series.filter { it.id != item.id },
             movies = stored.movies.filter { it.id != item.id },
             removed = stored.removed + (item.id to false),
+            removedItems = stored.removedItems.filter { it.id != item.id } + item,
             favorites = stored.favorites - item.id,
         )
         persist()
         publish()
+    }
+
+    /** Vuelve a mostrar un título eliminado; si no se tiene entero, vuelve en la próxima descarga. */
+    fun restore(id: String) {
+        val item = stored.removedItems.firstOrNull { it.id == id } ?: known[id]
+        stored = stored.copy(
+            removed = stored.removed - id,
+            removedItems = stored.removedItems.filter { it.id != id },
+            series = if (item != null && item.kind != ContentKind.VIDEO) (stored.series.filter { it.id != id } + item).alphabetical() else stored.series,
+            movies = if (item != null && item.kind == ContentKind.VIDEO) (stored.movies.filter { it.id != id } + item).alphabetical() else stored.movies,
+        )
+        persist()
+        publish()
+        if (item == null) load()
     }
 
     fun toggleFavorite(item: CatalogItem) {
@@ -210,6 +232,7 @@ class ClanCatalogViewModel(
             val gone = saved.removed.keys - stored.removed.keys
             if (gone.isEmpty()) return@launch
             stored = stored.copy(
+                removedItems = stored.removedItems.filter { it.id !in gone } + saved.removedItems.filter { it.id in gone },
                 series = stored.series.filter { it.id !in gone },
                 movies = stored.movies.filter { it.id !in gone },
                 removed = stored.removed + saved.removed.filterKeys { it in gone },
@@ -234,8 +257,11 @@ class ClanCatalogViewModel(
             .sortedWith(compareByDescending<CatalogItem> { stored.firstSeen[it.id] ?: 0L }.thenBy { it.title })
         val featured = highlights.mapNotNull { all[it.id] }
         val novelties = (recent + featured).distinctBy { it.id }.take(NOVELTIES_MAX)
+        val removedTitles = stored.removed.keys.map { id ->
+            RemovedTitle(id, (stored.removedItems.firstOrNull { it.id == id } ?: known[id])?.title)
+        }.sortedWith(compareBy({ it.name == null }, { it.name?.lowercase() }))
         mutableUiState.update {
-            it.copy(catalog = catalog, favorites = favorites, favoriteIds = stored.favorites, novelties = novelties)
+            it.copy(catalog = catalog, favorites = favorites, favoriteIds = stored.favorites, novelties = novelties, removed = removedTitles)
         }
     }
 
@@ -303,7 +329,13 @@ class ClanCatalogViewModel(
             }
             firstSeen[BASELINE_KEY] = 1L
         }
-        stored = StoredCatalog(series, movies, removed, before.favorites.filter { id -> series.any { it.id == id } || movies.any { it.id == id } }.toSet(), firstSeen)
+        (result.all.series + result.all.movies).forEach { known[it.id] = it }
+        stored = StoredCatalog(
+            series, movies, removed,
+            before.favorites.filter { id -> series.any { it.id == id } || movies.any { it.id == id } }.toSet(),
+            firstSeen,
+            removedItems = before.removedItems.filter { it.id in removed },
+        )
         highlights = result.highlights
         if (stored != before) persist()
         publish()
