@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -86,7 +87,6 @@ internal fun TvTopBar(
     ) {
         TvChoiceButton(stringResource(R.string.catalog_series), section == ClanSection.SERIES) { onSection(ClanSection.SERIES) }
         TvChoiceButton(stringResource(R.string.catalog_movies), section == ClanSection.MOVIES) { onSection(ClanSection.MOVIES) }
-        TvChoiceButton(stringResource(R.string.catalog_favorites), section == ClanSection.FAVORITES) { onSection(ClanSection.FAVORITES) }
         Spacer(Modifier.weight(1f))
         IconButton(onClick = onSearch) { Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.tab_search)) }
         IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title)) }
@@ -122,23 +122,21 @@ internal fun TvCatalogScreen(
     onRetry: () -> Unit,
     gridState: LazyGridState,
     focusId: String?,
-    onToggleFavorite: (CatalogItem) -> Unit,
+    onTogglePin: (CatalogItem) -> Unit,
     onRemove: (CatalogItem) -> Unit,
     isRemovalUnlocked: () -> Boolean,
     onUnlockRemoval: () -> Unit,
     reselectRequest: Int = 0,
 ) {
-    val isFavorites = section == ClanSection.FAVORITES
-    val titles = if (isFavorites) state.favorites else state.catalog.titles(section)
+    val titles = state.catalog.titles(section)
     val error = state.error
     when {
         titles.isNotEmpty() -> key(section) {
             TvTitleGrid(
                 titles = titles,
-                novelties = if (section == ClanSection.SERIES) state.novelties else emptyList(),
-                favoriteIds = state.favoriteIds,
+                pinnedIds = state.pinnedIds,
                 onOpen = onOpen,
-                onToggleFavorite = onToggleFavorite,
+                onTogglePin = onTogglePin,
                 onRemove = onRemove,
                 isRemovalUnlocked = isRemovalUnlocked,
                 onUnlockRemoval = onUnlockRemoval,
@@ -147,7 +145,6 @@ internal fun TvCatalogScreen(
                 reselectRequest = reselectRequest,
             )
         }
-        isFavorites -> TvCenterMessage(stringResource(R.string.favorites_empty))
         state.isLoading -> TvCenterMessage(stringResource(R.string.state_loading))
         error != null -> TvCenterMessage(error.text(LocalContext.current), onRetry)
         else -> TvCenterMessage(stringResource(R.string.catalog_empty), onRetry)
@@ -157,10 +154,9 @@ internal fun TvCatalogScreen(
 @Composable
 private fun TvTitleGrid(
     titles: List<CatalogItem>,
-    novelties: List<CatalogItem>,
-    favoriteIds: Set<String>,
+    pinnedIds: Set<String>,
     onOpen: (CatalogItem) -> Unit,
-    onToggleFavorite: (CatalogItem) -> Unit,
+    onTogglePin: (CatalogItem) -> Unit,
     onRemove: (CatalogItem) -> Unit,
     isRemovalUnlocked: () -> Boolean,
     onUnlockRemoval: () -> Unit,
@@ -174,8 +170,12 @@ private fun TvTitleGrid(
     var focusedIndex by remember { mutableIntStateOf(-1) }
     var menuItem by remember { mutableStateOf<CatalogItem?>(null) }
     // Al volver de una serie, el foco es de la serie que se abrió; si no, del primer título.
-    // Las novedades van arriba (dos filas) y no se repiten en el resto.
-    val shown = remember(titles, novelties) { novelties + titles.filter { t -> novelties.none { it.id == t.id } } }
+    // Los anclados ya vienen delante en la lista.
+    val shown = titles
+    val latest by rememberUpdatedState(titles)
+    var refocusIndex by remember { mutableIntStateOf(-1) }
+    var refocusId by remember { mutableStateOf<String?>(null) }
+    val refocus = remember { FocusRequester() }
     val target = shown.indexOfFirst { it.id == focusId }.coerceAtLeast(0)
     val toStart: () -> Unit = {
         scope.launch {
@@ -184,11 +184,27 @@ private fun TvTitleGrid(
             runCatching { first.requestFocus() }
         }
     }
+    // Al eliminar, el cursor se queda donde estaba: ahí queda ahora el siguiente título.
     val removeAndRefocus: (CatalogItem) -> Unit = { item ->
+        val index = latest.indexOfFirst { it.id == item.id }
         onRemove(item)
         scope.launch {
             withFrameNanos { }
-            runCatching { first.requestFocus() }
+            withFrameNanos { }
+            if (latest.isNotEmpty() && index >= 0) refocusIndex = index.coerceAtMost(latest.size - 1)
+        }
+    }
+    // Al anclar o desanclar, el título cambia de sitio: el cursor lo sigue.
+    val pinAndFollow: (CatalogItem) -> Unit = { item ->
+        onTogglePin(item)
+        scope.launch {
+            withFrameNanos { }
+            withFrameNanos { }
+            val index = latest.indexOfFirst { it.id == item.id }
+            if (index >= 0) {
+                gridState.scrollToItem(index)
+                refocusId = item.id
+            }
         }
     }
     // Repetir Inicio vuelve al principio de la lista.
@@ -204,12 +220,15 @@ private fun TvTitleGrid(
             verticalArrangement = Arrangement.spacedBy(24.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            if (novelties.isNotEmpty()) {
-                item(key = "novelties", span = { GridItemSpan(maxLineSpan) }, contentType = "novelties") {
-                    Text(stringResource(R.string.catalog_novelties), style = MaterialTheme.typography.titleLarge)
-                }
-            }
             itemsIndexed(shown, key = { _, it -> it.id }, contentType = { _, _ -> "title" }) { index, item ->
+                if (index == refocusIndex || item.id == refocusId) {
+                    LaunchedEffect(item.id, index) {
+                        withFrameNanos { }
+                        runCatching { refocus.requestFocus() }
+                        refocusIndex = -1
+                        refocusId = null
+                    }
+                }
                 val start = when {
                     index == target -> Modifier.initialFocus(requester = if (index == 0) first else null)
                     index == 0 -> Modifier.focusRequester(first)
@@ -218,10 +237,10 @@ private fun TvTitleGrid(
                 TvItemCard(
                     item, RowLayout.LANDSCAPE, { onOpen(item) },
                     start
+                        .then(if (index == refocusIndex || item.id == refocusId) Modifier.focusRequester(refocus) else Modifier)
                         .onFocusChanged { if (it.hasFocus) focusedIndex = index else if (focusedIndex == index) focusedIndex = -1 }
                         .wrapRowFocus(index, shown.size),
                     onLongClick = { menuItem = item },
-                    favorite = item.id in favoriteIds,
                 )
             }
         }
@@ -229,8 +248,8 @@ private fun TvTitleGrid(
     menuItem?.let { item ->
         TvItemMenu(
             item = item,
-            isFavorite = item.id in favoriteIds,
-            onFavorite = { onToggleFavorite(item) },
+            isPinned = item.id in pinnedIds,
+            onPin = { pinAndFollow(item) },
             onRemove = {
                 if (isRemovalUnlocked()) removeAndRefocus(item) else pinFor = item
             },
@@ -255,8 +274,8 @@ private fun TvTitleGrid(
 @Composable
 private fun TvItemMenu(
     item: CatalogItem,
-    isFavorite: Boolean,
-    onFavorite: () -> Unit,
+    isPinned: Boolean,
+    onPin: () -> Unit,
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -286,8 +305,8 @@ private fun TvItemMenu(
                 .padding(24.dp),
         ) {
             Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-            Button(onClick = { onFavorite(); onDismiss() }, modifier = Modifier.fillMaxWidth().focusRequester(firstOption)) {
-                Text(stringResource(if (isFavorite) R.string.menu_remove_favorite else R.string.menu_add_favorite))
+            Button(onClick = { onPin(); onDismiss() }, modifier = Modifier.fillMaxWidth().focusRequester(firstOption)) {
+                Text(stringResource(if (isPinned) R.string.menu_unpin else R.string.menu_pin))
             }
             Button(onClick = { onRemove(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.menu_remove))

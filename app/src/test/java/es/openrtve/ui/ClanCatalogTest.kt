@@ -249,18 +249,18 @@ class ClanCatalogTest {
     }
 
     @Test
-    fun `a removed title stays away until RTVE drops it and offers it again, and leaves favourites`() = runTest(mainDispatcher.dispatcher) {
+    fun `a removed title stays away until RTVE drops it and offers it again, and leaves the pinned ones`() = runTest(mainDispatcher.dispatcher) {
         val store = tempStore()
         val bluey = program("2", "Bluey")
         val peppa = program("3", "Peppa Pig")
         val first = ClanCatalogViewModel(online(bluey, peppa), store)
         advanceUntilIdle()
-        first.toggleFavorite(bluey)
-        assertEquals(listOf("2"), first.uiState.value.favorites.map { it.id })
+        first.togglePin(bluey)
+        assertEquals(setOf("2"), first.uiState.value.pinnedIds)
         first.remove(bluey)
         advanceUntilIdle()
         assertEquals(listOf("Peppa Pig"), first.uiState.value.catalog.series.map { it.title })
-        assertTrue(first.uiState.value.favorites.isEmpty())
+        assertTrue(first.uiState.value.pinnedIds.isEmpty())
 
         // Sigue en RTVE: sigue oculto.
         val still = ClanCatalogViewModel(online(bluey, peppa), store)
@@ -276,34 +276,47 @@ class ClanCatalogTest {
     }
 
     @Test
-    fun `new titles from a later download fill the carousel, at most eight`() = runTest(mainDispatcher.dispatcher) {
-        val store = tempStore()
-        ClanCatalogViewModel(online(program("1", "Antiguo")), store)
-        advanceUntilIdle()
-        val many = (2..20).map { program("$it", "Serie nueva $it") }
-        val later = ClanCatalogViewModel(online(*(listOf(program("1", "Antiguo")) + many).toTypedArray()), store)
-        advanceUntilIdle()
-        val novelties = later.uiState.value.novelties
-        assertEquals(8, novelties.size)
-        assertTrue(novelties.none { it.id == "1" })
-    }
-
-    @Test
-    fun `carousel entries leave after 20 days and the section empties`() = runTest(mainDispatcher.dispatcher) {
+    fun `RTVE pins new titles in front, the user unpins them and they never come back`() = runTest(mainDispatcher.dispatcher) {
         val store = tempStore()
         var now = 1_000_000_000_000L
         val old = program("1", "Antiguo")
         ClanCatalogViewModel(online(old), store, clock = { now })
         advanceUntilIdle()
-        now += 24L * 60 * 60 * 1000
-        val fresh = (2..4).map { program("$it", "Nueva $it") }
-        val day1 = ClanCatalogViewModel(online(*(listOf(old) + fresh).toTypedArray()), store, clock = { now })
+        now += 1_000
+        val zeta = program("5", "Zeta")
+        val alfa = program("4", "Alfa")
+        val day1 = ClanCatalogViewModel(online(old, alfa, zeta), store, clock = { now })
         advanceUntilIdle()
-        assertEquals(3, day1.uiState.value.novelties.size)
-        now += 25L * 24 * 60 * 60 * 1000
-        val day26 = ClanCatalogViewModel(online(*(listOf(old) + fresh).toTypedArray()), store, clock = { now })
+        // Los dos son novedades de RTVE: anclados y delante, sin límite; el resto, detrás.
+        assertEquals(setOf("4", "5"), day1.uiState.value.pinnedIds)
+        assertEquals(listOf("Alfa", "Zeta", "Antiguo"), day1.uiState.value.catalog.series.map { it.title })
+
+        // Una novedad más reciente va la primera.
+        now += 1_000
+        val nueva = program("6", "Nueva")
+        val day2 = ClanCatalogViewModel(online(old, alfa, zeta, nueva), store, clock = { now })
         advanceUntilIdle()
-        assertTrue(day26.uiState.value.novelties.isEmpty())
+        assertEquals(listOf("Nueva", "Alfa", "Zeta", "Antiguo"), day2.uiState.value.catalog.series.map { it.title })
+
+        // El usuario desancla Zeta: vuelve a su sitio y RTVE no la ancla otra vez.
+        day2.togglePin(zeta)
+        advanceUntilIdle()
+        assertEquals(listOf("Nueva", "Alfa", "Antiguo", "Zeta"), day2.uiState.value.catalog.series.map { it.title })
+        val day3 = ClanCatalogViewModel(online(old, alfa, zeta, nueva), store, clock = { now })
+        advanceUntilIdle()
+        assertEquals(setOf("4", "6"), day3.uiState.value.pinnedIds)
+
+        // RTVE deja de ofrecer Alfa: sigue anclada hasta que el usuario la quite.
+        val day4 = ClanCatalogViewModel(online(old, zeta, nueva), store, clock = { now })
+        advanceUntilIdle()
+        assertTrue("4" in day4.uiState.value.pinnedIds)
+    }
+
+    @Test
+    fun `the splash waits for the catalogue to settle`() = runTest(mainDispatcher.dispatcher) {
+        val viewModel = ClanCatalogViewModel(online(program("2", "Bluey")), tempStore())
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.ready)
     }
 
     @Test

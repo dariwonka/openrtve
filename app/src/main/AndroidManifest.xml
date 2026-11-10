@@ -44,6 +44,7 @@
         <activity
             android:name=".ui.tv.TvActivity"
             android:exported="true"
+            android:theme="@style/Theme.OpenRTVE.Launcher"
             android:launchMode="singleTask"
             android:screenOrientation="landscape"
             tools:ignore="DiscouragedApi">

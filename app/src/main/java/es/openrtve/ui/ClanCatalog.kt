@@ -24,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,7 +34,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 /** Las dos listas del inicio. */
-enum class ClanSection { SERIES, MOVIES, FAVORITES }
+enum class ClanSection { SERIES, MOVIES }
 
 /** Títulos únicos de Clan, cada lista en orden alfabético. */
 data class ClanCatalog(
@@ -45,7 +46,6 @@ data class ClanCatalog(
     fun titles(section: ClanSection): List<CatalogItem> = when (section) {
         ClanSection.SERIES -> series
         ClanSection.MOVIES -> movies
-        ClanSection.FAVORITES -> emptyList()
     }
 }
 
@@ -130,19 +130,17 @@ data class RemovedTitle(val id: String, val name: String?)
 data class ClanCatalogUiState(
     val catalog: ClanCatalog = ClanCatalog(),
     val removed: List<RemovedTitle> = emptyList(),
-    /** Favoritos (series y películas), en orden alfabético. */
-    val favorites: List<CatalogItem> = emptyList(),
-    val favoriteIds: Set<String> = emptySet(),
-    /** Carrusel de novedades: como mucho [NOVELTIES_MAX] (dos filas de 4), menos si no hay tantas. */
-    val novelties: List<CatalogItem> = emptyList(),
+    /** Ids anclados, para el menú (Anclar / Desanclar). */
+    val pinnedIds: Set<String> = emptySet(),
+    /** El catálogo ya está estable: hasta entonces se enseña la pantalla de inicio. */
+    val ready: Boolean = false,
     val isLoading: Boolean = true,
     /** Solo si no hay ningún título que enseñar. */
     val error: LoadError? = null,
 )
 
-const val NOVELTIES_MAX = 8
-/** Un título se queda en el carrusel 20 días desde que entra. */
-private const val NOVELTY_WINDOW_MS = 20L * 24 * 60 * 60 * 1000
+/** Si el catálogo tarda más en estabilizarse, se enseña lo que haya. */
+private const val READY_TIMEOUT_MS = 8_000L
 private const val BASELINE_KEY = "#baseline"
 
 /** Lo que trae una vuelta de descargas. */
@@ -181,7 +179,6 @@ class ClanCatalogViewModel(
     val uiState: StateFlow<ClanCatalogUiState> = mutableUiState.asStateFlow()
     private var job: Job? = null
     private var stored = StoredCatalog(emptyList(), emptyList())
-    private var highlights: List<CatalogItem> = emptyList()
     private var started = false
     /** Todo título visto alguna vez (fijos y descargados), para dar nombre a los eliminados. */
     private val known = mutableMapOf<String, CatalogItem>()
@@ -189,6 +186,10 @@ class ClanCatalogViewModel(
     init {
         (seed + movieSeed).forEach { known[it.id] = it }
         load()
+        viewModelScope.launch {
+            delay(READY_TIMEOUT_MS)
+            markReady()
+        }
     }
 
     fun retry() = load()
@@ -200,7 +201,8 @@ class ClanCatalogViewModel(
             movies = stored.movies.filter { it.id != item.id },
             removed = stored.removed + (item.id to false),
             removedItems = stored.removedItems.filter { it.id != item.id } + item,
-            favorites = stored.favorites - item.id,
+            pinned = stored.pinned - item.id,
+            pinnedFresh = stored.pinnedFresh - item.id,
         )
         persist()
         publish()
@@ -220,8 +222,16 @@ class ClanCatalogViewModel(
         if (item == null) load()
     }
 
-    fun toggleFavorite(item: CatalogItem) {
-        stored = stored.copy(favorites = if (item.id in stored.favorites) stored.favorites - item.id else stored.favorites + item.id)
+    /**
+     * Ancla o desancla un título. Lo desanclado a mano se recuerda: aunque RTVE lo vuelva
+     * a poner como novedad, aquí no se ancla otra vez.
+     */
+    fun togglePin(item: CatalogItem) {
+        stored = if (item.id in stored.pinned) {
+            stored.copy(pinned = stored.pinned - item.id, pinnedFresh = stored.pinnedFresh - item.id, unpinned = stored.unpinned + item.id)
+        } else {
+            stored.copy(pinned = stored.pinned + item.id, unpinned = stored.unpinned - item.id)
+        }
         persist()
         publish()
     }
@@ -237,7 +247,8 @@ class ClanCatalogViewModel(
                 series = stored.series.filter { it.id !in gone },
                 movies = stored.movies.filter { it.id !in gone },
                 removed = stored.removed + saved.removed.filterKeys { it in gone },
-                favorites = stored.favorites - gone,
+                pinned = stored.pinned - gone,
+                pinnedFresh = stored.pinnedFresh - gone,
             )
             publish()
         }
@@ -248,29 +259,24 @@ class ClanCatalogViewModel(
         viewModelScope.launch { store?.write(snapshot) }
     }
 
+    /** Primero los anclados (las novedades de RTVE recién llegadas delante, el resto por orden alfabético) y luego el resto. */
+    private fun List<CatalogItem>.pinnedFirst(): List<CatalogItem> {
+        val (pinned, rest) = partition { it.id in stored.pinned }
+        val (fresh, older) = pinned.partition { it.id in stored.pinnedFresh }
+        return fresh.sortedByDescending { stored.pinnedFresh[it.id] } + older + rest
+    }
+
     private fun publish() {
-        val catalog = ClanCatalog(stored.series, stored.movies)
-        val all = (stored.series + stored.movies).associateBy { it.id }
-        val favorites = stored.favorites.mapNotNull(all::get).alphabetical()
-        val cutoff = clock() - NOVELTY_WINDOW_MS
-        val order = highlights.map { it.id }
-        // Los más recientes primero; al entrar otros nuevos, los más antiguos salen.
-        val novelties = stored.carousel.entries
-            .filter { it.key in all && it.value > cutoff }
-            .sortedWith(
-                compareByDescending<Map.Entry<String, Long>> { it.value }
-                    .thenBy { order.indexOf(it.key).let { i -> if (i < 0) Int.MAX_VALUE else i } }
-                    .thenBy { all[it.key]?.title.orEmpty() },
-            )
-            .mapNotNull { all[it.key] }
-            .take(NOVELTIES_MAX)
+        val catalog = ClanCatalog(stored.series.pinnedFirst(), stored.movies.pinnedFirst())
         val removedTitles = stored.removed.keys.map { id ->
             RemovedTitle(id, (stored.removedItems.firstOrNull { it.id == id } ?: known[id])?.title)
         }.sortedWith(compareBy({ it.name == null }, { it.name?.lowercase() }))
         mutableUiState.update {
-            it.copy(catalog = catalog, favorites = favorites, favoriteIds = stored.favorites, novelties = novelties, removed = removedTitles)
+            it.copy(catalog = catalog, pinnedIds = stored.pinned, removed = removedTitles)
         }
     }
+
+    private fun markReady() = mutableUiState.update { it.copy(ready = true) }
 
     private fun load() {
         job?.cancel()
@@ -294,12 +300,12 @@ class ClanCatalogViewModel(
             try {
                 val result = download()
                 merge(result)
-                mutableUiState.update { it.copy(isLoading = false) }
+                mutableUiState.update { it.copy(isLoading = false, ready = true) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
                 // Con algo en pantalla, un fallo de red no se enseña.
-                mutableUiState.update { it.copy(isLoading = false, error = error.toLoadError().takeIf { _ -> it.catalog.isEmpty }) }
+                mutableUiState.update { it.copy(isLoading = false, ready = true, error = error.toLoadError().takeIf { _ -> it.catalog.isEmpty }) }
             }
         }
     }
@@ -337,22 +343,28 @@ class ClanCatalogViewModel(
             firstSeen[BASELINE_KEY] = 1L
         }
         (result.all.series + result.all.movies).forEach { known[it.id] = it }
-        // Entra en el carrusel lo que acaba de descubrirse y lo destacado de las portadas; una vez dentro, no se repite.
-        val carousel = before.carousel.toMutableMap()
+        // RTVE ancla sus novedades: lo recién descubierto y lo destacado en sus portadas. Lo desanclado a mano no vuelve.
         val inCatalog = (series + movies).associateBy { it.id }
-        for (item in inCatalog.values) {
-            val seen = firstSeen[item.id] ?: 0L
-            if (seen > 0L && item.id !in carousel) carousel[item.id] = seen
+        val pinned = before.pinned.toMutableSet()
+        val fresh = before.pinnedFresh.toMutableMap()
+        val baselineBefore = BASELINE_KEY in before.firstSeen
+        val now = clock()
+        val offered = inCatalog.values.filter { (firstSeen[it.id] ?: 0L) > 0L }.map { it.id } +
+            result.highlights.map { it.id }.filter { it in inCatalog }
+        for (id in offered) {
+            if (id in pinned || id in before.unpinned) continue
+            pinned += id
+            // En el primer arranque no se sabe qué es nuevo: se anclan, pero sin ir delante.
+            if (baselineBefore) fresh[id] = now
         }
-        for (item in result.highlights) if (item.id in inCatalog && item.id !in carousel) carousel[item.id] = clock()
         stored = StoredCatalog(
             series, movies, removed,
-            before.favorites.filter { id -> series.any { it.id == id } || movies.any { it.id == id } }.toSet(),
+            pinned.filter { it in inCatalog }.toSet(),
+            fresh.filterKeys { it in inCatalog },
+            before.unpinned,
             firstSeen,
             removedItems = before.removedItems.filter { it.id in removed },
-            carousel = carousel,
         )
-        highlights = result.highlights
         if (stored != before) persist()
         publish()
     }

@@ -39,11 +39,8 @@
     <string name="settings_removed">Eliminados</string>
     <string name="settings_removed_hint">Elige un título para volver a mostrarlo</string>
     <string name="removed_unnamed">Título sin nombre (vuelve al actualizar)</string>
-    <string name="catalog_favorites">Favoritos</string>
-    <string name="catalog_novelties">Novedades</string>
-    <string name="favorites_empty">Aún no hay favoritos. Mantén pulsada una serie o película para añadirla.</string>
-    <string name="menu_add_favorite">Añadir a favoritos</string>
-    <string name="menu_remove_favorite">Quitar de favoritos</string>
+    <string name="menu_pin">Anclar arriba</string>
+    <string name="menu_unpin">Desanclar</string>
     <string name="menu_remove">Eliminar de la lista</string>
     <string name="catalog_empty">No hay títulos ahora mismo</string>
 

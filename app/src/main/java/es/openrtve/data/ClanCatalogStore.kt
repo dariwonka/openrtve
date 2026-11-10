@@ -27,13 +27,16 @@ data class StoredCatalog(
     val movies: List<CatalogItem>,
     /** Título quitado a mano → `true` si RTVE ya lo había dejado de ofrecer (si vuelve, reaparece). */
     val removed: Map<String, Boolean> = emptyMap(),
-    val favorites: Set<String> = emptySet(),
+    /** Anclados: arriba de su lista. Los pone RTVE (sus novedades) o el usuario; solo el usuario los quita. */
+    val pinned: Set<String> = emptySet(),
+    /** Anclados que RTVE acaba de traer: van los primeros, los más nuevos antes. */
+    val pinnedFresh: Map<String, Long> = emptyMap(),
+    /** Desanclados a mano: RTVE no los vuelve a anclar. */
+    val unpinned: Set<String> = emptySet(),
     /** Momento en que se descubrió un título nuevo de RTVE; 0 si ya estaba al instalar. */
     val firstSeen: Map<String, Long> = emptyMap(),
     /** Los títulos eliminados, enteros, para poder restaurarlos aunque RTVE ya no los ofrezca. */
     val removedItems: List<CatalogItem> = emptyList(),
-    /** Cuándo entró cada título en el carrusel de novedades; a los 20 días deja de salir. */
-    val carousel: Map<String, Long> = emptyMap(),
 )
 
 /**
@@ -55,11 +58,13 @@ class ClanCatalogStore(
                 series = root.items("series"),
                 movies = root.items("movies"),
                 removed = (root["removed"] as? JsonObject).orEmpty().mapValues { (it.value as? JsonPrimitive)?.booleanOrNull ?: false },
-                favorites = (root["favorites"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
+                // "favorites" es el nombre antiguo de los anclados.
+                pinned = ((root["pinned"] ?: root["favorites"]) as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
+                pinnedFresh = (root["pinnedFresh"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
+                unpinned = (root["unpinned"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
                 removedItems = root.items("removedItems"),
-                carousel = (root["carousel"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
                 firstSeen = (root["firstSeen"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
-            ).takeIf { it.series.isNotEmpty() || it.movies.isNotEmpty() || it.removed.isNotEmpty() || it.favorites.isNotEmpty() || it.removedItems.isNotEmpty() }
+            ).takeIf { it.series.isNotEmpty() || it.movies.isNotEmpty() || it.removed.isNotEmpty() || it.pinned.isNotEmpty() || it.unpinned.isNotEmpty() || it.removedItems.isNotEmpty() }
         }.getOrNull()
     }
 
@@ -72,7 +77,8 @@ class ClanCatalogStore(
                 movies = current.movies.filter { it.id !in ids },
                 removed = current.removed + ids.associateWith { false },
                 removedItems = current.removedItems.filter { it.id !in ids } + (current.series + current.movies).filter { it.id in ids },
-                favorites = current.favorites - ids.toSet(),
+                pinned = current.pinned - ids.toSet(),
+                pinnedFresh = current.pinnedFresh - ids.toSet(),
             ),
         )
     }
@@ -82,11 +88,12 @@ class ClanCatalogStore(
         runCatching {
             val raw = buildJsonObject {
                 put("removedItems", catalog.removedItems.toJson())
-                put("carousel", buildJsonObject { catalog.carousel.forEach { (id, at) -> put(id, at) } })
                 put("series", catalog.series.toJson())
                 put("movies", catalog.movies.toJson())
                 put("removed", buildJsonObject { catalog.removed.forEach { (id, gone) -> put(id, gone) } })
-                put("favorites", buildJsonArray { catalog.favorites.forEach { add(JsonPrimitive(it)) } })
+                put("pinned", buildJsonArray { catalog.pinned.forEach { add(JsonPrimitive(it)) } })
+                put("pinnedFresh", buildJsonObject { catalog.pinnedFresh.forEach { (id, at) -> put(id, at) } })
+                put("unpinned", buildJsonArray { catalog.unpinned.forEach { add(JsonPrimitive(it)) } })
                 put("firstSeen", buildJsonObject { catalog.firstSeen.forEach { (id, at) -> put(id, at) } })
             }.toString()
             val pending = File(file.parentFile, file.name + ".tmp")

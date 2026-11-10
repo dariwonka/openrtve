@@ -61,7 +61,6 @@ fun TvApp(container: AppContainer) {
     // El desplazamiento de cada lista y la serie abierta sobreviven a entrar en una serie y volver.
     val seriesGrid = rememberLazyGridState()
     val moviesGrid = rememberLazyGridState()
-    val favoritesGrid = rememberLazyGridState()
     var lastOpened by rememberSaveable { mutableStateOf<String?>(null) }
 
     // El reproductor puede eliminar un título; al volver se refleja.
@@ -94,6 +93,7 @@ fun TvApp(container: AppContainer) {
             if (navigation.state.value.current != null) navigation.selectTab(Tab.HOME)
         }
     }
+    Box(Modifier.fillMaxSize()) {
     ProvideClock {
         Column(
             Modifier
@@ -154,9 +154,8 @@ fun TvApp(container: AppContainer) {
                             gridState = when (section) {
                                 ClanSection.SERIES -> seriesGrid
                                 ClanSection.MOVIES -> moviesGrid
-                                ClanSection.FAVORITES -> favoritesGrid
                             },
-                            onToggleFavorite = catalogViewModel::toggleFavorite,
+                            onTogglePin = catalogViewModel::togglePin,
                             onRemove = catalogViewModel::remove,
                             isRemovalUnlocked = { container.removalUnlocked },
                             onUnlockRemoval = { container.removalUnlocked = true },
@@ -180,6 +179,19 @@ fun TvApp(container: AppContainer) {
                 }
             }
         }
+    }
+    // Pantalla de inicio hasta que el catálogo está estable: así no se ve el cambio de la copia a lo actual.
+    androidx.compose.animation.AnimatedVisibility(
+        visible = !catalog.ready,
+        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(350)),
+    ) {
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(es.openrtve.R.drawable.splash),
+            contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
     }
 }
 
