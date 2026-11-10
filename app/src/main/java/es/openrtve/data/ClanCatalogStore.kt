@@ -57,6 +57,19 @@ class ClanCatalogStore(
         }.getOrNull()
     }
 
+    /** Quita títulos de las listas y de favoritos, y los apunta como eliminados a mano. */
+    suspend fun remove(ids: Collection<String>) {
+        val current = read() ?: StoredCatalog(emptyList(), emptyList())
+        write(
+            current.copy(
+                series = current.series.filter { it.id !in ids },
+                movies = current.movies.filter { it.id !in ids },
+                removed = current.removed + ids.associateWith { false },
+                favorites = current.favorites - ids.toSet(),
+            ),
+        )
+    }
+
     /** Escritura atómica: un corte a medias deja la copia anterior. */
     suspend fun write(catalog: StoredCatalog) = withContext(io) {
         runCatching {

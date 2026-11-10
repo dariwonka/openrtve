@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +63,12 @@ fun TvApp(container: AppContainer) {
     val moviesGrid = rememberLazyGridState()
     val favoritesGrid = rememberLazyGridState()
     var lastOpened by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // El reproductor puede eliminar un título; al volver se refleja.
+    val lifecycle = (context as? androidx.activity.ComponentActivity)?.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle?.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) { catalogViewModel.syncFromStore() }
+    }
 
     BackHandler(enabled = nav.canGoBack, onBack = navigation::pop)
 
@@ -151,6 +158,8 @@ fun TvApp(container: AppContainer) {
                             },
                             onToggleFavorite = catalogViewModel::toggleFavorite,
                             onRemove = catalogViewModel::remove,
+                            isRemovalUnlocked = { container.removalUnlocked },
+                            onUnlockRemoval = { container.removalUnlocked = true },
                             focusId = lastOpened,
                             onRetry = catalogViewModel::retry,
                             reselectRequest = nav.rootRequests.getValue(Tab.HOME),

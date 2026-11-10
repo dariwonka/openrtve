@@ -126,6 +126,8 @@ internal fun TvCatalogScreen(
     focusId: String?,
     onToggleFavorite: (CatalogItem) -> Unit,
     onRemove: (CatalogItem) -> Unit,
+    isRemovalUnlocked: () -> Boolean,
+    onUnlockRemoval: () -> Unit,
     reselectRequest: Int = 0,
 ) {
     val isFavorites = section == ClanSection.FAVORITES
@@ -140,6 +142,8 @@ internal fun TvCatalogScreen(
                 onOpen = onOpen,
                 onToggleFavorite = onToggleFavorite,
                 onRemove = onRemove,
+                isRemovalUnlocked = isRemovalUnlocked,
+                onUnlockRemoval = onUnlockRemoval,
                 gridState = gridState,
                 focusId = focusId,
                 reselectRequest = reselectRequest,
@@ -162,10 +166,13 @@ private fun TvTitleGrid(
     onOpen: (CatalogItem) -> Unit,
     onToggleFavorite: (CatalogItem) -> Unit,
     onRemove: (CatalogItem) -> Unit,
+    isRemovalUnlocked: () -> Boolean,
+    onUnlockRemoval: () -> Unit,
     gridState: LazyGridState,
     focusId: String?,
     reselectRequest: Int,
 ) {
+    var pinFor by remember { mutableStateOf<CatalogItem?>(null) }
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
     var focusedIndex by remember { mutableIntStateOf(-1) }
@@ -175,6 +182,13 @@ private fun TvTitleGrid(
     val toStart: () -> Unit = {
         scope.launch {
             gridState.scrollToItem(0)
+            withFrameNanos { }
+            runCatching { first.requestFocus() }
+        }
+    }
+    val removeAndRefocus: (CatalogItem) -> Unit = { item ->
+        onRemove(item)
+        scope.launch {
             withFrameNanos { }
             runCatching { first.requestFocus() }
         }
@@ -226,13 +240,21 @@ private fun TvTitleGrid(
             isFavorite = item.id in favoriteIds,
             onFavorite = { onToggleFavorite(item) },
             onRemove = {
-                onRemove(item)
-                scope.launch {
-                    withFrameNanos { }
-                    runCatching { first.requestFocus() }
-                }
+                if (isRemovalUnlocked()) removeAndRefocus(item) else pinFor = item
             },
             onDismiss = { menuItem = null },
+        )
+    }
+    pinFor?.let { item ->
+        es.openrtve.ui.PinDialog(
+            name = item.title,
+            unlocked = false,
+            onConfirm = {
+                onUnlockRemoval()
+                pinFor = null
+                removeAndRefocus(item)
+            },
+            onDismiss = { pinFor = null },
         )
     }
 }

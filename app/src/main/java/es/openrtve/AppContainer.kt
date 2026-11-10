@@ -43,6 +43,8 @@ class AppContainer(private val context: Context) {
     /** Programas con género Infantil en RTVE (recogidos de su catálogo), que se suman a Clan. */
     val infantilSeed: List<es.openrtve.domain.CatalogItem> by lazy { loadSeed(context, "infantil.json", es.openrtve.domain.ContentKind.PROGRAM) }
     val movieSeed: List<es.openrtve.domain.CatalogItem> by lazy { loadSeed(context, "peliculas.json", es.openrtve.domain.ContentKind.VIDEO) }
+    /** El PIN de borrado se pide una vez por sesión de la app. */
+    @Volatile var removalUnlocked: Boolean = false
     val clanCatalogStore = ClanCatalogStore(context.filesDir.resolve("clan-catalog.json"))
     val deepLinkResolver = DeepLinkResolver(catalogRepository)
     val watchHistory = WatchHistory(context.filesDir.resolve("watch-history.json"))

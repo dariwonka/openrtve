@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
@@ -107,6 +109,12 @@ class PlayerActivity : ComponentActivity() {
     private var sprite by mutableStateOf<PreviewSprite?>(null)
     /** Posición y fracción de la barra mientras el usuario arrastra. */
     private var scrub by mutableStateOf<Pair<Long, Float>?>(null)
+    private var seekLabel by mutableStateOf<String?>(null)
+    private var paused by mutableStateOf(false)
+    internal var controlsVisible by mutableStateOf(false)
+    /** Título del catálogo que se ofrece borrar cuando el vídeo ya no está en RTVE. */
+    private var removeName by mutableStateOf<String?>(null)
+    private var removeIds: Set<String> = emptySet()
     private var nextItem by mutableStateOf<CatalogItem?>(null)
     private var nextCountdown by mutableStateOf<Int?>(null)
     private var showNext by mutableStateOf(false)
@@ -135,7 +143,10 @@ class PlayerActivity : ComponentActivity() {
 
         override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) = refreshLiveState()
 
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = refreshPaused()
+
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            refreshPaused()
             refreshLiveState()
             updateKeepScreenOn()
         }
@@ -145,6 +156,7 @@ class PlayerActivity : ComponentActivity() {
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
+            refreshPaused()
             if (playbackState == Player.STATE_ENDED && nextItem != null && settings.current.autoplayNext) playNext()
         }
 
@@ -165,6 +177,10 @@ class PlayerActivity : ComponentActivity() {
             }
             errorRes = error.toMessageRes()
         }
+    }
+
+    private fun refreshPaused() {
+        paused = controller?.let { !it.playWhenReady && it.playbackState == Player.STATE_READY } == true
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -203,6 +219,14 @@ class PlayerActivity : ComponentActivity() {
                     sprite = sprite,
                     scrub = scrub,
                     onScrub = { scrub = it },
+                    seekLabel = seekLabel,
+                    paused = paused,
+                    controlsVisible = controlsVisible,
+                    removeName = removeName,
+                    removeUnlocked = container.removalUnlocked,
+                    onErrorShown = ::offerRemoval,
+                    onConfirmRemoval = ::removeFromCatalog,
+                    onDismissRemoval = { removeName = null },
                     nextTitle = nextItem?.takeIf { showNext }?.title,
                     nextCountdown = nextCountdown,
                     onPlayNext = ::playNext,
@@ -274,11 +298,29 @@ class PlayerActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    private val seekHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var seekPending = false
+    private var seekOrigin = 0L
+    private val confirmSeek = Runnable {
+        if (seekPending) controller?.seekTo(seekTarget)
+        seekPending = false
+        scrub = null
+        seekLabel = null
+    }
+
+    /**
+     * Cada pulsación solo mueve un destino: se enseña la miniatura y el tiempo ("+3 min · 42:10")
+     * y el salto real se hace al soltar, tras un instante sin teclas.
+     */
     private fun seekByKey(view: PlayerView, forward: Boolean, repeat: Int) {
         val player = view.player ?: return
         val now = android.os.SystemClock.uptimeMillis()
         if (repeat == 0) {
-            seekTarget = player.currentPosition
+            if (!seekPending) {
+                seekOrigin = player.currentPosition
+                seekTarget = seekOrigin
+                seekPending = true
+            }
             seekHoldStart = now
             seekLastStep = 0L
         } else if (now - seekLastStep < SEEK_REPEAT_INTERVAL_MS || now - seekHoldStart < SEEK_HOLD_DELAY_MS) {
@@ -287,13 +329,51 @@ class PlayerActivity : ComponentActivity() {
         val heldSeconds = if (repeat == 0) 0L else (now - seekHoldStart) / 1000
         val step = SEEK_STEP_MS * (1 + heldSeconds).coerceAtMost(SEEK_MAX_FACTOR)
         val duration = player.duration
-        var target = seekTarget + if (forward) step else -step
-        target = target.coerceAtLeast(0L)
+        var target = (seekTarget + if (forward) step else -step).coerceAtLeast(0L)
         if (duration > 0) target = target.coerceAtMost(duration)
         seekTarget = target
         seekLastStep = now
-        player.seekTo(target)
+        if (duration > 0) scrub = target to (target.toFloat() / duration)
+        val minutes = Math.round((target - seekOrigin) / 60_000.0)
+        seekLabel = "${if (minutes >= 0) "+" else "−"}${kotlin.math.abs(minutes)} min · ${formatClock(target)}"
+        seekHandler.removeCallbacks(confirmSeek)
+        seekHandler.postDelayed(confirmSeek, SEEK_CONFIRM_DELAY_MS)
         view.showController()
+    }
+
+    private fun formatClock(ms: Long): String {
+        val total = ms / 1000
+        val h = total / 3600
+        val m = (total % 3600) / 60
+        val sec = total % 60
+        return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
+    }
+
+    /** Si el vídeo ya no está en RTVE y es un título del catálogo, ofrece borrarlo ahí mismo. */
+    private fun offerRemoval(error: Int?) {
+        val unavailable = error == R.string.player_error_not_found || error == R.string.player_error_nothing || error == R.string.player_error_generic
+        if (!unavailable) {
+            removeName = null
+            return
+        }
+        val ids = request?.catalogIds.orEmpty().toSet()
+        if (ids.isEmpty()) return
+        lifecycleScope.launch {
+            val saved = container.clanCatalogStore.read() ?: return@launch
+            val match = (saved.series + saved.movies).firstOrNull { it.id in ids } ?: return@launch
+            removeIds = setOf(match.id)
+            removeName = match.title
+        }
+    }
+
+    private fun removeFromCatalog() {
+        val ids = removeIds
+        lifecycleScope.launch {
+            container.clanCatalogStore.remove(ids)
+            container.removalUnlocked = true
+            removeName = null
+            finish()
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
@@ -356,6 +436,10 @@ class PlayerActivity : ComponentActivity() {
      */
     override fun onStop() {
         super.onStop()
+        seekHandler.removeCallbacks(confirmSeek)
+        seekPending = false
+        scrub = null
+        seekLabel = null
         saveProgress()
         val inPictureInPicture = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
         if (!inPictureInPicture || isFinishing) {
@@ -597,8 +681,9 @@ class PlayerActivity : ComponentActivity() {
         // El ticker guarda cada 10 s: sin esto, el episodio que acaba puede no quedar como visto.
         saveProgress()
         history.register(next)
-        request = PlaybackRequest.from(decision, restart = false)
-        setIntent(intent(this, decision))
+        val ids = listOfNotNull(next.id, next.programId)
+        request = PlaybackRequest.from(decision, restart = false, catalogIds = ids)
+        setIntent(intent(this, decision, catalogIds = ids))
         pendingPlay = true
         usedFallback = false
         errorRes = null
@@ -684,6 +769,8 @@ class PlayerActivity : ComponentActivity() {
         val historyKey: String?,
         val restart: Boolean,
         val videoId: String?,
+        /** Ids con los que el título puede estar en el catálogo (la película, o la serie del capítulo). */
+        val catalogIds: List<String> = emptyList(),
     ) {
 
         fun toBundle(): Bundle = Bundle().apply {
@@ -694,6 +781,7 @@ class PlayerActivity : ComponentActivity() {
             putString(EXTRA_FALLBACK_URI, fallbackUri)
             putString(EXTRA_HISTORY_KEY, historyKey)
             putString(EXTRA_VIDEO_ID, videoId)
+            putStringArrayList(EXTRA_CATALOG_IDS, ArrayList(catalogIds))
             // Reiniciar es una orden transitoria, no parte del contenido activo.
         }
 
@@ -714,7 +802,7 @@ class PlayerActivity : ComponentActivity() {
             .build()
 
         companion object {
-            fun from(decision: PlaybackDecision.Ready, restart: Boolean) = PlaybackRequest(
+            fun from(decision: PlaybackDecision.Ready, restart: Boolean, catalogIds: List<String> = emptyList()) = PlaybackRequest(
                 uri = decision.uri,
                 mimeType = decision.mimeType,
                 title = decision.title,
@@ -723,6 +811,7 @@ class PlayerActivity : ComponentActivity() {
                 historyKey = decision.historyKey,
                 restart = restart,
                 videoId = decision.videoId,
+                catalogIds = catalogIds,
             )
 
             fun from(intent: Intent): PlaybackRequest? = intent.extras?.let(::from)
@@ -739,6 +828,7 @@ class PlayerActivity : ComponentActivity() {
                     historyKey = extras.getString(EXTRA_HISTORY_KEY),
                     restart = extras.getBoolean(EXTRA_RESTART, false),
                     videoId = extras.getString(EXTRA_VIDEO_ID),
+                    catalogIds = extras.getStringArrayList(EXTRA_CATALOG_IDS).orEmpty(),
                 )
             }
         }
@@ -749,6 +839,7 @@ class PlayerActivity : ComponentActivity() {
         private const val SEEK_MAX_FACTOR = 10L
         private const val SEEK_HOLD_DELAY_MS = 450L
         private const val SEEK_REPEAT_INTERVAL_MS = 300L
+        private const val SEEK_CONFIRM_DELAY_MS = 700L
         private const val SAVED_REQUEST = "active-playback"
         private const val EXTRA_URI = "playback_uri"
         private const val EXTRA_MIME_TYPE = "playback_mime_type"
@@ -758,8 +849,9 @@ class PlayerActivity : ComponentActivity() {
         private const val EXTRA_HISTORY_KEY = "playback_history_key"
         private const val EXTRA_RESTART = "playback_restart"
         private const val EXTRA_VIDEO_ID = "playback_video_id"
+        private const val EXTRA_CATALOG_IDS = "playback_catalog_ids"
 
-        fun intent(context: Context, decision: PlaybackDecision.Ready, restart: Boolean = false): Intent =
+        fun intent(context: Context, decision: PlaybackDecision.Ready, restart: Boolean = false, catalogIds: List<String> = emptyList()): Intent =
             Intent(context, PlayerActivity::class.java).apply {
                 putExtra(EXTRA_URI, decision.uri)
                 putExtra(EXTRA_MIME_TYPE, decision.mimeType)
@@ -769,6 +861,7 @@ class PlayerActivity : ComponentActivity() {
                 putExtra(EXTRA_HISTORY_KEY, decision.historyKey)
                 putExtra(EXTRA_RESTART, restart)
                 putExtra(EXTRA_VIDEO_ID, decision.videoId)
+                putStringArrayListExtra(EXTRA_CATALOG_IDS, ArrayList(catalogIds))
             }
     }
 }
@@ -788,6 +881,14 @@ private fun PlaybackScreen(
     sprite: PreviewSprite?,
     scrub: Pair<Long, Float>?,
     onScrub: (Pair<Long, Float>?) -> Unit,
+    seekLabel: String?,
+    paused: Boolean,
+    controlsVisible: Boolean,
+    removeName: String?,
+    removeUnlocked: Boolean,
+    onErrorShown: (Int?) -> Unit,
+    onConfirmRemoval: () -> Unit,
+    onDismissRemoval: () -> Unit,
     nextTitle: String?,
     nextCountdown: Int?,
     onPlayNext: () -> Unit,
@@ -853,6 +954,7 @@ private fun PlaybackScreen(
                     view.setControllerVisibilityListener(
                         PlayerView.ControllerVisibilityListener { visibility ->
                             activity.hideControlsOnBack.isEnabled = visibility == View.VISIBLE
+                            activity.controlsVisible = visibility == View.VISIBLE
                             if (visibility == View.VISIBLE) {
                                 view.post {
                                     if (view.isControllerFullyVisible) {
@@ -900,6 +1002,41 @@ private fun PlaybackScreen(
         }
         if (sprite != null && scrub != null) {
             ScrubPreview(sprite, scrub.first, scrub.second)
+        }
+        seekLabel?.let {
+            Text(
+                text = it,
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .background(Color.Black.copy(alpha = 0.6f), MaterialTheme.shapes.small)
+                    .padding(horizontal = 18.dp, vertical = 8.dp),
+            )
+        }
+        if (paused && !controlsVisible && menu == null && errorRes == null) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(28.dp)
+                    .background(Color.Black.copy(alpha = 0.35f), MaterialTheme.shapes.small)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                repeat(2) {
+                    Box(Modifier.size(width = 7.dp, height = 22.dp).background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(2.dp)))
+                }
+            }
+        }
+        LaunchedEffect(errorRes) { onErrorShown(errorRes) }
+        removeName?.let { name ->
+            es.openrtve.ui.PinDialog(
+                name = name,
+                unlocked = removeUnlocked,
+                notice = stringResource(R.string.unavailable_notice),
+                onConfirm = onConfirmRemoval,
+                onDismiss = onDismissRemoval,
+            )
         }
         if (nextTitle != null && menu == null) {
             NextEpisodeCard(nextTitle, nextCountdown, onPlayNext)

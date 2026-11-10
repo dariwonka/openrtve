@@ -29,6 +29,13 @@
     <string name="search_min_length">Escribe al menos tres letras</string>
     <string name="catalog_series">Series</string>
     <string name="catalog_movies">Películas</string>
+    <string name="pin_title">¿Quieres borrar «%1$s» de la base de datos?</string>
+    <string name="pin_hint">Introduce 0000 para confirmar</string>
+    <string name="pin_wrong">PIN incorrecto. Prueba otra vez</string>
+    <string name="pin_delete">Borrar</string>
+    <string name="pin_cancel">Cancelar</string>
+    <string name="pin_erase">Borrar dígito</string>
+    <string name="unavailable_notice">Este vídeo ya no está disponible en RTVE.</string>
     <string name="catalog_favorites">Favoritos</string>
     <string name="catalog_novelties">Novedades</string>
     <string name="favorites_empty">Aún no hay favoritos. Mantén pulsada una serie o película para añadirla.</string>

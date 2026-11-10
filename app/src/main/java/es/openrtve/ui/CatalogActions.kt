@@ -28,7 +28,7 @@ class CatalogActions(
         when (val decision = container.playbackResolver.resolve(item)) {
             is PlaybackDecision.Ready -> {
                 container.watchHistory.register(item)
-                context.startActivity(PlayerActivity.intent(context, decision, restart))
+                context.startActivity(PlayerActivity.intent(context, decision, restart, listOfNotNull(item.id, item.programId)))
             }
             is PlaybackDecision.Blocked -> {
                 val schedule = item.live?.scheduleLabel(context, System.currentTimeMillis())

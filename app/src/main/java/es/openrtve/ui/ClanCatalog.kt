@@ -203,6 +203,22 @@ class ClanCatalogViewModel(
         publish()
     }
 
+    /** El reproductor puede haber eliminado un título; al volver a la lista se refleja. */
+    fun syncFromStore() {
+        viewModelScope.launch {
+            val saved = store?.read() ?: return@launch
+            val gone = saved.removed.keys - stored.removed.keys
+            if (gone.isEmpty()) return@launch
+            stored = stored.copy(
+                series = stored.series.filter { it.id !in gone },
+                movies = stored.movies.filter { it.id !in gone },
+                removed = stored.removed + saved.removed.filterKeys { it in gone },
+                favorites = stored.favorites - gone,
+            )
+            publish()
+        }
+    }
+
     private fun persist() {
         val snapshot = stored
         viewModelScope.launch { store?.write(snapshot) }
