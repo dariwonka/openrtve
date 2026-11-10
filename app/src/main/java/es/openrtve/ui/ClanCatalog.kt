@@ -342,9 +342,9 @@ class ClanCatalogViewModel(
         val inCatalog = (series + movies).associateBy { it.id }
         for (item in inCatalog.values) {
             val seen = firstSeen[item.id] ?: 0L
-            if (seen > 0L) carousel.putIfAbsent(item.id, seen)
+            if (seen > 0L && item.id !in carousel) carousel[item.id] = seen
         }
-        for (item in result.highlights) if (item.id in inCatalog) carousel.putIfAbsent(item.id, clock())
+        for (item in result.highlights) if (item.id in inCatalog && item.id !in carousel) carousel[item.id] = clock()
         stored = StoredCatalog(
             series, movies, removed,
             before.favorites.filter { id -> series.any { it.id == id } || movies.any { it.id == id } }.toSet(),
