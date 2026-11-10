@@ -276,7 +276,7 @@ class ClanCatalogTest {
     }
 
     @Test
-    fun `new titles from a later download fill the carousel, at most ten`() = runTest(mainDispatcher.dispatcher) {
+    fun `new titles from a later download fill the carousel, at most eight`() = runTest(mainDispatcher.dispatcher) {
         val store = tempStore()
         ClanCatalogViewModel(online(program("1", "Antiguo")), store)
         advanceUntilIdle()
@@ -284,7 +284,7 @@ class ClanCatalogTest {
         val later = ClanCatalogViewModel(online(*(listOf(program("1", "Antiguo")) + many).toTypedArray()), store)
         advanceUntilIdle()
         val novelties = later.uiState.value.novelties
-        assertEquals(10, novelties.size)
+        assertEquals(8, novelties.size)
         assertTrue(novelties.none { it.id == "1" })
     }
 
