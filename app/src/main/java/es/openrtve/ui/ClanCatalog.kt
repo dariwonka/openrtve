@@ -33,7 +33,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 /** Las dos listas del inicio. */
-enum class ClanSection { SERIES, MOVIES }
+enum class ClanSection { SERIES, MOVIES, FAVORITES }
 
 /** Títulos únicos de Clan, cada lista en orden alfabético. */
 data class ClanCatalog(
@@ -42,7 +42,11 @@ data class ClanCatalog(
 ) {
     val isEmpty: Boolean get() = series.isEmpty() && movies.isEmpty()
 
-    fun titles(section: ClanSection): List<CatalogItem> = if (section == ClanSection.SERIES) series else movies
+    fun titles(section: ClanSection): List<CatalogItem> = when (section) {
+        ClanSection.SERIES -> series
+        ClanSection.MOVIES -> movies
+        ClanSection.FAVORITES -> emptyList()
+    }
 }
 
 /** Una fila de la portada ya descargada: su título editorial y sus piezas. */
@@ -64,7 +68,7 @@ data class LoadedRow(
  *
  * Las filas dejan de existir: solo importa qué títulos contienen.
  */
-fun buildClanCatalog(rows: List<LoadedRow>): ClanCatalog {
+fun buildClanCatalog(rows: List<LoadedRow>, sorted: Boolean = true): ClanCatalog {
     val programs = linkedMapOf<String, CatalogItem>()
     val fromEpisodes = linkedMapOf<String, CatalogItem>()
     val movies = linkedMapOf<String, CatalogItem>()
@@ -87,7 +91,8 @@ fun buildClanCatalog(rows: List<LoadedRow>): ClanCatalog {
     fromEpisodes.values.forEach(programs::addTitle)
     // Lo que una fila presenta como película no se repite entre las series.
     movies.keys.forEach(programs::remove)
-    return ClanCatalog(series = programs.values.alphabetical(), movies = movies.values.alphabetical())
+    return if (sorted) ClanCatalog(series = programs.values.alphabetical(), movies = movies.values.alphabetical())
+    else ClanCatalog(series = programs.values.toList(), movies = movies.values.toList())
 }
 
 /** Serie a la que pertenece un capítulo, como título propio; `null` si el feed no la nombra. */
@@ -121,23 +126,42 @@ private val DIACRITICS = Regex("\\p{Mn}+")
 
 data class ClanCatalogUiState(
     val catalog: ClanCatalog = ClanCatalog(),
+    /** Favoritos (series y películas), en orden alfabético. */
+    val favorites: List<CatalogItem> = emptyList(),
+    val favoriteIds: Set<String> = emptySet(),
+    /** Carrusel de novedades: como mucho [NOVELTIES_MAX], menos si no hay tantas. */
+    val novelties: List<CatalogItem> = emptyList(),
     val isLoading: Boolean = true,
     /** Solo si no hay ningún título que enseñar. */
     val error: LoadError? = null,
 )
 
+const val NOVELTIES_MAX = 10
+private const val NOVELTY_WINDOW_MS = 30L * 24 * 60 * 60 * 1000
+private const val BASELINE_KEY = "#baseline"
+
+/** Lo que trae una vuelta de descargas. */
+private class Download(
+    /** Con la lista fija incluida. */
+    val all: ClanCatalog,
+    /** Solo lo que ha entregado RTVE ahora. */
+    val network: ClanCatalog,
+    /** Lo destacado en las portadas de Clan, en su orden. */
+    val highlights: List<CatalogItem>,
+    /** Todas las fuentes principales respondieron. */
+    val complete: Boolean,
+)
+
 /**
- * Catálogo del inicio. Primero pinta la última copia guardada ([ClanCatalogStore]),
- * sin red: la app abre con los títulos ya en pantalla. Después lo rehace en segundo
- * plano y lo sustituye solo si ha cambiado:
+ * Catálogo del inicio. Primero pinta la copia guardada ([ClanCatalogStore]), sin red,
+ * y después lo rehace en segundo plano, siempre **sumando**: lo que ya se conocía no se
+ * borra aunque una fuente falle o RTVE deje de ofrecerlo. Solo se quita lo que el
+ * usuario elimina a mano; eso no vuelve hasta que RTVE lo retire y lo vuelva a añadir.
  *
  * - el listado A-Z de la cadena Clan aporta sus series;
- * - las filas de las cinco portadas del menú de Clan (la principal, las tres franjas
- *   de edad y la de películas; seis filas a la vez) aportan las películas y las
- *   series que el listado no traiga.
- *
- * Una fuente que falla no impide usar las demás; si no hay nada que enseñar, se
- * explica y se puede reintentar.
+ * - las portadas de Clan (principal, tres edades y películas) aportan las películas y
+ *   las series que el listado no traiga;
+ * - los favoritos y los títulos nuevos (carrusel) viven en la misma copia.
  */
 class ClanCatalogViewModel(
     private val repository: CatalogRepository,
@@ -146,10 +170,14 @@ class ClanCatalogViewModel(
     private val seed: List<CatalogItem> = emptyList(),
     /** Películas infantiles conocidas, para tenerlas desde el primer segundo. */
     private val movieSeed: List<CatalogItem> = emptyList(),
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ClanCatalogUiState())
     val uiState: StateFlow<ClanCatalogUiState> = mutableUiState.asStateFlow()
     private var job: Job? = null
+    private var stored = StoredCatalog(emptyList(), emptyList())
+    private var highlights: List<CatalogItem> = emptyList()
+    private var started = false
 
     init {
         load()
@@ -157,36 +185,116 @@ class ClanCatalogViewModel(
 
     fun retry() = load()
 
+    /** Quita un título de las listas y de favoritos; no vuelve salvo que RTVE lo retire y lo reponga. */
+    fun remove(item: CatalogItem) {
+        stored = stored.copy(
+            series = stored.series.filter { it.id != item.id },
+            movies = stored.movies.filter { it.id != item.id },
+            removed = stored.removed + (item.id to false),
+            favorites = stored.favorites - item.id,
+        )
+        persist()
+        publish()
+    }
+
+    fun toggleFavorite(item: CatalogItem) {
+        stored = stored.copy(favorites = if (item.id in stored.favorites) stored.favorites - item.id else stored.favorites + item.id)
+        persist()
+        publish()
+    }
+
+    private fun persist() {
+        val snapshot = stored
+        viewModelScope.launch { store?.write(snapshot) }
+    }
+
+    private fun publish() {
+        val catalog = ClanCatalog(stored.series, stored.movies)
+        val all = (stored.series + stored.movies).associateBy { it.id }
+        val favorites = stored.favorites.mapNotNull(all::get).alphabetical()
+        val cutoff = clock() - NOVELTY_WINDOW_MS
+        val recent = all.values
+            .filter { (stored.firstSeen[it.id] ?: 0L) > cutoff }
+            .sortedWith(compareByDescending<CatalogItem> { stored.firstSeen[it.id] ?: 0L }.thenBy { it.title })
+        val featured = highlights.mapNotNull { all[it.id] }
+        val novelties = (recent + featured).distinctBy { it.id }.take(NOVELTIES_MAX)
+        mutableUiState.update {
+            it.copy(catalog = catalog, favorites = favorites, favoriteIds = stored.favorites, novelties = novelties)
+        }
+    }
+
     private fun load() {
         job?.cancel()
         job = viewModelScope.launch {
             mutableUiState.update { it.copy(isLoading = it.catalog.isEmpty, error = null) }
-            if (mutableUiState.value.catalog.isEmpty) {
+            if (!started) {
+                started = true
                 val saved = store?.read()
-                val start = if (saved != null) ClanCatalog(saved.series, saved.movies) else buildClanCatalog(listOf(LoadedRow(SEED_ROW_TITLE, seed), LoadedRow(SEED_ROW_TITLE, movieSeed, true)))
-                if (!start.isEmpty) mutableUiState.update { it.copy(catalog = start, isLoading = false) }
+                stored = saved ?: buildClanCatalog(listOf(LoadedRow(SEED_ROW_TITLE, seed), LoadedRow(SEED_ROW_TITLE, movieSeed, true)))
+                    .let { StoredCatalog(it.series, it.movies) }
+                if (saved != null) {
+                    // Lo quitado a mano no se deja ver aunque la copia lo traiga.
+                    stored = stored.copy(
+                        series = stored.series.filter { it.id !in stored.removed },
+                        movies = stored.movies.filter { it.id !in stored.removed },
+                    )
+                }
+                publish()
+                if (!mutableUiState.value.catalog.isEmpty) mutableUiState.update { it.copy(isLoading = false) }
             }
             try {
-                val fresh = download()
-                if (fresh.isEmpty) {
-                    mutableUiState.update { it.copy(isLoading = false) }
-                } else if (fresh != mutableUiState.value.catalog) {
-                    mutableUiState.update { it.copy(catalog = fresh, isLoading = false) }
-                    store?.write(StoredCatalog(fresh.series, fresh.movies))
-                } else {
-                    mutableUiState.update { it.copy(isLoading = false) }
-                }
+                val result = download()
+                merge(result)
+                mutableUiState.update { it.copy(isLoading = false) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                // Con la copia guardada en pantalla, un fallo de red no se enseña.
+                // Con algo en pantalla, un fallo de red no se enseña.
                 mutableUiState.update { it.copy(isLoading = false, error = error.toLoadError().takeIf { _ -> it.catalog.isEmpty }) }
             }
         }
     }
 
+    /** Suma lo descargado a lo que ya había; nunca resta. */
+    private fun merge(result: Download) {
+        val before = stored
+        val netIds = (result.network.series + result.network.movies).map { it.id }.toSet()
+        val removed = before.removed.toMutableMap()
+        for ((id, gone) in before.removed) {
+            when {
+                gone && id in netIds -> removed.remove(id) // RTVE lo ha vuelto a ofrecer
+                !gone && result.complete && id !in netIds -> removed[id] = true
+            }
+        }
+        fun mergeList(old: List<CatalogItem>, fresh: List<CatalogItem>, freshOther: List<CatalogItem>): List<CatalogItem> {
+            val otherIds = freshOther.map { it.id }.toSet()
+            val merged = linkedMapOf<String, CatalogItem>()
+            old.filter { it.id !in otherIds }.forEach { merged[it.id] = it }
+            for (item in fresh) {
+                val known = merged[item.id]
+                merged[item.id] = known?.let { item.copy(imageUrl = item.imageUrl ?: it.imageUrl, posterUrl = item.posterUrl ?: it.posterUrl) } ?: item
+            }
+            return merged.values.filter { it.id !in removed }.alphabetical()
+        }
+        val series = mergeList(before.series, result.all.series, result.all.movies)
+        val movies = mergeList(before.movies, result.all.movies, result.all.series)
+        val firstSeen = before.firstSeen.toMutableMap()
+        if (result.complete) {
+            val baselineDone = BASELINE_KEY in firstSeen
+            val now = clock()
+            for (item in series + movies) {
+                if (item.id !in firstSeen) firstSeen[item.id] = if (baselineDone && item.id in netIds) now else 0L
+            }
+            firstSeen[BASELINE_KEY] = 1L
+        }
+        stored = StoredCatalog(series, movies, removed, before.favorites.filter { id -> series.any { it.id == id } || movies.any { it.id == id } }.toSet(), firstSeen)
+        highlights = result.highlights
+        if (stored != before) persist()
+        publish()
+    }
+
     /** Lanza el primer fallo solo si ninguna fuente ha dado títulos. */
-    private suspend fun download(): ClanCatalog = coroutineScope {
+    private suspend fun download(): Download = coroutineScope {
         var firstFailure: Exception? = null
         suspend fun <T> orNull(block: suspend () -> T): T? = try {
             block()
@@ -196,7 +304,6 @@ class ClanCatalogViewModel(
             if (firstFailure == null) firstFailure = error
             null
         }
-
         // Las fuentes extra de películas no cuentan como fallo: el catálogo ya tiene su copia fija.
         suspend fun <T> quiet(block: suspend () -> T): T? = try {
             block()
@@ -231,11 +338,11 @@ class ClanCatalogViewModel(
         // La portada de Clan, sus tres franjas de edad y la de películas, a la vez.
         val portadas = listOf(RtveUrls.CLAN_HOME to false) + RtveUrls.CLAN_AGE_PORTADAS.map { it to false } + (RtveUrls.CLAN_MOVIES_PORTADA to true)
         val feeds = portadas
-            .map { (url, isMovies) -> async { orNull { repository.loadPortada(url).value }?.let { it to isMovies } } }
+            .map { (url, isMovies) -> async { orNull { repository.loadPortada(url).value }?.let { Triple(url, it, isMovies) } } }
             .awaitAll()
             .filterNotNull()
         // Los accesos directos de una fila `links` ya vienen en la portada.
-        val linked = feeds.flatMap { (feed, isMovies) ->
+        val linked = feeds.flatMap { (_, feed, isMovies) ->
             feed.rows.filter { it.isInline }.map { row ->
                 LoadedRow(
                     row.title,
@@ -249,22 +356,36 @@ class ClanCatalogViewModel(
         // Las portadas comparten colecciones: cada una se descarga una vez, y es de cine
         // si alguna de las que la enseñan es la de películas.
         val remote = feeds
-            .flatMap { (feed, isMovies) -> feed.rows.filter { !it.isInline && !it.isLive && it.contentUrl != null }.map { it to isMovies } }
+            .flatMap { (_, feed, isMovies) -> feed.rows.filter { !it.isInline && !it.isLive && it.contentUrl != null }.map { it to isMovies } }
             .groupBy({ it.first.contentUrl }, { it })
             .values
             .map { same -> same.first().first to same.any { it.second } }
         val permits = Semaphore(MAX_PARALLEL_ROWS)
-        val loaded = remote
-            .map { (row, isMovies) -> async { permits.withPermit { orNull { LoadedRow(row.title, repository.loadModule(row).value.items, isMovies) } } } }
+        val loadedPairs = remote
+            .map { (row, isMovies) ->
+                async { permits.withPermit { orNull { row.contentUrl to LoadedRow(row.title, repository.loadModule(row).value.items, isMovies) } } }
+            }
             .awaitAll()
             .filterNotNull()
-        // El listado va al final: la imagen y el nombre de una portada mandan sobre los suyos.
-        val catalog = buildClanCatalog(
-            listOf(LoadedRow(SEED_ROW_TITLE, seed), LoadedRow(SEED_ROW_TITLE, movieSeed, true), LoadedRow(SEED_ROW_TITLE, topMovies.await(), true)) +
-                containerMovies.map { LoadedRow(SEED_ROW_TITLE, it.await(), true) } + linked + loaded + LoadedRow(AZ_ROW_TITLE, listing.await().orEmpty()))
+        val loaded = loadedPairs.map { it.second }
+        val byUrl = loadedPairs.toMap()
+        // Lo destacado: las dos primeras filas de la portada de Clan y de la de películas.
+        val highlightRows = feeds
+            .filter { (url, _, _) -> url == RtveUrls.CLAN_HOME || url == RtveUrls.CLAN_MOVIES_PORTADA }
+            .flatMap { (_, feed, _) ->
+                feed.rows.filter { !it.isInline && !it.isLive && it.contentUrl != null }.take(2).mapNotNull { byUrl[it.contentUrl] }
+            }
+        val highlighted = buildClanCatalog(highlightRows, sorted = false).let { it.series + it.movies }
+        val seedRows = listOf(LoadedRow(SEED_ROW_TITLE, seed), LoadedRow(SEED_ROW_TITLE, movieSeed, true))
+        val networkRows = listOf(LoadedRow(SEED_ROW_TITLE, topMovies.await(), true)) +
+            containerMovies.map { LoadedRow(SEED_ROW_TITLE, it.await(), true) } + linked + loaded +
+            // El listado va al final: la imagen y el nombre de una portada mandan sobre los suyos.
+            LoadedRow(AZ_ROW_TITLE, listing.await().orEmpty())
+        val all = buildClanCatalog(seedRows + networkRows)
+        val network = buildClanCatalog(networkRows)
         val failure = firstFailure
-        if (catalog.isEmpty && failure != null) throw failure
-        catalog
+        if (all.isEmpty && failure != null) throw failure
+        Download(all, network, highlighted, complete = failure == null)
     }
 
     private companion object {

@@ -60,6 +60,7 @@ fun TvApp(container: AppContainer) {
     // El desplazamiento de cada lista y la serie abierta sobreviven a entrar en una serie y volver.
     val seriesGrid = rememberLazyGridState()
     val moviesGrid = rememberLazyGridState()
+    val favoritesGrid = rememberLazyGridState()
     var lastOpened by rememberSaveable { mutableStateOf<String?>(null) }
 
     BackHandler(enabled = nav.canGoBack, onBack = navigation::pop)
@@ -143,7 +144,13 @@ fun TvApp(container: AppContainer) {
                                 lastOpened = item.id
                                 if (item.kind == ContentKind.VIDEO) actions.play(item) else actions.openItem(item)
                             },
-                            gridState = if (section == ClanSection.SERIES) seriesGrid else moviesGrid,
+                            gridState = when (section) {
+                                ClanSection.SERIES -> seriesGrid
+                                ClanSection.MOVIES -> moviesGrid
+                                ClanSection.FAVORITES -> favoritesGrid
+                            },
+                            onToggleFavorite = catalogViewModel::toggleFavorite,
+                            onRemove = catalogViewModel::remove,
                             focusId = lastOpened,
                             onRetry = catalogViewModel::retry,
                             reselectRequest = nav.rootRequests.getValue(Tab.HOME),

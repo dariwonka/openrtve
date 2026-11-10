@@ -267,6 +267,8 @@ internal fun TvItemCard(
     /** Posición en un ranking ("Lo más visto"); se pinta grande sobre la imagen. */
     rank: Int? = null,
     onLongClick: (() -> Unit)? = null,
+    /** Favorito: lleva una estrella roja arriba a la derecha. */
+    favorite: Boolean = false,
 ) {
     val live = item.live
     Column(modifier) {
@@ -274,6 +276,14 @@ internal fun TvItemCard(
             TvFocusSurface(onClick = onClick, modifier = Modifier.fillMaxWidth().aspectRatio(layout.aspectRatio), onLongClick = onLongClick) {
                 TvArtwork(item.imageFor(layout), Modifier.fillMaxSize())
                 rank?.let { TvRankBadge(it, Modifier.align(Alignment.BottomStart)) }
+                if (favorite) {
+                    androidx.tv.material3.Icon(
+                        androidx.compose.material.icons.Icons.Filled.Star,
+                        contentDescription = null,
+                        tint = TvFocusColor,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp),
+                    )
+                }
                 progress?.let { TvProgressStrip(it, Modifier.align(Alignment.BottomCenter)) }
             }
             Spacer(Modifier.height(TvCardCaptionGap))

@@ -29,6 +29,12 @@
     <string name="search_min_length">Escribe al menos tres letras</string>
     <string name="catalog_series">Series</string>
     <string name="catalog_movies">Películas</string>
+    <string name="catalog_favorites">Favoritos</string>
+    <string name="catalog_novelties">Novedades</string>
+    <string name="favorites_empty">Aún no hay favoritos. Mantén pulsada una serie o película para añadirla.</string>
+    <string name="menu_add_favorite">Añadir a favoritos</string>
+    <string name="menu_remove_favorite">Quitar de favoritos</string>
+    <string name="menu_remove">Eliminar de la lista</string>
     <string name="catalog_empty">No hay títulos ahora mismo</string>
 
     <string name="explore_kids">Infantil</string>

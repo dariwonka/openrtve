@@ -15,6 +15,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.window.Dialog
+import androidx.tv.material3.Button
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -75,6 +88,7 @@ internal fun TvTopBar(
     ) {
         TvChoiceButton(stringResource(R.string.catalog_series), section == ClanSection.SERIES) { onSection(ClanSection.SERIES) }
         TvChoiceButton(stringResource(R.string.catalog_movies), section == ClanSection.MOVIES) { onSection(ClanSection.MOVIES) }
+        TvChoiceButton(stringResource(R.string.catalog_favorites), section == ClanSection.FAVORITES) { onSection(ClanSection.FAVORITES) }
         Spacer(Modifier.weight(1f))
         IconButton(onClick = onSearch) { Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.tab_search)) }
         IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title)) }
@@ -110,22 +124,44 @@ internal fun TvCatalogScreen(
     onRetry: () -> Unit,
     gridState: LazyGridState,
     focusId: String?,
+    onToggleFavorite: (CatalogItem) -> Unit,
+    onRemove: (CatalogItem) -> Unit,
     reselectRequest: Int = 0,
 ) {
-    val titles = state.catalog.titles(section)
+    val isFavorites = section == ClanSection.FAVORITES
+    val titles = if (isFavorites) state.favorites else state.catalog.titles(section)
     val error = state.error
     when {
-        titles.isNotEmpty() -> key(section) { TvTitleGrid(titles, onOpen, gridState, focusId, reselectRequest) }
+        titles.isNotEmpty() -> key(section) {
+            TvTitleGrid(
+                titles = titles,
+                novelties = if (section == ClanSection.SERIES) state.novelties else emptyList(),
+                favoriteIds = state.favoriteIds,
+                onOpen = onOpen,
+                onToggleFavorite = onToggleFavorite,
+                onRemove = onRemove,
+                gridState = gridState,
+                focusId = focusId,
+                reselectRequest = reselectRequest,
+            )
+        }
+        isFavorites -> TvCenterMessage(stringResource(R.string.favorites_empty))
         state.isLoading -> TvCenterMessage(stringResource(R.string.state_loading))
         error != null -> TvCenterMessage(error.text(LocalContext.current), onRetry)
         else -> TvCenterMessage(stringResource(R.string.catalog_empty), onRetry)
     }
 }
 
+private const val CarouselFocus = Int.MAX_VALUE
+
 @Composable
 private fun TvTitleGrid(
     titles: List<CatalogItem>,
+    novelties: List<CatalogItem>,
+    favoriteIds: Set<String>,
     onOpen: (CatalogItem) -> Unit,
+    onToggleFavorite: (CatalogItem) -> Unit,
+    onRemove: (CatalogItem) -> Unit,
     gridState: LazyGridState,
     focusId: String?,
     reselectRequest: Int,
@@ -133,6 +169,7 @@ private fun TvTitleGrid(
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
     var focusedIndex by remember { mutableIntStateOf(-1) }
+    var menuItem by remember { mutableStateOf<CatalogItem?>(null) }
     // Al volver de una serie, el foco es de la serie que se abrió; si no, del primer título.
     val target = titles.indexOfFirst { it.id == focusId }.coerceAtLeast(0)
     val toStart: () -> Unit = {
@@ -144,8 +181,8 @@ private fun TvTitleGrid(
     }
     // Repetir Inicio vuelve al principio de la lista.
     RootReselectionEffect(reselectRequest) { gridState.scrollToItem(0) }
-    // Atrás desde un título lleva al primero; desde el primero sale de la app.
-    BackHandler(enabled = focusedIndex > 0, onBack = toStart)
+    // Atrás desde un título o del carrusel lleva al primero; desde el primero sale de la app.
+    BackHandler(enabled = focusedIndex != 0 && focusedIndex != -1 && menuItem == null, onBack = toStart)
     ProvideTvCenteredScroll {
         LazyVerticalGrid(
             state = gridState,
@@ -155,6 +192,17 @@ private fun TvTitleGrid(
             verticalArrangement = Arrangement.spacedBy(24.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
+            if (novelties.isNotEmpty()) {
+                item(key = "novelties", span = { GridItemSpan(maxLineSpan) }, contentType = "novelties") {
+                    TvNoveltiesRow(
+                        items = novelties,
+                        favoriteIds = favoriteIds,
+                        onOpen = onOpen,
+                        onMenu = { menuItem = it },
+                        onFocused = { focusedIndex = CarouselFocus },
+                    )
+                }
+            }
             itemsIndexed(titles, key = { _, it -> it.id }, contentType = { _, _ -> "title" }) { index, item ->
                 val start = when {
                     index == target -> Modifier.initialFocus(requester = if (index == 0) first else null)
@@ -166,7 +214,83 @@ private fun TvTitleGrid(
                     start
                         .onFocusChanged { if (it.hasFocus) focusedIndex = index else if (focusedIndex == index) focusedIndex = -1 }
                         .wrapRowFocus(index, titles.size),
+                    onLongClick = { menuItem = item },
+                    favorite = item.id in favoriteIds,
                 )
+            }
+        }
+    }
+    menuItem?.let { item ->
+        TvItemMenu(
+            item = item,
+            isFavorite = item.id in favoriteIds,
+            onFavorite = { onToggleFavorite(item) },
+            onRemove = {
+                onRemove(item)
+                scope.launch {
+                    withFrameNanos { }
+                    runCatching { first.requestFocus() }
+                }
+            },
+            onDismiss = { menuItem = null },
+        )
+    }
+}
+
+/** Carrusel de novedades: como mucho 10 tarjetas del mismo ancho que las de la cuadrícula. */
+@Composable
+private fun TvNoveltiesRow(
+    items: List<CatalogItem>,
+    favoriteIds: Set<String>,
+    onOpen: (CatalogItem) -> Unit,
+    onMenu: (CatalogItem) -> Unit,
+    onFocused: () -> Unit,
+) {
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val cardWidth = (screenWidth - TvHorizontalMargin * 2 - 20.dp * (TvGridColumns - 1)) / TvGridColumns
+    Column {
+        Text(stringResource(R.string.catalog_novelties), style = MaterialTheme.typography.titleLarge)
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            contentPadding = PaddingValues(vertical = TvFocusScaleRoom),
+        ) {
+            items(items, key = { it.id }) { item ->
+                TvItemCard(
+                    item, RowLayout.LANDSCAPE, { onOpen(item) },
+                    Modifier.width(cardWidth).onFocusChanged { if (it.hasFocus) onFocused() },
+                    onLongClick = { onMenu(item) },
+                    favorite = item.id in favoriteIds,
+                )
+            }
+        }
+    }
+}
+
+/** Menú de pulsación larga: favoritos y eliminar de la lista. */
+@Composable
+private fun TvItemMenu(
+    item: CatalogItem,
+    isFavorite: Boolean,
+    onFavorite: () -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val firstOption = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { firstOption.requestFocus() } }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .width(380.dp)
+                .background(MaterialTheme.colorScheme.surface, TvCardShape)
+                .padding(24.dp),
+        ) {
+            Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            Button(onClick = { onFavorite(); onDismiss() }, modifier = Modifier.fillMaxWidth().focusRequester(firstOption)) {
+                Text(stringResource(if (isFavorite) R.string.menu_remove_favorite else R.string.menu_add_favorite))
+            }
+            Button(onClick = { onRemove(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.menu_remove))
             }
         }
     }

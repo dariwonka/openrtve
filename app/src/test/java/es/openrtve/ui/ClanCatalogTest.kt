@@ -225,4 +225,66 @@ class ClanCatalogTest {
         // La colección compartida se descarga una sola vez.
         assertEquals(1, repository.calls.count { it.startsWith("module(https://www.rtve.es/shared.json") })
     }
+
+    private fun online(vararg series: es.openrtve.domain.CatalogItem): FakeCatalogRepository {
+        val repository = FakeCatalogRepository()
+        repository.portada = { _, _, _ -> loaded(HomeFeed(null, "Clan", emptyList())) }
+        repository.channelPrograms = { _, _ -> loaded(series.toList()) }
+        return repository
+    }
+
+    private fun tempStore() = es.openrtve.data.ClanCatalogStore(
+        java.io.File(java.nio.file.Files.createTempDirectory("clan").toFile(), "catalog.json"),
+        mainDispatcher.dispatcher,
+    )
+
+    @Test
+    fun `nothing known is ever dropped when a later download brings less`() = runTest(mainDispatcher.dispatcher) {
+        val store = tempStore()
+        ClanCatalogViewModel(online(program("2", "Bluey"), program("3", "Peppa Pig")), store)
+        advanceUntilIdle()
+        val later = ClanCatalogViewModel(online(program("3", "Peppa Pig")), store)
+        advanceUntilIdle()
+        assertEquals(listOf("Bluey", "Peppa Pig"), later.uiState.value.catalog.series.map { it.title })
+    }
+
+    @Test
+    fun `a removed title stays away until RTVE drops it and offers it again, and leaves favourites`() = runTest(mainDispatcher.dispatcher) {
+        val store = tempStore()
+        val bluey = program("2", "Bluey")
+        val peppa = program("3", "Peppa Pig")
+        val first = ClanCatalogViewModel(online(bluey, peppa), store)
+        advanceUntilIdle()
+        first.toggleFavorite(bluey)
+        assertEquals(listOf("2"), first.uiState.value.favorites.map { it.id })
+        first.remove(bluey)
+        advanceUntilIdle()
+        assertEquals(listOf("Peppa Pig"), first.uiState.value.catalog.series.map { it.title })
+        assertTrue(first.uiState.value.favorites.isEmpty())
+
+        // Sigue en RTVE: sigue oculto.
+        val still = ClanCatalogViewModel(online(bluey, peppa), store)
+        advanceUntilIdle()
+        assertEquals(listOf("Peppa Pig"), still.uiState.value.catalog.series.map { it.title })
+
+        // RTVE lo retira (descarga completa sin él) y más tarde lo repone: vuelve.
+        ClanCatalogViewModel(online(peppa), store)
+        advanceUntilIdle()
+        val back = ClanCatalogViewModel(online(bluey, peppa), store)
+        advanceUntilIdle()
+        assertEquals(listOf("Bluey", "Peppa Pig"), back.uiState.value.catalog.series.map { it.title })
+    }
+
+    @Test
+    fun `new titles from a later download fill the carousel, at most ten`() = runTest(mainDispatcher.dispatcher) {
+        val store = tempStore()
+        ClanCatalogViewModel(online(program("1", "Antiguo")), store)
+        advanceUntilIdle()
+        val many = (2..20).map { program("$it", "Serie nueva $it") }
+        val later = ClanCatalogViewModel(online(*(listOf(program("1", "Antiguo")) + many).toTypedArray()), store)
+        advanceUntilIdle()
+        val novelties = later.uiState.value.novelties
+        assertEquals(10, novelties.size)
+        assertTrue(novelties.none { it.id == "1" })
+    }
 }

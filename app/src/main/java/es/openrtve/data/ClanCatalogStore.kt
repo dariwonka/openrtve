@@ -18,8 +18,19 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
-/** Las dos listas del inicio tal como se guardan: títulos ya únicos y ordenados. */
-data class StoredCatalog(val series: List<CatalogItem>, val movies: List<CatalogItem>)
+/**
+ * Lo que la app recuerda entre arranques: las dos listas (que solo crecen), los títulos
+ * que se han quitado a mano, los favoritos y cuándo se vio por primera vez cada título.
+ */
+data class StoredCatalog(
+    val series: List<CatalogItem>,
+    val movies: List<CatalogItem>,
+    /** Título quitado a mano → `true` si RTVE ya lo había dejado de ofrecer (si vuelve, reaparece). */
+    val removed: Map<String, Boolean> = emptyMap(),
+    val favorites: Set<String> = emptySet(),
+    /** Momento en que se descubrió un título nuevo de RTVE; 0 si ya estaba al instalar. */
+    val firstSeen: Map<String, Long> = emptyMap(),
+)
 
 /**
  * Última copia del catálogo del inicio, en un solo fichero pequeño. Al abrir la
@@ -36,7 +47,13 @@ class ClanCatalogStore(
         runCatching {
             if (!file.isFile) return@runCatching null
             val root = json.parseToJsonElement(file.readText()).jsonObject
-            StoredCatalog(root.items("series"), root.items("movies")).takeIf { it.series.isNotEmpty() || it.movies.isNotEmpty() }
+            StoredCatalog(
+                series = root.items("series"),
+                movies = root.items("movies"),
+                removed = (root["removed"] as? JsonObject).orEmpty().mapValues { (it.value as? JsonPrimitive)?.booleanOrNull ?: false },
+                favorites = (root["favorites"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
+                firstSeen = (root["firstSeen"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
+            ).takeIf { it.series.isNotEmpty() || it.movies.isNotEmpty() || it.removed.isNotEmpty() || it.favorites.isNotEmpty() }
         }.getOrNull()
     }
 
@@ -46,6 +63,9 @@ class ClanCatalogStore(
             val raw = buildJsonObject {
                 put("series", catalog.series.toJson())
                 put("movies", catalog.movies.toJson())
+                put("removed", buildJsonObject { catalog.removed.forEach { (id, gone) -> put(id, gone) } })
+                put("favorites", buildJsonArray { catalog.favorites.forEach { add(JsonPrimitive(it)) } })
+                put("firstSeen", buildJsonObject { catalog.firstSeen.forEach { (id, at) -> put(id, at) } })
             }.toString()
             val pending = File(file.parentFile, file.name + ".tmp")
             pending.writeText(raw)
