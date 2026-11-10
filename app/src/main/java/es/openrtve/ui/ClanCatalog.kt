@@ -141,7 +141,8 @@ data class ClanCatalogUiState(
 )
 
 const val NOVELTIES_MAX = 10
-private const val NOVELTY_WINDOW_MS = 30L * 24 * 60 * 60 * 1000
+/** Un título se queda en el carrusel 20 días desde que entra. */
+private const val NOVELTY_WINDOW_MS = 20L * 24 * 60 * 60 * 1000
 private const val BASELINE_KEY = "#baseline"
 
 /** Lo que trae una vuelta de descargas. */
@@ -252,11 +253,17 @@ class ClanCatalogViewModel(
         val all = (stored.series + stored.movies).associateBy { it.id }
         val favorites = stored.favorites.mapNotNull(all::get).alphabetical()
         val cutoff = clock() - NOVELTY_WINDOW_MS
-        val recent = all.values
-            .filter { (stored.firstSeen[it.id] ?: 0L) > cutoff }
-            .sortedWith(compareByDescending<CatalogItem> { stored.firstSeen[it.id] ?: 0L }.thenBy { it.title })
-        val featured = highlights.mapNotNull { all[it.id] }
-        val novelties = (recent + featured).distinctBy { it.id }.take(NOVELTIES_MAX)
+        val order = highlights.map { it.id }
+        // Los más recientes primero; al entrar otros nuevos, los más antiguos salen.
+        val novelties = stored.carousel.entries
+            .filter { it.key in all && it.value > cutoff }
+            .sortedWith(
+                compareByDescending<Map.Entry<String, Long>> { it.value }
+                    .thenBy { order.indexOf(it.key).let { i -> if (i < 0) Int.MAX_VALUE else i } }
+                    .thenBy { all[it.key]?.title.orEmpty() },
+            )
+            .mapNotNull { all[it.key] }
+            .take(NOVELTIES_MAX)
         val removedTitles = stored.removed.keys.map { id ->
             RemovedTitle(id, (stored.removedItems.firstOrNull { it.id == id } ?: known[id])?.title)
         }.sortedWith(compareBy({ it.name == null }, { it.name?.lowercase() }))
@@ -330,11 +337,20 @@ class ClanCatalogViewModel(
             firstSeen[BASELINE_KEY] = 1L
         }
         (result.all.series + result.all.movies).forEach { known[it.id] = it }
+        // Entra en el carrusel lo que acaba de descubrirse y lo destacado de las portadas; una vez dentro, no se repite.
+        val carousel = before.carousel.toMutableMap()
+        val inCatalog = (series + movies).associateBy { it.id }
+        for (item in inCatalog.values) {
+            val seen = firstSeen[item.id] ?: 0L
+            if (seen > 0L) carousel.putIfAbsent(item.id, seen)
+        }
+        for (item in result.highlights) if (item.id in inCatalog) carousel.putIfAbsent(item.id, clock())
         stored = StoredCatalog(
             series, movies, removed,
             before.favorites.filter { id -> series.any { it.id == id } || movies.any { it.id == id } }.toSet(),
             firstSeen,
             removedItems = before.removedItems.filter { it.id in removed },
+            carousel = carousel,
         )
         highlights = result.highlights
         if (stored != before) persist()

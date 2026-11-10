@@ -32,6 +32,8 @@ data class StoredCatalog(
     val firstSeen: Map<String, Long> = emptyMap(),
     /** Los títulos eliminados, enteros, para poder restaurarlos aunque RTVE ya no los ofrezca. */
     val removedItems: List<CatalogItem> = emptyList(),
+    /** Cuándo entró cada título en el carrusel de novedades; a los 20 días deja de salir. */
+    val carousel: Map<String, Long> = emptyMap(),
 )
 
 /**
@@ -55,6 +57,7 @@ class ClanCatalogStore(
                 removed = (root["removed"] as? JsonObject).orEmpty().mapValues { (it.value as? JsonPrimitive)?.booleanOrNull ?: false },
                 favorites = (root["favorites"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
                 removedItems = root.items("removedItems"),
+                carousel = (root["carousel"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
                 firstSeen = (root["firstSeen"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
             ).takeIf { it.series.isNotEmpty() || it.movies.isNotEmpty() || it.removed.isNotEmpty() || it.favorites.isNotEmpty() || it.removedItems.isNotEmpty() }
         }.getOrNull()
@@ -79,6 +82,7 @@ class ClanCatalogStore(
         runCatching {
             val raw = buildJsonObject {
                 put("removedItems", catalog.removedItems.toJson())
+                put("carousel", buildJsonObject { catalog.carousel.forEach { (id, at) -> put(id, at) } })
                 put("series", catalog.series.toJson())
                 put("movies", catalog.movies.toJson())
                 put("removed", buildJsonObject { catalog.removed.forEach { (id, gone) -> put(id, gone) } })

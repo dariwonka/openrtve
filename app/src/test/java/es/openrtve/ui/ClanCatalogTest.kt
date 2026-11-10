@@ -289,6 +289,24 @@ class ClanCatalogTest {
     }
 
     @Test
+    fun `carousel entries leave after 20 days and the section empties`() = runTest(mainDispatcher.dispatcher) {
+        val store = tempStore()
+        var now = 1_000_000_000_000L
+        val old = program("1", "Antiguo")
+        ClanCatalogViewModel(online(old), store, clock = { now })
+        advanceUntilIdle()
+        now += 24L * 60 * 60 * 1000
+        val fresh = (2..4).map { program("$it", "Nueva $it") }
+        val day1 = ClanCatalogViewModel(online(*(listOf(old) + fresh).toTypedArray()), store, clock = { now })
+        advanceUntilIdle()
+        assertEquals(3, day1.uiState.value.novelties.size)
+        now += 25L * 24 * 60 * 60 * 1000
+        val day26 = ClanCatalogViewModel(online(*(listOf(old) + fresh).toTypedArray()), store, clock = { now })
+        advanceUntilIdle()
+        assertTrue(day26.uiState.value.novelties.isEmpty())
+    }
+
+    @Test
     fun `a removed title is listed by name and can be restored`() = runTest(mainDispatcher.dispatcher) {
         val store = tempStore()
         val bluey = program("2", "Bluey")
