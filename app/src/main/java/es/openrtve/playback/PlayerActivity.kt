@@ -244,6 +244,7 @@ class PlayerActivity : ComponentActivity() {
      * Con los controles a la vista, izquierda/derecha saltan un minuto por pulsación y,
      * manteniendo la tecla, el salto crece poco a poco; el botón central pausa/reanuda.
      */
+    @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         val view = playerView
         if (view != null && menu == null && !locked && view.useController && view.isControllerFullyVisible) {
