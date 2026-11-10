@@ -248,18 +248,18 @@ private fun TvTitleGrid(
                         .onFocusChanged { if (it.hasFocus) focusedIndex = index else if (focusedIndex == index) focusedIndex = -1 }
                         .wrapRowFocus(index, shown.size),
                     onLongClick = { menuItem = item },
+                    favorite = item.id in pinnedIds,
                 )
             }
         }
     }
     menuItem?.let { item ->
         TvItemMenu(
-            item = item,
-            isPinned = item.id in pinnedIds,
-            onPin = { pinAndFollow(item) },
-            onRemove = {
-                if (isRemovalUnlocked()) removeAndRefocus(item) else pinFor = item
-            },
+            title = item.title,
+            options = listOf(
+                stringResource(if (item.id in pinnedIds) R.string.menu_unpin else R.string.menu_pin) to { pinAndFollow(item) },
+                stringResource(R.string.menu_remove) to { if (isRemovalUnlocked()) removeAndRefocus(item) else pinFor = item },
+            ),
             onDismiss = { menuItem = null },
         )
     }
@@ -277,13 +277,11 @@ private fun TvTitleGrid(
     }
 }
 
-/** Menú de pulsación larga: favoritos y eliminar de la lista. */
+/** Menú de pulsación larga con las opciones que se le den. */
 @Composable
-private fun TvItemMenu(
-    item: CatalogItem,
-    isPinned: Boolean,
-    onPin: () -> Unit,
-    onRemove: () -> Unit,
+internal fun TvItemMenu(
+    title: String,
+    options: List<Pair<String, () -> Unit>>,
     onDismiss: () -> Unit,
 ) {
     val firstOption = remember { FocusRequester() }
@@ -311,12 +309,12 @@ private fun TvItemMenu(
                 .background(MaterialTheme.colorScheme.surface, TvCardShape)
                 .padding(24.dp),
         ) {
-            Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-            Button(onClick = { onPin(); onDismiss() }, modifier = Modifier.fillMaxWidth().focusRequester(firstOption)) {
-                Text(stringResource(if (isPinned) R.string.menu_unpin else R.string.menu_pin))
-            }
-            Button(onClick = { onRemove(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.menu_remove))
+            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            options.forEachIndexed { index, (label, action) ->
+                Button(
+                    onClick = { action(); onDismiss() },
+                    modifier = Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(firstOption) else Modifier),
+                ) { Text(label) }
             }
         }
     }

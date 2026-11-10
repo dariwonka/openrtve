@@ -276,6 +276,27 @@ class ClanCatalogTest {
     }
 
     @Test
+    fun `a search result that is not in the list is added by pinning and long videos are films`() = runTest(mainDispatcher.dispatcher) {
+        val store = tempStore()
+        val vm = ClanCatalogViewModel(online(program("1", "Antiguo")), store)
+        advanceUntilIdle()
+        val found = program("9", "Encontrado")
+        assertEquals(false, "9" in vm.uiState.value.knownIds)
+        vm.togglePin(found)
+        assertEquals(true, "9" in vm.uiState.value.knownIds)
+        assertEquals(true, "9" in vm.uiState.value.pinnedIds)
+        assertEquals("Encontrado", vm.uiState.value.catalog.series.first().title)
+        vm.add(program("8", "Otro"))
+        assertEquals(true, "8" in vm.uiState.value.knownIds)
+        vm.remove(found)
+        assertEquals(false, "9" in vm.uiState.value.knownIds)
+
+        val long = catalogItem("7", title = "Largo").copy(mediaTypeId = RtveTypes.COMPLETE, durationMs = 41 * 60_000L)
+        assertEquals("7", catalogEntryOf(long)?.id)
+        assertEquals(true, buildClanCatalog(listOf(LoadedRow("", listOf(long)))).movies.any { it.id == "7" })
+    }
+
+    @Test
     fun `RTVE pins new titles in front, the user unpins them and they never come back`() = runTest(mainDispatcher.dispatcher) {
         val store = tempStore()
         var now = 1_000_000_000_000L

@@ -610,6 +610,8 @@ class PlayerActivity : ComponentActivity() {
                 // Siempre en español cuando el vídeo lo trae: muchas series llegan con la versión
                 // original (`qaa`) como primera pista. Elegir otra en el panel sigue funcionando.
                 setPreferredAudioLanguages("es", "spa")
+                // Al empezar, la mejor calidad disponible en vez de la automática (que arranca baja).
+                setForceHighestSupportedBitrate(true)
             }
             .build()
     }

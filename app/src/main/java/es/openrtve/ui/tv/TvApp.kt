@@ -143,6 +143,13 @@ fun TvApp(container: AppContainer) {
                         null -> if (nav.tab == Tab.SEARCH) TvSearchScreen(
                             repository = repository,
                             onOpenItem = { item -> if (item.kind == ContentKind.VIDEO) actions.play(item) else actions.openItem(item) },
+                            knownIds = catalog.knownIds,
+                            pinnedIds = catalog.pinnedIds,
+                            onAdd = catalogViewModel::add,
+                            onTogglePin = catalogViewModel::togglePin,
+                            onRemove = catalogViewModel::remove,
+                            isRemovalUnlocked = { container.removalUnlocked },
+                            onUnlockRemoval = { container.removalUnlocked = true },
                             reselectRequest = nav.rootRequests.getValue(Tab.SEARCH),
                         ) else TvCatalogScreen(
                             state = catalog,

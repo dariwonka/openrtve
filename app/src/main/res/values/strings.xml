@@ -39,7 +39,8 @@
     <string name="settings_removed">Eliminados</string>
     <string name="settings_removed_hint">Elige un título para volver a mostrarlo</string>
     <string name="removed_unnamed">Título sin nombre (vuelve al actualizar)</string>
-    <string name="menu_pin">Anclar arriba</string>
+    <string name="menu_pin">Anclar</string>
+    <string name="menu_add">Añadir a la lista</string>
     <string name="menu_unpin">Desanclar</string>
     <string name="menu_remove">Eliminar de la lista</string>
     <string name="catalog_empty">No hay títulos ahora mismo</string>

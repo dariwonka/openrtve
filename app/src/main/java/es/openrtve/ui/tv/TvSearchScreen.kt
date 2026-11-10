@@ -55,6 +55,7 @@ import es.openrtve.data.CatalogRepository
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.RowLayout
 import es.openrtve.ui.RootReselectionEffect
+import es.openrtve.ui.catalogEntryOf
 import es.openrtve.ui.rememberSearchScreen
 import es.openrtve.ui.text
 
@@ -67,8 +68,17 @@ import es.openrtve.ui.text
 fun TvSearchScreen(
     repository: CatalogRepository,
     onOpenItem: (CatalogItem) -> Unit,
+    knownIds: Set<String>,
+    pinnedIds: Set<String>,
+    onAdd: (CatalogItem) -> Unit,
+    onTogglePin: (CatalogItem) -> Unit,
+    onRemove: (CatalogItem) -> Unit,
+    isRemovalUnlocked: () -> Boolean,
+    onUnlockRemoval: () -> Unit,
     reselectRequest: Int = 0,
 ) {
+    var menuItem by remember { mutableStateOf<CatalogItem?>(null) }
+    var pinFor by remember { mutableStateOf<CatalogItem?>(null) }
     val screen = rememberSearchScreen(repository)
     val viewModel = screen.viewModel
     val state = screen.state
@@ -81,6 +91,7 @@ fun TvSearchScreen(
     val searchError = state.searchError
     // Una serie solo enseña su título; un vídeo conserva debajo el nombre de su serie.
     val found = remember(results) { results?.let { it.programs.map { program -> program.copy(subtitle = null) } + it.videos.filter { v -> v.durationMs?.let { ms -> ms >= 4 * 60_000L } != false} }.orEmpty().distinctBy { it.kind to it.id } }
+    SearchMenus(menuItem, pinFor, knownIds, pinnedIds, { menuItem = it }, { pinFor = it }, onAdd, onTogglePin, onRemove, isRemovalUnlocked, onUnlockRemoval)
     ProvideTvCenteredScroll {
         LazyVerticalGrid(
             state = gridState,
@@ -106,7 +117,12 @@ fun TvSearchScreen(
                 found.isEmpty() -> fullWidth("status") { TvInlineMessage(stringResource(R.string.search_empty), StatusPadding) }
                 else -> {
                     itemsIndexed(found, key = { _, it -> "${it.kind}-${it.id}" }, contentType = { _, _ -> "title" }) { index, item ->
-                        TvItemCard(item, RowLayout.LANDSCAPE, { onOpenItem(item) }, Modifier.wrapRowFocus(index, found.size))
+                        val entryId = catalogEntryOf(item)?.id
+                        TvItemCard(
+                            item, RowLayout.LANDSCAPE, { onOpenItem(item) }, Modifier.wrapRowFocus(index, found.size),
+                            onLongClick = if (entryId != null) ({ menuItem = item }) else null,
+                            favorite = entryId != null && entryId in pinnedIds,
+                        )
                     }
                     if (results.hasMoreVideos) {
                         fullWidth("more") {
@@ -117,6 +133,48 @@ fun TvSearchScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SearchMenus(
+    menuItem: CatalogItem?,
+    pinFor: CatalogItem?,
+    knownIds: Set<String>,
+    pinnedIds: Set<String>,
+    onMenu: (CatalogItem?) -> Unit,
+    onPinFor: (CatalogItem?) -> Unit,
+    onAdd: (CatalogItem) -> Unit,
+    onTogglePin: (CatalogItem) -> Unit,
+    onRemove: (CatalogItem) -> Unit,
+    isRemovalUnlocked: () -> Boolean,
+    onUnlockRemoval: () -> Unit,
+) {
+    menuItem?.let { item ->
+        val entryId = catalogEntryOf(item)?.id
+        val inList = entryId != null && entryId in knownIds
+        val pinLabel = stringResource(if (entryId != null && entryId in pinnedIds) R.string.menu_unpin else R.string.menu_pin)
+        val options = buildList<Pair<String, () -> Unit>> {
+            add(pinLabel to { onTogglePin(item) })
+            if (inList) {
+                add(stringResource(R.string.menu_remove) to { if (isRemovalUnlocked()) onRemove(item) else onPinFor(item) })
+            } else {
+                add(stringResource(R.string.menu_add) to { onAdd(item) })
+            }
+        }
+        TvItemMenu(title = item.title, options = options, onDismiss = { onMenu(null) })
+    }
+    pinFor?.let { item ->
+        es.openrtve.ui.PinDialog(
+            name = item.title,
+            unlocked = false,
+            onConfirm = {
+                onUnlockRemoval()
+                onPinFor(null)
+                onRemove(item)
+            },
+            onDismiss = { onPinFor(null) },
+        )
     }
 }
 

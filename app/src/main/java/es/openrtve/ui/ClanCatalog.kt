@@ -79,7 +79,9 @@ fun buildClanCatalog(rows: List<LoadedRow>, sorted: Boolean = true): ClanCatalog
                 ContentKind.PROGRAM -> (if (movieRow) movies else programs).addTitle(item.copy(subtitle = null))
                 ContentKind.VIDEO -> when {
                     item.mediaForm == MediaForm.EXTRA -> item.seriesTitle()?.let(fromEpisodes::addTitle)
-                    movieRow || item.isFullMovie || item.parentStructure == ProgramStructure.MOVIES ->
+                    // Lo que dura 40 minutos o más es una película, venga de donde venga.
+                    movieRow || item.isFullMovie || item.parentStructure == ProgramStructure.MOVIES ||
+                        (item.durationMs ?: 0L) >= MOVIE_MIN_MS ->
                         movies.addTitle(item.copy(subtitle = null))
                     else -> item.seriesTitle()?.let(fromEpisodes::addTitle)
                 }
@@ -94,6 +96,16 @@ fun buildClanCatalog(rows: List<LoadedRow>, sorted: Boolean = true): ClanCatalog
     return if (sorted) ClanCatalog(series = programs.values.alphabetical(), movies = movies.values.alphabetical())
     else ClanCatalog(series = programs.values.toList(), movies = movies.values.toList())
 }
+
+/** Duración a partir de la cual un vídeo cuenta como película. */
+const val MOVIE_MIN_MS = 40L * 60_000L
+
+/**
+ * El título del catálogo que corresponde a un resultado cualquiera: el propio programa,
+ * la película, o la serie a la que pertenece un capítulo. `null` si no encaja (un avance...).
+ */
+fun catalogEntryOf(item: CatalogItem): CatalogItem? =
+    buildClanCatalog(listOf(LoadedRow("", listOf(item)))).let { it.movies.firstOrNull() ?: it.series.firstOrNull() }
 
 /** Serie a la que pertenece un capítulo, como título propio; `null` si el feed no la nombra. */
 private fun CatalogItem.seriesTitle(): CatalogItem? {
@@ -132,6 +144,8 @@ data class ClanCatalogUiState(
     val removed: List<RemovedTitle> = emptyList(),
     /** Ids anclados, para el menú (Anclar / Desanclar). */
     val pinnedIds: Set<String> = emptySet(),
+    /** Ids de todo lo que ya está en la base de datos (series y películas). */
+    val knownIds: Set<String> = emptySet(),
     /** El catálogo ya está estable: hasta entonces se enseña la pantalla de inicio. */
     val ready: Boolean = false,
     val isLoading: Boolean = true,
@@ -195,7 +209,8 @@ class ClanCatalogViewModel(
     fun retry() = load()
 
     /** Quita un título de las listas y de favoritos; no vuelve salvo que RTVE lo retire y lo reponga. */
-    fun remove(item: CatalogItem) {
+    fun remove(result: CatalogItem) {
+        val item = entryFor(result) ?: return
         stored = stored.copy(
             series = stored.series.filter { it.id != item.id },
             movies = stored.movies.filter { it.id != item.id },
@@ -226,12 +241,38 @@ class ClanCatalogViewModel(
      * Ancla o desancla un título. Lo desanclado a mano se recuerda: aunque RTVE lo vuelva
      * a poner como novedad, aquí no se ancla otra vez.
      */
-    fun togglePin(item: CatalogItem) {
+    fun togglePin(result: CatalogItem) {
+        val item = entryFor(result) ?: return
+        addEntry(item)
         stored = if (item.id in stored.pinned) {
             stored.copy(pinned = stored.pinned - item.id, pinnedFresh = stored.pinnedFresh - item.id, unpinned = stored.unpinned + item.id)
         } else {
             stored.copy(pinned = stored.pinned + item.id, unpinned = stored.unpinned - item.id)
         }
+        persist()
+        publish()
+    }
+
+    /** Lo que ya está en la base de datos se usa tal cual; si no (un resultado del buscador), se deduce. */
+    private fun entryFor(item: CatalogItem): CatalogItem? =
+        if (stored.series.any { it.id == item.id } || stored.movies.any { it.id == item.id }) item else catalogEntryOf(item)
+
+    private fun addEntry(entry: CatalogItem) {
+        if (stored.series.any { it.id == entry.id } || stored.movies.any { it.id == entry.id }) return
+        val isMovie = entry.kind == ContentKind.VIDEO
+        stored = stored.copy(
+            series = if (isMovie) stored.series else (stored.series + entry).alphabetical(),
+            movies = if (isMovie) (stored.movies + entry).alphabetical() else stored.movies,
+            removed = stored.removed - entry.id,
+            removedItems = stored.removedItems.filter { it.id != entry.id },
+        )
+        known[entry.id] = entry
+    }
+
+    /** Añade a la lista un resultado del buscador que aún no está en la base de datos. */
+    fun add(result: CatalogItem) {
+        val entry = entryFor(result) ?: return
+        addEntry(entry)
         persist()
         publish()
     }
@@ -272,7 +313,7 @@ class ClanCatalogViewModel(
             RemovedTitle(id, (stored.removedItems.firstOrNull { it.id == id } ?: known[id])?.title)
         }.sortedWith(compareBy({ it.name == null }, { it.name?.lowercase() }))
         mutableUiState.update {
-            it.copy(catalog = catalog, pinnedIds = stored.pinned, removed = removedTitles)
+            it.copy(catalog = catalog, pinnedIds = stored.pinned, knownIds = (stored.series + stored.movies).map { t -> t.id }.toSet(), removed = removedTitles)
         }
     }
 
