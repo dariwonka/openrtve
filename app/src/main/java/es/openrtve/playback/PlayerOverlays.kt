@@ -28,6 +28,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -80,7 +83,6 @@ internal fun PlayerSettingsPanel(menu: PlayerMenu, onSelect: (PlayerOption) -> U
         ) {
             val sections = listOf(
                 stringResource(R.string.player_quality) to menu.qualities,
-                stringResource(R.string.player_speed) to menu.speeds,
                 stringResource(R.string.player_audio_track) to menu.audios,
                 stringResource(R.string.player_subtitles) to menu.subtitles,
             ).filter { it.second.isNotEmpty() }
@@ -110,10 +112,13 @@ private fun SectionTitle(title: String) {
 
 @Composable
 private fun OptionRow(option: PlayerOption, modifier: Modifier, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
+            .onFocusChanged { focused = it.isFocused }
+            .background(if (focused) Color(0xFFFF1744) else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 8.dp),
     ) {
@@ -124,7 +129,7 @@ private fun OptionRow(option: PlayerOption, modifier: Modifier, onClick: () -> U
             modifier = Modifier.weight(1f),
         )
         if (option.selected) {
-            Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Filled.Check, contentDescription = null, tint = if (focused) Color.White else MaterialTheme.colorScheme.primary)
         }
     }
 }

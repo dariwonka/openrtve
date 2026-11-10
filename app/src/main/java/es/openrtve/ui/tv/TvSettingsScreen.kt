@@ -49,8 +49,6 @@ fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit) {
             .padding(vertical = TvVerticalMargin),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
         TvSettingsLabel(stringResource(R.string.settings_playback))
         TvSwitchRow(stringResource(R.string.settings_autoplay), stringResource(R.string.settings_autoplay_summary), settings.autoplayNext, Modifier.initialFocus()) { v ->
             viewModel.update { it.copy(autoplayNext = v) }
@@ -73,10 +71,6 @@ fun TvSettingsScreen(container: AppContainer, onMessage: (String) -> Unit) {
             Button(onClick = { viewModel.clearCache { onMessage(cleared) } }) { Text(stringResource(R.string.settings_clear_cache)) }
             Text(stringResource(R.string.settings_cache_size, cacheBytes?.let(::formatBytes) ?: "…"), style = MaterialTheme.typography.bodyLarge)
         }
-        Spacer(Modifier.height(8.dp))
-        TvSettingsLabel(stringResource(R.string.settings_about))
-        Text(stringResource(R.string.settings_version, versionName), style = MaterialTheme.typography.bodyLarge)
-        Text(stringResource(R.string.settings_about_summary), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
     }
     }
 }

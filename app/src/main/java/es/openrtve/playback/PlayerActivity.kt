@@ -247,6 +247,11 @@ class PlayerActivity : ComponentActivity() {
     @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         val view = playerView
+        // Atrás cierra el panel de ajustes de una sola pulsación.
+        if (menu != null && event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+            if (event.action == android.view.KeyEvent.ACTION_UP) menu = null
+            return true
+        }
         if (view != null && menu == null && !locked && view.useController && view.isControllerFullyVisible) {
             val focused = currentFocus?.id
             val onBar = focused == null || focused == androidx.media3.ui.R.id.exo_progress ||
