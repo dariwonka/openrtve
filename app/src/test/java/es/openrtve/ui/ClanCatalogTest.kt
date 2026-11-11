@@ -272,7 +272,8 @@ class ClanCatalogTest {
         advanceUntilIdle()
         val back = ClanCatalogViewModel(online(bluey, peppa), store)
         advanceUntilIdle()
-        assertEquals(listOf("Bluey", "Peppa Pig"), back.uiState.value.catalog.series.map { it.title })
+        // Vuelve, pero detrás: las primeras filas ya mostradas no se mueven en esta sesión.
+        assertEquals(listOf("Peppa Pig", "Bluey"), back.uiState.value.catalog.series.map { it.title })
     }
 
     @Test
