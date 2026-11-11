@@ -2,7 +2,6 @@ package es.openrtve.ui
 
 import android.content.Context
 import es.openrtve.R
-import es.openrtve.data.WatchEntry
 import es.openrtve.domain.BlockReason
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.LiveInfo
@@ -126,34 +125,6 @@ private val AGE_DIGITS = Regex("menores de (\\d+)")
 
 /** Géneros que caben en la línea de datos de la cabecera; el resto va a la ficha técnica. */
 internal const val MAX_HEADER_GENRES = 2
-
-/** Botón grande de la ficha de programa: "Continuar: …", "Siguiente: …" o "Reproducir: …". */
-fun PlaySuggestion.label(context: Context): String = context.getString(
-    when (this) {
-        is PlaySuggestion.Continue -> R.string.program_continue_episode
-        is PlaySuggestion.Next -> R.string.program_next_episode
-        is PlaySuggestion.Play -> R.string.program_play_episode
-    },
-    item.title,
-)
-
-/**
- * Etiqueta de una pieza en su sección. En Capítulos, dónde está el espectador: el
- * que se ve en esta ficha, los vistos y el siguiente; en el resto, su tipo.
- */
-fun ContentSection.badge(
-    context: Context,
-    item: CatalogItem,
-    entry: WatchEntry?,
-    suggestion: PlaySuggestion?,
-    currentItemId: String?,
-): String? = when {
-    tab != ProgramTab.EPISODES -> if (tab == ProgramTab.MORE_VIDEOS) item.mediaTypeName else item.mediaSubtypeName
-    item.id == currentItemId -> context.getString(R.string.episode_current)
-    entry?.finished == true -> context.getString(R.string.episode_watched)
-    suggestion is PlaySuggestion.Next && suggestion.item.id == item.id -> context.getString(R.string.episode_next)
-    else -> null
-}
 
 /** Fecha del feed (`dd-MM-yyyy HH:mm:ss`) como `dd/MM/yyyy`. */
 fun String.feedDateToDisplay(): String = take(10).replace('-', '/')

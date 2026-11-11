@@ -229,41 +229,16 @@ data class CatalogPage(
     val hasMore: Boolean get() = page < totalPages
 }
 
-data class ProgramSeason(
-    val id: String,
-    val title: String,
-    val episodeCount: Int?,
-    /** Posición editorial (`orden`); decide el orden de las pestañas. */
-    val order: Int? = null,
-)
-
+/** De la ficha de un programa solo importa lo que decide en qué orden se listan sus vídeos. */
 data class ProgramDetail(
     val id: String,
     val title: String,
-    /** Puede contener HTML; la UI lo renderiza. */
-    val description: String?,
-    val imageUrl: String?,
-    val emission: String?,
-    /** Ya en el orden en que se muestran (ver [seasonsInDisplayOrder]). */
-    val seasons: List<ProgramSeason>,
-    val webUrl: String? = null,
     /** `programTypeId`/`programTypeID` del feed ("136519" = Series Prime Time...). */
     val programTypeId: String? = null,
     /** `outOfEmission == false`: sigue publicando episodios. */
     val inEmission: Boolean = true,
     /** `isComplete`: la serie está completa en el catálogo. */
     val isComplete: Boolean = false,
-    /** RTVE anuncia que el programa publica fragmentos y avances. */
-    val showFragments: Boolean = false,
-    val year: String? = null,
-    val ageRating: String? = null,
-    val genres: List<String> = emptyList(),
-    val director: String? = null,
-    val cast: List<String> = emptyList(),
-    val originalLanguage: String? = null,
-    val country: String? = null,
-    /** Tipo editorial: distingue series de ciclos como "Contenedor Películas". */
-    val programType: String? = null,
 )
 
 data class CatalogLoad<T>(

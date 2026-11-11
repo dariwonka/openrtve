@@ -57,13 +57,6 @@ interface CatalogRepository {
         forceRefresh: Boolean = false,
     ): CatalogLoad<CatalogPage>
 
-    /** Fragmentos y avances/tráilers de un programa, separados de sus episodios completos. */
-    suspend fun loadProgramExtras(
-        programId: String,
-        page: Int = 1,
-        order: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
-        forceRefresh: Boolean = false,
-    ): CatalogLoad<CatalogPage>
 }
 
 class DefaultCatalogRepository(
@@ -174,19 +167,6 @@ class DefaultCatalogRepository(
             parse = parser::parseVideoPage,
         )
     }
-
-    override suspend fun loadProgramExtras(
-        programId: String,
-        page: Int,
-        order: EpisodeOrder,
-        forceRefresh: Boolean,
-    ): CatalogLoad<CatalogPage> = loadDocument(
-        url = "$PROGRAMS_BASE/${encode(programId)}/videos.json?page=$page&type=${RtveTypes.FRAGMENT},${RtveTypes.PREVIEW}&order=${encode(order.apiValue)}",
-        forceRefresh = forceRefresh,
-        freshForMillis = PROGRAM_FRESH_MS,
-        staleForMillis = PROGRAM_STALE_MS,
-        parse = parser::parseVideoPage,
-    )
 
     private fun encode(segment: String): String = URLEncoder.encode(segment, "UTF-8")
 

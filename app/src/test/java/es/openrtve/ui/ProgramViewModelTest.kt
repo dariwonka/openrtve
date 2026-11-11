@@ -3,7 +3,6 @@ package es.openrtve.ui
 import es.openrtve.data.HttpStatusException
 import es.openrtve.domain.EpisodeOrder
 import es.openrtve.domain.ProgramDetail
-import es.openrtve.domain.ProgramSeason
 import es.openrtve.testing.FakeCatalogRepository
 import es.openrtve.testing.MainDispatcherRule
 import es.openrtve.testing.catalogItem
@@ -77,26 +76,12 @@ class ProgramViewModelTest {
     }
 
     @Test
-    fun `clips and trailers load separately from complete episodes`() = runTest(mainDispatcher.dispatcher) {
-        repository.program = { id, _ -> loaded(detail(id).copy(showFragments = true)) }
-        repository.programVideos = { _, _, _, _, _ -> page(emptyList()) }
-        repository.programExtras = { _, _, _ -> page(listOf(catalogItem("clip"), catalogItem("trailer"))) }
-        val viewModel = ProgramViewModel(repository, "1", "")
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.episodes.items.isEmpty())
-        assertEquals(listOf("clip", "trailer"), viewModel.uiState.value.extras.items.map { it.id })
-        assertTrue(repository.calls.any { it.startsWith("programExtras(1") })
-    }
-
-    @Test
     fun `a missing sheet does not prevent the episodes from loading`() = runTest(mainDispatcher.dispatcher) {
         repository.program = { _, _ -> throw IOException("404") }
         val viewModel = ProgramViewModel(repository, "1", "Título de la fila")
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertNull(state.detail)
         assertEquals("Título de la fila", state.title)
         assertEquals(listOf("e1"), state.episodes.items.map { it.id })
         assertNull(state.episodes.error)
@@ -144,9 +129,5 @@ class ProgramViewModelTest {
     private fun detail(id: String) = ProgramDetail(
         id = id,
         title = "Telediario",
-        description = null,
-        imageUrl = null,
-        emission = null,
-        seasons = listOf(ProgramSeason("t1", "Temporada 1", 10)),
     )
 }

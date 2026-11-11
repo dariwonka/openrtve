@@ -12,11 +12,9 @@ import es.openrtve.domain.HomeRow
 import es.openrtve.domain.LinkKind
 import es.openrtve.domain.LiveInfo
 import es.openrtve.domain.ProgramDetail
-import es.openrtve.domain.ProgramSeason
 import es.openrtve.domain.RtveHostPolicy
 import es.openrtve.domain.programStructure
 import es.openrtve.domain.referenceItem
-import es.openrtve.domain.seasonsInDisplayOrder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -141,41 +139,13 @@ class RtveJsonParser(
         val root = json.parseToJsonElement(raw).jsonObject
         val program = root.obj("page")?.array("items")?.firstOrNull() as? JsonObject
             ?: throw IllegalArgumentException("El programa no tiene ficha")
-        val seasons = program.array("seasons")
-            .orEmpty()
-            .mapNotNull { it as? JsonObject }
-            .mapNotNull { season ->
-                val id = season.text("id") ?: return@mapNotNull null
-                ProgramSeason(
-                    id = id,
-                    title = season.text("longTitle", "shorttitle", "shortTitle", "title") ?: id,
-                    episodeCount = season.number("numEpisodes"),
-                    order = season.number("orden"),
-                )
-            }
-        val detail = ProgramDetail(
+        return ProgramDetail(
             id = program.text("id") ?: throw IllegalArgumentException("Programa sin id"),
             title = program.text("name", "title", "longTitle") ?: "",
-            description = program.text("description", "longDescription", "promoDesc"),
-            imageUrl = firstAllowed(program.text("imgPortada", "imgPortada2"))
-                ?: derivedImage("p", program.text("id").orEmpty(), "imgPortada", BACKDROP_WIDTH),
-            emission = program.text("emission"),
-            seasons = seasons,
-            webUrl = program.text("htmlUrl")?.let(hostPolicy::sanitize),
             programTypeId = program.text("programTypeId", "programTypeID"),
-            programType = program.text("programType"),
             inEmission = program.flag("outOfEmission") != true,
             isComplete = program.flag("isComplete") == true,
-            showFragments = program.flag("showFragments") == true,
-            year = program.text("productionDate")?.let(::productionYear),
-            ageRating = program.text("ageRange"),
-            genres = program.genres(),
-            director = program.people("director"),
-            cast = program.peopleList("casting"),
-            originalLanguage = program.text("languageOriginal"),
-            country = program.text("country"),
         )
-        return detail.copy(seasons = detail.seasonsInDisplayOrder())
     }
 
     fun parseVideoPage(raw: String): CatalogPage {
@@ -446,29 +416,12 @@ class RtveJsonParser(
 
     private fun JsonObject.array(key: String): JsonArray? = get(key) as? JsonArray
 
-    private fun JsonObject.genres(): List<String> = array("generos")
-        .orEmpty()
-        .mapNotNull { (it as? JsonObject)?.text("subGeneroInf", "generoInf") }
-        .distinct()
-
-    private fun JsonObject.people(key: String): String? = peopleList(key).joinToString(", ").ifBlank { null }
-
-    private fun JsonObject.peopleList(key: String): List<String> = text(key)
-        ?.split('|')
-        ?.map(String::trim)
-        ?.filter(String::isNotEmpty)
-        .orEmpty()
-
-    private fun productionYear(value: String): String? = YEAR.find(value)?.value
-
     private companion object {
         val LIVE_EDITORIAL_TYPES = setOf("broadcast", "peticion", "directo")
         val NON_CATALOG_ROWS = setOf("noticias", "parrilla")
-        val YEAR = Regex("\\b(?:19|20)\\d{2}\\b")
         const val IMAGE_SERVICE = "https://img.rtve.es"
         const val LANDSCAPE_WIDTH = 960
         const val POSTER_WIDTH = 480
         const val SQUARE_WIDTH = 480
-        const val BACKDROP_WIDTH = 1600
     }
 }

@@ -145,51 +145,28 @@ class RtveJsonParserTest {
     }
 
     @Test
-    fun `program detail exposes seasons and description`() {
+    fun `program detail keeps what decides the episode order`() {
         val detail = parser.parseProgram(
             """
             {"page":{"items":[{
               "id":"178291","name":"La amiga estupenda","contentType":"programa",
-              "description":"<p>Elena y Lila</p>","emission":"Sábado a las 22:00",
-              "imgPortada":"https://img.rtve.es/imagenes/x.jpg",
-              "programTypeID":136519,"outOfEmission":false,"isComplete":false,"showFragments":true,
-              "productionDate":"01-01-2022 00:00:00","ageRange":"No recomendable para menores de 16 años",
-              "generos":[{"generoInf":"Drama"}],"director":"Una Directora | Otro Director",
-              "casting":"Actriz Uno | Actor Dos","languageOriginal":"es","country":"ES",
-              "seasons":[
-                {"shorttitle":"T1","longTitle":"Temporada 1","id":1000013,"orden":1,"numEpisodes":8},
-                {"shorttitle":"T2","longTitle":"Temporada 2","id":1000014,"orden":2,"numEpisodes":6},
-                {"shorttitle":"T3","longTitle":"Temporada 3","id":1000015,"orden":3,"numEpisodes":0}
-              ]
+              "programTypeID":136519,"outOfEmission":false,"isComplete":false
             }]}}
             """.trimIndent(),
         )
 
         assertEquals("La amiga estupenda", detail.title)
-        assertEquals("Sábado a las 22:00", detail.emission)
-        assertEquals("https://img.rtve.es/imagenes/x.jpg", detail.imageUrl)
         assertEquals("136519", detail.programTypeId)
         assertTrue(detail.inEmission)
         assertFalse(detail.isComplete)
-        assertTrue(detail.showFragments)
-        assertEquals("2022", detail.year)
-        assertEquals(listOf("Drama"), detail.genres)
-        assertEquals("Una Directora, Otro Director", detail.director)
-        assertEquals(listOf("Actriz Uno", "Actor Dos"), detail.cast)
-        assertEquals("ES", detail.country)
-        // En emisión: la temporada más reciente primero; sin episodios no se lista.
-        assertEquals(listOf("1000014", "1000013"), detail.seasons.map { it.id })
-        assertEquals(6, detail.seasons.first().episodeCount)
-        assertEquals(2, detail.seasons.first().order)
     }
 
     @Test
-    fun `program detail preserves the editorial type of a film cycle`() {
+    fun `program detail accepts both spellings of the program type id`() {
         for (key in listOf("programTypeId", "programTypeID")) {
             val detail = parser.parseProgram(
-                """{"page":{"items":[{"id":"61150","name":"Somos cine","programType":"Contenedor Películas","$key":137310}]}}""",
+                """{"page":{"items":[{"id":"61150","name":"Somos cine","$key":137310}]}}""",
             )
-            assertEquals("Contenedor Películas", detail.programType)
             assertEquals("137310", detail.programTypeId)
         }
     }

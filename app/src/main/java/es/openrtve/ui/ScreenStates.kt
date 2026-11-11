@@ -44,8 +44,6 @@ class ProgramScreenState(
     val state: ProgramUiState,
     /** Historial por id de episodio: progreso y "visto". */
     val entriesById: Map<String, WatchEntry>,
-    /** Qué reproduce el botón grande. */
-    val suggestion: PlaySuggestion?,
 )
 
 @Composable
@@ -61,14 +59,8 @@ fun rememberProgramScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val historyEntries by history.entries.collectAsStateWithLifecycle()
     val entriesById = remember(historyEntries) { historyEntries.associateBy { it.item.id } }
-    // De la lista completa, no de la temporada que se esté mirando: el botón grande es estable.
-    val suggestion = remember(historyEntries, state.headerEpisodes, state.headerOrder, state.structure) {
-        if (state.structure.isCollection) null else suggestPlay(history, program.id, state.headerEpisodes, state.headerOrder) {
-            it.contentTab(state.structure) == ProgramTab.EPISODES
-        }
-    }
-    // Sin ErrorEffect: cada sección explica su fallo en el sitio, con su reintento.
-    return ProgramScreenState(viewModel, state, entriesById, suggestion)
+    // Sin ErrorEffect: la lista explica su fallo en el sitio, con su reintento.
+    return ProgramScreenState(viewModel, state, entriesById)
 }
 
 class SearchScreenState(val viewModel: SearchViewModel, val state: SearchUiState)

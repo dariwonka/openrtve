@@ -51,8 +51,6 @@ fun programStructure(programTypeId: String?, programType: String?): ProgramStruc
     else -> ProgramStructure.VIDEOS
 }
 
-val ProgramDetail.structure: ProgramStructure get() = programStructure(programTypeId, programType)
-
 /** Estructura del programa al que pertenece un medio (`programInfo`). */
 val CatalogItem.parentStructure: ProgramStructure get() = programStructure(programTypeId, programType)
 

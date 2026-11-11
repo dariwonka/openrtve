@@ -3,11 +3,8 @@ package es.openrtve.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import es.openrtve.data.CatalogRepository
-import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.EpisodeOrder
 import es.openrtve.domain.episodeOrder
-import es.openrtve.domain.isFirstSeason
-import es.openrtve.domain.ProgramDetail
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,25 +16,13 @@ import kotlinx.coroutines.launch
 data class ProgramUiState(
     val programId: String,
     val title: String,
-    val detail: ProgramDetail? = null,
-    /** Los metadatos pueden fallar aunque la lista de vídeos esté disponible. */
-    val detailError: LoadError? = null,
-    val selectedSeasonId: String? = null,
-    /** Emisiones completas de la temporada elegida; carga ya mientras llega la ficha. */
+    /** Vídeos completos del programa, página a página; cargan ya mientras llega la ficha. */
     val episodes: PagedItemsState = PagedItemsState(isLoading = true),
-    /** Sentido de [episodes]: el de RTVE Play para este programa y temporada. */
+    /** Sentido de [episodes]: el de RTVE Play para este programa. */
     val order: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
-    /** Fragmentos, avances y tráilers; nunca se mezclan con los episodios completos. */
-    val extras: PagedItemsState = PagedItemsState(),
-    /**
-     * Páginas cargadas de la lista completa ("Todos") y su orden: de ellas sale el
-     * botón grande, que no debe cambiar al mirar otra temporada.
-     */
-    val headerEpisodes: List<CatalogItem> = emptyList(),
-    val headerOrder: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
 )
 
-/** Ficha de programa: la ficha primero (decide temporadas, orden y extras) y después sus listas paginadas. */
+/** Página de una serie: la ficha decide el orden de los vídeos y después se cargan paginados. */
 class ProgramViewModel(
     private val repository: CatalogRepository,
     programId: String,
@@ -45,62 +30,42 @@ class ProgramViewModel(
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ProgramUiState(programId = programId, title = initialTitle))
     val uiState: StateFlow<ProgramUiState> = mutableUiState.asStateFlow()
-    private var detailJob: Job? = null
+    private var startJob: Job? = null
+    private var detailLoaded = false
 
-    private val episodeLoader = PagedItemsLoader(
-        viewModelScope, mutableUiState, ProgramUiState::episodes, { copy(episodes = it) },
-        onLoaded = { if (selectedSeasonId == null) copy(headerEpisodes = episodes.items, headerOrder = order) else this },
-    ) { page ->
+    private val episodeLoader = PagedItemsLoader(viewModelScope, mutableUiState, ProgramUiState::episodes, { copy(episodes = it) }) { page ->
         val state = mutableUiState.value
-        repository.loadProgramVideos(state.programId, state.selectedSeasonId, page, completeOnly = true, order = state.order).value
-    }
-
-    private val extrasLoader = PagedItemsLoader(viewModelScope, mutableUiState, ProgramUiState::extras, { copy(extras = it) }) { page ->
-        repository.loadProgramExtras(mutableUiState.value.programId, page, EpisodeOrder.NEWEST_FIRST).value
+        repository.loadProgramVideos(state.programId, page = page, completeOnly = true, order = state.order).value
     }
 
     init {
-        loadDetailThenEpisodes()
+        start()
     }
 
-    private fun loadDetailThenEpisodes() {
-        detailJob?.cancel()
+    private fun start() {
+        startJob?.cancel()
         episodeLoader.cancel()
-        detailJob = viewModelScope.launch {
-            mutableUiState.update { it.copy(detailError = null, episodes = it.episodes.copy(isLoading = true, error = null)) }
-            val programId = mutableUiState.value.programId
+        startJob = viewModelScope.launch {
+            mutableUiState.update { it.copy(episodes = it.episodes.copy(isLoading = true, error = null)) }
             try {
-                val detail = repository.loadProgram(programId).value
-                mutableUiState.update { it.copy(detail = detail, title = detail.title.ifBlank { it.title }) }
-                if (detail.showFragments) extrasLoader.load(firstPage = true)
+                val detail = repository.loadProgram(mutableUiState.value.programId).value
+                detailLoaded = true
+                mutableUiState.update {
+                    it.copy(title = detail.title.ifBlank { it.title }, order = detail.episodeOrder())
+                }
             } catch (error: CancellationException) {
                 throw error
-            } catch (error: Exception) {
-                mutableUiState.update { it.copy(detailError = error.toLoadError()) }
+            } catch (_: Exception) {
+                // Sin ficha, los vídeos van del más nuevo al más antiguo, como los feeds.
             }
-            mutableUiState.update { it.copy(order = orderFor(it.selectedSeasonId)) }
             episodeLoader.load(firstPage = true)
         }
     }
 
-    /** Sin ficha no hay regla: del más nuevo al más antiguo, como los feeds. */
-    private fun orderFor(seasonId: String?): EpisodeOrder =
-        mutableUiState.value.detail?.let { it.episodeOrder(isFirstSeason = it.isFirstSeason(seasonId)) } ?: EpisodeOrder.NEWEST_FIRST
-
     fun loadMore() = episodeLoader.loadMore()
 
-    /** Sin ficha no hay temporadas, sinopsis ni extras: el reintento empieza por ella. */
+    /** Sin ficha el reintento empieza por ella; si no, por la página que falló. */
     fun retry() {
-        if (mutableUiState.value.detail == null) loadDetailThenEpisodes() else episodeLoader.retry()
-    }
-
-    fun loadMore(section: ContentSection) {
-        if (section.loadsComplete) episodeLoader.loadMore()
-        if (section.loadsExtras) extrasLoader.loadMore()
-    }
-
-    fun retry(section: ContentSection) {
-        if (section.loadsComplete) retry()
-        if (section.loadsExtras) extrasLoader.retry()
+        if (detailLoaded) episodeLoader.retry() else start()
     }
 }

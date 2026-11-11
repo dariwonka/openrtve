@@ -31,8 +31,6 @@ open class FakeCatalogRepository : CatalogRepository {
     var channelPrograms: suspend (channelId: String, cachedOnly: Boolean) -> CatalogLoad<List<CatalogItem>> = { _, _ -> CatalogLoad(emptyList(), false) }
     var programVideos: suspend (programId: String, seasonId: String?, page: Int, completeOnly: Boolean, forceRefresh: Boolean) -> CatalogLoad<CatalogPage> =
         { _, _, _, _, _ -> unsupported() }
-    var programExtras: suspend (programId: String, page: Int, forceRefresh: Boolean) -> CatalogLoad<CatalogPage> =
-        { _, page, _ -> CatalogLoad(CatalogPage(emptyList(), page, page), false) }
 
     override suspend fun loadPortada(url: String, forceRefresh: Boolean, cachedOnly: Boolean): CatalogLoad<HomeFeed> {
         calls += "portada($url, force=$forceRefresh, cached=$cachedOnly)"
@@ -79,16 +77,6 @@ open class FakeCatalogRepository : CatalogRepository {
     ): CatalogLoad<CatalogPage> {
         calls += "programVideos($programId, season=$seasonId, page=$page, complete=$completeOnly, order=${order.name})"
         return programVideos(programId, seasonId, page, completeOnly, forceRefresh)
-    }
-
-    override suspend fun loadProgramExtras(
-        programId: String,
-        page: Int,
-        order: EpisodeOrder,
-        forceRefresh: Boolean,
-    ): CatalogLoad<CatalogPage> {
-        calls += "programExtras($programId, page=$page, order=${order.name})"
-        return programExtras(programId, page, forceRefresh)
     }
 
     private fun unsupported(): Nothing = throw UnsupportedOperationException("No configurado en el test")

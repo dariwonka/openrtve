@@ -63,18 +63,7 @@
 
     <string name="kind_live">Directo</string>
     <string name="program_empty">Este programa no tiene vídeos disponibles</string>
-    <string name="program_continue_episode">Continuar · %1$s</string>
-    <string name="program_next_episode">Siguiente · %1$s</string>
-    <string name="program_play_episode">Reproducir · %1$s</string>
     <string name="episode_watched">Visto</string>
-    <string name="episode_next">Siguiente</string>
-    <string name="episode_current">Este capítulo</string>
-    <string name="video_genres">Género</string>
-    <string name="video_country">País</string>
-    <string name="video_director">Dirección</string>
-    <string name="video_cast">Reparto</string>
-    <string name="video_language">Idioma original</string>
-    <string name="video_available_until">Disponible hasta</string>
     <string name="meta_episode">E%1$d</string>
     <string name="meta_minutes">%1$d min</string>
 
