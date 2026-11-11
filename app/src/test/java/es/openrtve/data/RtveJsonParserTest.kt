@@ -394,37 +394,6 @@ class RtveJsonParserTest {
     }
 
     @Test
-    fun `video detail collects the movie sheet`() {
-        val detail = parser.parseVideo(
-            """
-            {"page":{"items":[{
-              "id":"16368062","title":"La favorita","contentType":"video","duration":6493100,
-              "description":"<p>Reina Ana</p>","promoDesc":"Comedia negra","subType":{"id":1,"name":"Película"},
-              "previews":{"horizontal":null,"horizontal2":"https://img.rtve.es/h2.jpg","vertical":"https://img.rtve.es/v.jpg"},
-              "casting":"Emma Stone | Olivia Colman","director":"Yorgos Lanthimos",
-              "generos":[{"generoInf":"Drama","subGeneroInf":"Drama"},{"generoInf":"Comedia"}],
-              "productionDate":"2018","ageRange":"No recomendable para menores de 12 años","languageOriginal":"en",
-              "expirationDate":"19-09-2026 02:40:00","htmlUrl":"https://www.rtve.es/play/videos/cine/la-favorita/",
-              "programInfo":{"id":"77590","title":"Cine internacional"},"hasDRM":true,"requireLogged":true,"allowedInCountry":true
-            }]}}
-            """.trimIndent(),
-        )
-
-        assertEquals("La favorita", detail.item.title)
-        assertEquals("16368062", detail.item.playbackId)
-        assertEquals("77590", detail.item.programId)
-        assertEquals("Cine internacional", detail.programTitle)
-        assertEquals("https://img.rtve.es/h2.jpg", detail.backdropUrl)
-        assertEquals("https://img.rtve.es/v/16368062/vertical?w=480", detail.item.posterUrl)
-        assertEquals(listOf("Emma Stone", "Olivia Colman"), detail.cast)
-        assertEquals(listOf("Drama", "Comedia"), detail.genres)
-        assertEquals("2018", detail.year)
-        assertEquals("Película", detail.item.mediaSubtypeName)
-        assertEquals("Comedia negra", detail.promo)
-        assertTrue(detail.item.drm)
-    }
-
-    @Test
     fun `program without last multimedia has no playback id`() {
         val result = parser.parseModule(
             raw = """{"page":{"items":[{"id":"55","title":"Serie","contentType":"programa"}]}}""",

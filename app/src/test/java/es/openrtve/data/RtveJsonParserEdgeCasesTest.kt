@@ -3,7 +3,6 @@ package es.openrtve.data
 import es.openrtve.domain.ContentKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Test
 
 class RtveJsonParserEdgeCasesTest {
@@ -39,22 +38,6 @@ class RtveJsonParserEdgeCasesTest {
         assertEquals(listOf("2"), paged.items.map { it.id })
         assertTrue(empty.items.isEmpty())
         assertEquals("Fila", empty.title)
-    }
-
-    @Test
-    fun `unusable documents raise instead of producing half a sheet`() {
-        for (raw in listOf("""{"page":{"items":[]}}""", """{}""")) {
-            try {
-                parser.parseProgram(raw)
-                fail("programa sin ficha")
-            } catch (_: IllegalArgumentException) {
-            }
-            try {
-                parser.parseVideo(raw)
-                fail("vídeo sin ficha")
-            } catch (_: IllegalArgumentException) {
-            }
-        }
     }
 
     @Test

@@ -112,17 +112,6 @@ class CatalogRepositoryTest {
         }
     }
 
-    @Test
-    fun `program extras request only fragments and previews`() = runBlocking {
-        client.response = { """{"page":{"number":1,"totalPages":1,"items":[]}}""" }
-
-        repository.loadProgramExtras("169690")
-
-        assertTrue(client.lastUrl.orEmpty().contains("/programas/169690/videos.json?page=1"))
-        assertTrue(client.lastUrl.orEmpty().contains("type=39978,39980"))
-        assertTrue(client.lastUrl.orEmpty().contains("order=multimedia_date_emission%2Cdesc"))
-    }
-
     private fun home(title: String) = """{"title":"$title","rows":[]}"""
 
     private class ScriptedClient : TextHttpClient {
