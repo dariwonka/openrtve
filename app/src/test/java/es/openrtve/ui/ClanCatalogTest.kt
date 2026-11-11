@@ -351,7 +351,8 @@ class ClanCatalogTest {
                 es.openrtve.domain.CatalogPage(
                     when (programId) {
                         "1" -> listOf(video("10", "1", "Peligro en el tren nocturno", 86))
-                        else -> listOf(video("20", "2", "El cartel", 45), video("21", "2", "Camping", 7))
+                        "2" -> listOf(video("20", "2", "El cartel", 45), video("21", "2", "Camping", 7))
+                        else -> emptyList()
                     },
                     page = 1,
                     totalPages = 1,
