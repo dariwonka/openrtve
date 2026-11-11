@@ -1,7 +1,6 @@
 package es.openrtve.ui
 
 import es.openrtve.domain.CatalogItem
-import es.openrtve.domain.ContentKind
 import es.openrtve.domain.MediaForm
 import es.openrtve.domain.MediaSubject
 import es.openrtve.domain.ProgramStructure
@@ -24,10 +23,6 @@ val ProgramUiState.structure: ProgramStructure get() = detail?.structure ?: Prog
 /** Al llegar la ficha, [VideoUiState.item] pasa a ser el suyo, con el tipo del programa padre. */
 val VideoUiState.structure: ProgramStructure get() = item.parentStructure
 
-/** En un contenedor, o si es una película, cada pieza abre su ficha; un capítulo o un extra se reproduce. */
-fun CatalogItem.opensDetailsIn(structure: ProgramStructure): Boolean =
-    kind == ContentKind.PROGRAM || (mediaForm != MediaForm.EXTRA && (structure.isCollection || isMovie))
-
 /** Sección de una pieza: primero su forma (un extra siempre es extra), luego su tema y, por último, la estructura. */
 fun CatalogItem.contentTab(structure: ProgramStructure, fromExtras: Boolean = false): ProgramTab = when {
     mediaForm == MediaForm.EXTRA || (mediaForm == MediaForm.UNKNOWN && fromExtras) -> ProgramTab.MORE_VIDEOS
@@ -36,9 +31,6 @@ fun CatalogItem.contentTab(structure: ProgramStructure, fromExtras: Boolean = fa
     structure.isCollection -> ProgramTab.VIDEOS
     else -> ProgramTab.EPISODES
 }
-
-/** Películas y documentales se recorren como pósters; el resto, como lista de capítulos. */
-val ProgramTab.showsPosters: Boolean get() = this == ProgramTab.MOVIES || this == ProgramTab.DOCUMENTARIES
 
 /** La sección principal de cada estructura: Capítulos en una serie, Películas en un ciclo de cine... */
 val ProgramStructure.primaryTab: ProgramTab
@@ -68,9 +60,6 @@ data class ContentSection(
      */
     val progressKey: Int = 0,
 ) {
-    /** Lo que se elige en Extras se reproduce; en el resto, según la pieza y la estructura (ver [opensDetailsIn]). */
-    fun opensDetails(item: CatalogItem, structure: ProgramStructure): Boolean =
-        tab != ProgramTab.MORE_VIDEOS && item.opensDetailsIn(structure)
 }
 
 val ProgramUiState.contentSections: List<ContentSection>

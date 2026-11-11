@@ -42,7 +42,6 @@ data class FichaFacts(
     val country: String? = null,
     val expirationDate: String? = null,
 ) {
-    val hasDetails: Boolean get() = rows.isNotEmpty()
 
     /** Filas etiqueta/valor, omitiendo lo que falte. */
     val rows: List<Pair<Int, String>> = buildList {

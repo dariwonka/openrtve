@@ -83,15 +83,6 @@ val CatalogItem.isMovie: Boolean get() = mediaSubject == MediaSubject.MOVIE
 /** Una película completa tiene ficha propia; su tráiler sigue siendo un extra. */
 val CatalogItem.isFullMovie: Boolean get() = isMovie && mediaForm != MediaForm.EXTRA
 
-/**
- * Es un capítulo de un programa que se recorre por capítulos: no una película ni
- * una pieza de un contenedor (un ciclo de cine). Basta con que el programa tenga
- * tipo aunque el vídeo no traiga temporada ni número de episodio.
- */
-val CatalogItem.belongsToEpisodicProgram: Boolean
-    get() = programId != null && !isFullMovie && parentStructure == ProgramStructure.EPISODIC &&
-        (seasonId != null || episode != null || programType != null)
-
 /** Solo los capítulos de una serie encadenan el siguiente; nunca películas ni piezas de un contenedor. */
 val CatalogItem.canHaveNextEpisode: Boolean
     get() = kind == ContentKind.VIDEO && mediaForm != MediaForm.EXTRA && !isFullMovie && parentStructure == ProgramStructure.EPISODIC

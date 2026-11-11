@@ -1,6 +1,5 @@
 package es.openrtve.ui
 
-import es.openrtve.domain.ProgramStructure
 
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
@@ -34,24 +33,6 @@ class PlaySuggestionTest {
         val suggestion = suggestPlay(history, "p", episodes)
         assertTrue(suggestion is PlaySuggestion.Continue)
         assertEquals("902", suggestion!!.item.id)
-    }
-
-    @Test
-    fun `the program action ignores films and extras in both the page and watch history`() {
-        val film = episode("film").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")
-        val trailer = episode("trailer").copy(mediaTypeId = "39978", mediaSubtypeId = "130734")
-        history.register(episodes[2])
-        history.updateProgress(episodes[2].id, 600_000, 3_000_000)
-        history.register(film)
-        history.updateProgress(film.id, 600_000, 3_000_000)
-        history.register(trailer)
-        history.updateProgress(trailer.id, 60_000, 180_000)
-
-        val suggestion = suggestPlay(history, "p", listOf(film, trailer) + episodes) {
-            it.contentTab(ProgramStructure.EPISODIC) == ProgramTab.EPISODES
-        }
-        assertTrue(suggestion is PlaySuggestion.Continue)
-        assertEquals(episodes[2].id, suggestion!!.item.id)
     }
 
     @Test

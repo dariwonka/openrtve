@@ -71,9 +71,6 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.TextView
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Icon
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
@@ -97,9 +94,6 @@ class PlayerActivity : ComponentActivity() {
     private var controller by mutableStateOf<MediaController?>(null)
     private var errorRes by mutableStateOf<Int?>(null)
     private var inPictureInPicture by mutableStateOf(false)
-    private var locked by mutableStateOf(false)
-    private var showUnlock by mutableStateOf(false)
-    private var feedback by mutableStateOf<GestureFeedback?>(null)
     private var title by mutableStateOf("")
     private var liveState by mutableStateOf<LiveState?>(null)
     private var menu by mutableStateOf<PlayerMenu?>(null)
@@ -223,19 +217,11 @@ class PlayerActivity : ComponentActivity() {
                     nextTitle = nextItem?.takeIf { showNext }?.title,
                     nextCountdown = nextCountdown,
                     onPlayNext = ::playNext,
-                    controlsEnabled = !inPictureInPicture && !locked,
-                    locked = locked,
-                    showUnlock = showUnlock && !inPictureInPicture,
-                    feedback = feedback,
+                    controlsEnabled = !inPictureInPicture,
                     canPictureInPicture = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && canEnterPictureInPicture(),
                     onBack = ::finish,
                     onRetry = ::retry,
                     onPictureInPicture = ::enterPictureInPictureNow,
-                    onLock = { locked = true; showUnlock = true },
-                    onUnlock = { locked = false; showUnlock = false },
-                    onLockedTap = { showUnlock = true },
-                    onFeedback = { feedback = it },
-                    onUnlockShown = { showUnlock = false },
                 )
             }
         }
@@ -269,7 +255,7 @@ class PlayerActivity : ComponentActivity() {
             if (event.action == android.view.KeyEvent.ACTION_UP) menu = null
             return true
         }
-        if (view != null && menu == null && !locked && view.useController && view.isControllerFullyVisible) {
+        if (view != null && menu == null && view.useController && view.isControllerFullyVisible) {
             val focused = currentFocus?.id
             val onBar = focused == null || focused == androidx.media3.ui.R.id.exo_progress ||
                 focused == androidx.media3.ui.R.id.exo_play_pause
@@ -361,7 +347,7 @@ class PlayerActivity : ComponentActivity() {
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
         if (menu != null) return super.onKeyDown(keyCode, event)
         val view = playerView
-        if (view != null && !locked && view.useController && view.dispatchKeyEvent(event)) return true
+        if (view != null && view.useController && view.dispatchKeyEvent(event)) return true
         return super.onKeyDown(keyCode, event)
     }
 
@@ -860,18 +846,10 @@ private fun PlaybackScreen(
     nextCountdown: Int?,
     onPlayNext: () -> Unit,
     controlsEnabled: Boolean,
-    locked: Boolean,
-    showUnlock: Boolean,
-    feedback: GestureFeedback?,
     canPictureInPicture: Boolean,
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onPictureInPicture: () -> Unit,
-    onLock: () -> Unit,
-    onUnlock: () -> Unit,
-    onLockedTap: () -> Unit,
-    onFeedback: (GestureFeedback?) -> Unit,
-    onUnlockShown: () -> Unit,
 ) {
     Box(
         contentAlignment = Alignment.Center,
@@ -919,15 +897,6 @@ private fun PlaybackScreen(
                                 }
                             }
                         },
-                    )
-                    view.setOnTouchListener(
-                        PlayerGestures(
-                            playerView = view,
-                            window = activity.window,
-                            isLocked = { !view.useController },
-                            onLockedTap = onLockedTap,
-                            onFeedback = onFeedback,
-                        ),
                     )
                     view
                 },
@@ -988,38 +957,6 @@ private fun PlaybackScreen(
             androidx.activity.compose.BackHandler(onBack = onCloseMenu)
             PlayerSettingsPanel(it, onSelectOption, onCloseMenu)
         }
-        feedback?.let {
-            Text(
-                text = when (it) {
-                    is GestureFeedback.Brightness -> stringResource(R.string.player_brightness, it.percent)
-                    is GestureFeedback.Volume -> stringResource(R.string.player_volume, it.percent)
-                },
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.6f), MaterialTheme.shapes.small)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
-        if (locked && showUnlock) {
-            LaunchedEffect(showUnlock) {
-                delay(UNLOCK_VISIBLE_MS)
-                onUnlockShown()
-            }
-            IconButton(
-                onClick = onUnlock,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-                    .background(Color.Black.copy(alpha = 0.6f), MaterialTheme.shapes.small),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_player_unlock),
-                    contentDescription = stringResource(R.string.player_unlock),
-                    tint = Color.White,
-                )
-            }
-        }
     }
 }
 
@@ -1050,7 +987,6 @@ private fun PlaybackError(@StringRes errorRes: Int, onRetry: () -> Unit, onBack:
     }
 }
 
-private const val UNLOCK_VISIBLE_MS = 3_000L
 private const val LIVE_TICK_MS = 1_000L
 private const val PROGRESS_SAVE_EVERY_TICKS = 10
 private const val LIVE_EDGE_TOLERANCE_MS = 20_000L

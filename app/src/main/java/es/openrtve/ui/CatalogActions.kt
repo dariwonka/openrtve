@@ -8,10 +8,7 @@ import es.openrtve.AppContainer
 import es.openrtve.domain.BlockReason
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ContentKind
-import es.openrtve.domain.HomeLink
-import es.openrtve.domain.HomeRow
 import es.openrtve.domain.PlaybackDecision
-import es.openrtve.domain.referenceItem
 import es.openrtve.playback.PlayerActivity
 
 /**
@@ -42,21 +39,9 @@ class CatalogActions(
 
     val playItem: (CatalogItem) -> Unit = { play(it) }
 
-    /** Programas y vídeos abren su ficha; los directos se reproducen al momento. */
+    /** Una serie abre su página; un vídeo suelto o un directo se reproduce al momento. */
     val openItem: (CatalogItem) -> Unit = { item ->
-        when (item.kind) {
-            ContentKind.PROGRAM -> navigation.push(Destination.Program(item))
-            ContentKind.VIDEO -> navigation.push(Destination.Video(item))
-            else -> play(item)
-        }
-    }
-
-    val openRow: (HomeRow, String) -> Unit = { row, title -> navigation.push(Destination.Module(row, title)) }
-
-    val openLink: (HomeLink) -> Unit = { link -> link.destination()?.let(navigation::push) }
-
-    val openProgram: (programId: String, title: String) -> Unit = { id, title ->
-        navigation.push(Destination.Program(referenceItem(id, ContentKind.PROGRAM, title)))
+        if (item.kind == ContentKind.PROGRAM) navigation.push(Destination.Program(item)) else play(item)
     }
 
     val openSettings: () -> Unit = { navigation.openGlobal(GlobalDestination.Settings) }

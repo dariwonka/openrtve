@@ -15,8 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -120,18 +118,3 @@ internal val TvFocusedRowTop = 76.dp
 /** Aire para que la tarjeta enfocada (ampliada un 8 % con borde y brillo) no se corte en el borde de la lista. */
 internal val TvFocusScaleRoom = 16.dp
 
-/**
- * Funde el borde superior con el fondo: lo que sale por arriba al bajar (la última
- * línea de la fila anterior) se desvanece en vez de quedar cortado a ras.
- */
-@Composable
-internal fun Modifier.tvTopFade(height: Dp = TvVerticalMargin): Modifier {
-    val color = androidx.tv.material3.MaterialTheme.colorScheme.background
-    return drawWithContent {
-        drawContent()
-        drawRect(
-            brush = Brush.verticalGradient(0f to color, 1f to color.copy(alpha = 0f), endY = height.toPx()),
-            size = size.copy(height = height.toPx()),
-        )
-    }
-}

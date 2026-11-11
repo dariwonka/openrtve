@@ -6,12 +6,6 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import es.openrtve.domain.BlockReason
 import es.openrtve.domain.CatalogItem
-import es.openrtve.domain.ContentKind
-import es.openrtve.domain.HomeLink
-import es.openrtve.domain.HomeRow
-import es.openrtve.domain.LinkKind
-import es.openrtve.domain.collectionRow
-import es.openrtve.domain.referenceItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,26 +17,12 @@ sealed interface AppDestination
 
 /** Pantallas apilables sobre la raíz de cada pestaña. */
 sealed interface Destination : AppDestination {
-    data class Portada(val url: String, val title: String) : Destination
-    data class Module(val row: HomeRow, val title: String) : Destination
     data class Program(val item: CatalogItem) : Destination
-    data class Video(val item: CatalogItem) : Destination
 }
 
 /** Pantallas globales: no pertenecen ni se guardan en la pila de una pestaña. */
 sealed interface GlobalDestination : AppDestination {
     data object Settings : GlobalDestination
-}
-
-/**
- * Destino de un enlace de portada. Programa y vídeo necesitan el id de su
- * URL de API; si no se reconoce, el enlace no lleva a ningún sitio.
- */
-fun HomeLink.destination(): Destination? = when (kind) {
-    LinkKind.COLLECTION -> Destination.Module(collectionRow(url, title), title)
-    LinkKind.PORTADA -> Destination.Portada(url, title)
-    LinkKind.PROGRAM -> apiId?.let { Destination.Program(referenceItem(it, ContentKind.PROGRAM, title, imageUrl)) }
-    LinkKind.VIDEO -> apiId?.let { Destination.Video(referenceItem(it, ContentKind.VIDEO, title, imageUrl)) }
 }
 
 /** Mensajes efímeros que la UI muestra una vez y descarta. */

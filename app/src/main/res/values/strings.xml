@@ -44,12 +44,8 @@
 
     <string name="action_back">Atrás</string>
     <string name="action_retry">Reintentar</string>
-    <string name="action_see_all">Ver todo</string>
-    <string name="action_watch_now">Ver ahora</string>
 
     <string name="state_loading">Cargando…</string>
-    <string name="state_empty_home">La portada no tiene módulos públicos ahora mismo</string>
-    <string name="state_empty_module">Este módulo no tiene contenidos ahora mismo</string>
 
     <string name="error_offline">Sin conexión a Internet</string>
     <string name="error_timeout">RTVE está tardando demasiado en responder</string>
@@ -63,31 +59,16 @@
     <string name="blocked_starts_at">Empieza %1$s</string>
     <string name="schedule_today">Hoy</string>
     <string name="schedule_tomorrow">Mañana</string>
-    <string name="continue_watching">Seguir viendo</string>
-    <string name="action_continue">Continuar</string>
-    <string name="action_restart">Desde el inicio</string>
     <string name="blocked_no_source">Este elemento todavía no tiene una fuente reproducible</string>
 
     <string name="kind_live">Directo</string>
     <string name="program_empty">Este programa no tiene vídeos disponibles</string>
-    <string name="program_load_more">Cargar más</string>
     <string name="program_continue_episode">Continuar · %1$s</string>
     <string name="program_next_episode">Siguiente · %1$s</string>
     <string name="program_play_episode">Reproducir · %1$s</string>
     <string name="episode_watched">Visto</string>
     <string name="episode_next">Siguiente</string>
-    <string name="tab_episodes">Capítulos</string>
-    <string name="tab_movies">Películas</string>
-    <string name="tab_documentaries">Documentales</string>
-    <string name="tab_videos">Vídeos</string>
-    <string name="tab_more_videos">Extras</string>
-    <string name="tab_related">Similares</string>
     <string name="episode_current">Este capítulo</string>
-    <string name="tab_details">Detalles</string>
-
-    <string name="action_play">Reproducir</string>
-    <string name="action_open_program">Ver programa</string>
-    <string name="collection_more_in">Más en %1$s</string>
     <string name="video_genres">Género</string>
     <string name="video_country">País</string>
     <string name="video_director">Dirección</string>
@@ -101,7 +82,6 @@
     <string name="player_subtitles">Subtítulos</string>
     <string name="player_aspect">Ajustar imagen</string>
     <string name="player_pip">Imagen en imagen</string>
-    <string name="player_unlock">Desbloquear controles</string>
     <string name="player_play_pause">Reproducir o pausar</string>
     <string name="player_settings">Ajustes de reproducción</string>
     <string name="player_quality">Calidad</string>
@@ -121,10 +101,6 @@
     <string name="settings_autoplay_summary">Encadena el siguiente episodio al terminar</string>
     <string name="player_live">DIRECTO</string>
     <string name="player_go_live">IR AL DIRECTO</string>
-    <string name="player_brightness">Brillo %1$d%%</string>
-    <string name="player_volume">Volumen %1$d%%</string>
-    <string name="continue_open_details">Ver ficha</string>
-    <string name="continue_remove">Quitar de Seguir viendo</string>
     <plurals name="continue_remaining_minutes">
         <item quantity="one">Queda %d min</item>
         <item quantity="other">Quedan %d min</item>

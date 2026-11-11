@@ -41,13 +41,11 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Button
@@ -63,7 +61,6 @@ import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.LiveInfo
 import es.openrtve.domain.RowLayout
 import es.openrtve.domain.imageFor
-import es.openrtve.ui.CategoryArtwork
 
 /**
  * Si la pantalla ya dio su foco inicial. Es estado de la pantalla, no del elemento
@@ -126,10 +123,6 @@ internal val TvRowPadding = PaddingValues(horizontal = TvHorizontalMargin)
 internal val TvCardShape = RoundedCornerShape(12.dp)
 /** Color del selector: el borde de la tarjeta enfocada. */
 internal val TvFocusColor = Color(0xFFFF1744)
-internal val TvLandscapeWidth = 260.dp
-/** Degradado de las tarjetas con el título sobre la imagen. */
-private val TvTitleScrim = Brush.verticalGradient(0.3f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.85f))
-internal val TvPosterWidth = 150.dp
 
 /**
  * Separación entre la imagen de una tarjeta y su título. Al enfocarla, la imagen
@@ -137,24 +130,6 @@ internal val TvPosterWidth = 150.dp
  * y un brillo: con menos aire, el halo del foco tocaba el título.
  */
 internal val TvCardCaptionGap = 18.dp
-internal val TvSquareWidth = 180.dp
-
-/**
- * Ancho mínimo de celda en las rejillas de TV. Más estrecho que en las filas: con
- * el menú lateral y los márgenes quedan unos 780 dp útiles y 260 dp solo daban
- * para dos tarjetas enormes; así salen tres apaisadas o cinco pósters.
- */
-internal fun RowLayout.gridCellWidth(): Dp = when (this) {
-    RowLayout.HERO, RowLayout.FEATURED, RowLayout.LANDSCAPE, RowLayout.RANKED -> 220.dp
-    RowLayout.POSTER, RowLayout.POSTER_TALL -> 130.dp
-    RowLayout.SQUARE -> 160.dp
-}
-
-internal fun RowLayout.cardWidth(): Dp = when (this) {
-    RowLayout.HERO, RowLayout.FEATURED, RowLayout.LANDSCAPE, RowLayout.RANKED -> TvLandscapeWidth
-    RowLayout.POSTER, RowLayout.POSTER_TALL -> TvPosterWidth
-    RowLayout.SQUARE -> TvSquareWidth
-}
 
 /**
  * Superficie enfocable con la respuesta al foco que piden las guías de TV:
@@ -362,45 +337,6 @@ internal fun TvRankBadge(rank: Int, modifier: Modifier = Modifier) {
     )
 }
 
-/** Última tarjeta de cada fila: abre la rejilla completa sin sacar el foco de la fila. */
-@Composable
-internal fun TvSeeAllCard(layout: RowLayout, onClick: () -> Unit) {
-    Column(Modifier.width(layout.cardWidth())) {
-        TvFocusSurface(onClick = onClick, modifier = Modifier.fillMaxWidth().aspectRatio(layout.aspectRatio)) {
-            Text(
-                text = stringResource(R.string.action_see_all),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.align(Alignment.Center),
-            )
-        }
-    }
-}
-
-@Composable
-internal fun TvImageTile(
-    title: String,
-    imageUrl: String?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    fallbackImageUrl: String? = null,
-) {
-    TvFocusSurface(onClick = onClick, modifier = modifier.aspectRatio(16f / 9f)) {
-        CategoryArtwork(imageUrl, fallbackImageUrl, MaterialTheme.colorScheme.primary, Modifier.fillMaxSize())
-        Box(Modifier.fillMaxSize().background(TvTitleScrim))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(14.dp),
-        )
-    }
-}
-
 @Composable
 @OptIn(ExperimentalTvMaterial3Api::class)
 internal fun TvChoiceButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
@@ -420,18 +356,6 @@ internal fun TvScreenTitle(title: String) {
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.padding(start = TvHorizontalMargin, end = TvHorizontalMargin, top = TvVerticalMargin, bottom = 16.dp),
-    )
-}
-
-@Composable
-internal fun TvSectionTitle(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.padding(TvRowPadding),
     )
 }
 

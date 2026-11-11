@@ -1,14 +1,12 @@
 package es.openrtve.ui
 
 import android.content.Context
-import androidx.annotation.StringRes
 import es.openrtve.R
 import es.openrtve.data.WatchEntry
 import es.openrtve.domain.BlockReason
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.LiveInfo
 import es.openrtve.domain.ProgramDetail
-import es.openrtve.domain.ProgramStructure
 import es.openrtve.domain.VideoDetail
 import es.openrtve.domain.canHaveNextEpisode
 import java.text.SimpleDateFormat
@@ -91,25 +89,6 @@ private fun minutesLabel(context: Context, durationMs: Long): String? =
     ((durationMs + 30_000L) / 60_000L).toInt().takeIf { it > 0 }?.let { context.getString(R.string.meta_minutes, it) }
 
 /**
- * Cabecera de un grupo de Explorar, o `null` si no lleva: el menú oficial es plano y
- * el bloque principal se lista sin título; el infantil se nombra y los submenús
- * traen título editorial.
- */
-/**
- * Título de una portada abierta desde el menú. El menú lo da en mayúsculas ("LA REVUELTA")
- * y el feed con un nombre interno que lo contiene bien escrito ("Portada RTVE Play La
- * Revuelta"): se toma esa grafía. Si el feed no lo contiene, mayúscula inicial ("70 años"),
- * como el resto de cabeceras. Un título ya escrito con minúsculas se respeta.
- */
-fun portadaTitle(given: String, feedTitle: String): String {
-    if (given.isBlank()) return feedTitle
-    if (given != given.uppercase()) return given
-    val start = feedTitle.indexOf(given, ignoreCase = true)
-    if (start >= 0) return feedTitle.substring(start, start + given.length)
-    return given.lowercase().replaceFirstChar { it.uppercase() }
-}
-
-/**
  * Línea de datos de la cabecera, como en Google TV: "2018 · 108 min · +12 ·
  * Comedia, Drama", omitiendo lo que falte. Los géneros, como mucho dos.
  */
@@ -147,26 +126,6 @@ private val AGE_DIGITS = Regex("menores de (\\d+)")
 
 /** Géneros que caben en la línea de datos de la cabecera; el resto va a la ficha técnica. */
 internal const val MAX_HEADER_GENRES = 2
-
-/** Título de una sección de la ficha: pestaña en el móvil, fila en TV. */
-@get:StringRes
-val ProgramTab.titleRes: Int
-    get() = when (this) {
-        ProgramTab.EPISODES -> R.string.tab_episodes
-        ProgramTab.MOVIES -> R.string.tab_movies
-        ProgramTab.DOCUMENTARIES -> R.string.tab_documentaries
-        ProgramTab.VIDEOS -> R.string.tab_videos
-        ProgramTab.MORE_VIDEOS -> R.string.tab_more_videos
-        ProgramTab.RELATED -> R.string.tab_related
-    }
-
-/**
- * Enlace de una pieza a su colección: "Más en Cine de siempre". El nombre de un ciclo
- * no dice por sí solo que lleva a más títulos; el de la serie de un capítulo sí, y
- * se queda tal cual.
- */
-fun Context.collectionLinkText(structure: ProgramStructure, collection: String?): String? =
-    collection?.takeIf { structure.isCollection }?.let { getString(R.string.collection_more_in, it) }
 
 /** Botón grande de la ficha de programa: "Continuar: …", "Siguiente: …" o "Reproducir: …". */
 fun PlaySuggestion.label(context: Context): String = context.getString(

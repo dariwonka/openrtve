@@ -106,10 +106,6 @@ class WatchHistory(
     /** Vuelve a poner una entrada quitada, tal como estaba. */
     fun restore(entry: WatchEntry) = save(mutableEntries.value.filterNot { it.item.id == entry.item.id } + entry)
 
-    /** Solo lo empezado y no terminado, lo más reciente primero. */
-    val resumable: List<WatchEntry>
-        get() = mutableEntries.value.filter { it.inProgress }.sortedByDescending { it.updatedAtMillis }
-
     private fun save(entries: List<WatchEntry>) {
         val trimmed = entries
             .filter { nowMillis() - it.updatedAtMillis < MAX_AGE_MS }

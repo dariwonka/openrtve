@@ -16,18 +16,6 @@ class WatchHistoryLimitsTest {
     private val history = WatchHistory(file, nowMillis = { now++ }, ioDispatcher = Dispatchers.Unconfined)
 
     @Test
-    fun `only the most recent sixty entries survive`() {
-        repeat(70) { index ->
-            history.register(catalogItem("v$index"))
-            history.updateProgress("v$index", 60_000, 600_000)
-        }
-
-        assertEquals(60, history.entries.value.size)
-        assertNull("las más antiguas se descartan", history.entryFor("v0"))
-        assertEquals("v69", history.resumable.first().item.id)
-    }
-
-    @Test
     fun `entries older than sixty days are dropped on the next write`() {
         history.register(catalogItem("old"))
         history.updateProgress("old", 60_000, 600_000)

@@ -117,34 +117,11 @@ fun TvApp(container: AppContainer) {
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 DestinationHost(nav, navigation) { current ->
                     ProvideScreenInitialFocus { when (current) {
-                        is Destination.Portada -> TvPortadaScreen(
-                            repository = repository,
-                            url = current.url,
-                            title = current.title,
-                            onOpenItem = actions.openItem,
-                            onOpenRow = actions.openRow,
-                            onOpenLink = actions.openLink,
-                        )
-                        is Destination.Module -> TvModuleScreen(
-                            repository = repository,
-                            row = current.row,
-                            title = current.title,
-                            onOpenItem = actions.openItem,
-                            onError = actions.showMessage,
-                        )
                         is Destination.Program -> TvProgramScreen(
                             repository = repository,
                             history = container.watchHistory,
                             program = current.item,
                             onPlay = actions.playItem,
-                        )
-                        is Destination.Video -> TvVideoScreen(
-                            repository = repository,
-                            history = container.watchHistory,
-                            item = current.item,
-                            onPlay = actions::play,
-                            onOpenProgram = actions.openProgram,
-                            onOpenItem = actions.openItem,
                         )
                         GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage, removed = catalog.removed, onRestore = catalogViewModel::restore, onBackupRestored = catalogViewModel::reloadFromStore)
                         // Dos raíces: el buscador y los títulos de Clan. Una serie abre su página; un vídeo se reproduce.

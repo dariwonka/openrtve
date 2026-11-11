@@ -3,10 +3,6 @@ package es.openrtve.ui
 import androidx.lifecycle.SavedStateHandle
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ContentKind
-import es.openrtve.domain.HomeLink
-import es.openrtve.domain.HomeRow
-import es.openrtve.domain.LinkKind
-import es.openrtve.domain.RowLayout
 import es.openrtve.domain.referenceItem
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -14,11 +10,9 @@ import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 
 private const val SAVED_TAB = "navigation.tab"
 private const val SAVED_GLOBAL = "navigation.global"
@@ -36,40 +30,8 @@ private fun savedRootRequest(tab: Tab) = "navigation.rootRequest.${tab.name.lowe
  */
 private fun Destination.encodeRoute(): String = buildJsonObject {
     when (this@encodeRoute) {
-        is Destination.Portada -> {
-            put("type", "portada")
-            put("url", url)
-            put("title", title)
-        }
-        is Destination.Module -> {
-            put("type", "module")
-            put("title", title)
-            put("rowId", row.id)
-            put("rowTitle", row.title)
-            put("order", row.order)
-            put("moduleType", row.moduleType)
-            put("presentation", row.presentation)
-            put("contentUrl", row.contentUrl)
-            put("layout", row.layout.name)
-            putJsonArray("links") {
-                row.links.forEach { link ->
-                    add(
-                        buildJsonObject {
-                            put("title", link.title)
-                            put("imageUrl", link.imageUrl)
-                            put("url", link.url)
-                            put("kind", link.kind.name)
-                        },
-                    )
-                }
-            }
-        }
         is Destination.Program -> {
             put("type", "program")
-            putItemRoute(item)
-        }
-        is Destination.Video -> {
-            put("type", "video")
             putItemRoute(item)
         }
     }
@@ -87,30 +49,7 @@ private fun JsonObjectBuilder.putItemRoute(item: CatalogItem) {
 private fun decodeRoute(raw: String): Destination? = runCatching {
     val route = navigationJson.parseToJsonElement(raw).jsonObject
     when (route.text("type")) {
-        "portada" -> Destination.Portada(
-            url = route.requiredText("url"),
-            title = route.requiredText("title"),
-        )
-        "module" -> Destination.Module(
-            row = HomeRow(
-                id = route.number("rowId") ?: -1,
-                title = route.text("rowTitle").orEmpty(),
-                order = route.number("order") ?: 0,
-                moduleType = route.text("moduleType"),
-                presentation = route.text("presentation"),
-                contentUrl = route.text("contentUrl"),
-                layout = route.text("layout")?.let { RowLayout.valueOf(it) } ?: RowLayout.LANDSCAPE,
-                links = route["links"]?.jsonArray.orEmpty().mapNotNull { element ->
-                    val link = element.jsonObject
-                    val url = link.text("url") ?: return@mapNotNull null
-                    val kind = link.text("kind")?.let { runCatching { LinkKind.valueOf(it) }.getOrNull() }
-                        ?: return@mapNotNull null
-                    HomeLink(link.text("title").orEmpty(), link.text("imageUrl"), url, kind)
-                },
-            ),
-            title = route.requiredText("title"),
-        )
-        "program", "video" -> {
+        "program" -> {
             val kind = route.text("kind")?.let { ContentKind.valueOf(it) } ?: ContentKind.UNKNOWN
             val item = referenceItem(
                 id = route.requiredText("id"),
@@ -121,7 +60,7 @@ private fun decodeRoute(raw: String): Destination? = runCatching {
                 playbackId = route.text("playbackId"),
                 programId = route.text("programId"),
             )
-            if (route.text("type") == "program") Destination.Program(item) else Destination.Video(item)
+            Destination.Program(item)
         }
         else -> null
     }

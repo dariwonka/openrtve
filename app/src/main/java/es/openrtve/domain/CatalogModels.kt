@@ -61,17 +61,6 @@ fun referenceItem(id: String, kind: ContentKind, title: String, imageUrl: String
     programId = if (kind == ContentKind.PROGRAM) id else null,
 )
 
-/** Fila sintética de colección (`collection/{id}.json`), para abrirla desde un enlace. */
-fun collectionRow(url: String, title: String) = HomeRow(
-    id = -1,
-    title = title,
-    order = 0,
-    moduleType = "Collection",
-    presentation = "ColeccionPoster",
-    contentUrl = url,
-    layout = RowLayout.POSTER,
-)
-
 /**
  * Cómo pinta la UI una fila; se deduce del `tipo` editorial y nunca es un enum
  * cerrado en el feed. Cada valor corresponde a una presentación distinta en
@@ -110,12 +99,6 @@ enum class RowLayout {
             SQUARE -> 1f
         }
 
-    /** En rejilla los destacados no tienen sentido: se degradan a apaisada. */
-    val gridLayout: RowLayout
-        get() = when (this) {
-            HERO, FEATURED -> LANDSCAPE
-            POSTER, POSTER_TALL, SQUARE, LANDSCAPE, RANKED -> this
-        }
 }
 
 data class HomeFeed(
@@ -158,10 +141,6 @@ data class HomeRow(
     /** Su contenido ya viene en la portada: no hay módulo que descargar. */
     val isInline: Boolean
         get() = links.isNotEmpty()
-
-    /** Se puede pintar: o trae su contenido, o tiene una fuente remota admitida. */
-    val isRenderable: Boolean
-        get() = isInline || contentUrl != null
 
     /** Fila de directos: su contenido caduca en minutos. */
     val isLive: Boolean
@@ -253,9 +232,6 @@ data class CatalogModule(
     val title: String,
     val items: List<CatalogItem>,
 )
-
-/** "Ver todo" solo tiene sentido si la fila trae más de lo que cabe de un vistazo. */
-const val SEE_ALL_MIN_ITEMS = 6
 
 data class CatalogPage(
     val items: List<CatalogItem>,
