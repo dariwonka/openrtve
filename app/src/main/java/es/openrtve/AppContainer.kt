@@ -4,7 +4,6 @@ import android.content.Context
 import es.openrtve.data.AppSettings
 import es.openrtve.data.CatalogBackup
 import es.openrtve.data.CatalogRepository
-import es.openrtve.data.ClanCatalogRepository
 import es.openrtve.data.ClanCatalogStore
 import es.openrtve.data.DefaultCatalogRepository
 import es.openrtve.data.DrmTokenClient
@@ -30,13 +29,11 @@ class AppContainer(private val context: Context) {
     private val httpClient = SafeHttpsClient(okHttpClient, hostPolicy)
     val documentCache = RawDocumentCache(context.cacheDir.resolve("catalog"))
     /** Todo el catálogo pasa por el filtro infantil: la UI no tiene otra entrada. */
-    val catalogRepository: CatalogRepository = ClanCatalogRepository(
-        DefaultCatalogRepository(
-            httpClient = httpClient,
-            parser = RtveJsonParser(),
-            cache = documentCache,
-            childProfile = true,
-        ),
+    val catalogRepository: CatalogRepository = DefaultCatalogRepository(
+        httpClient = httpClient,
+        parser = RtveJsonParser(),
+        cache = documentCache,
+        childProfile = true,
     )
     val settings = AppSettings(context)
     /** Copia del catálogo del inicio: con ella la app abre sin esperar a la red. */

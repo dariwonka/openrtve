@@ -10,10 +10,7 @@ import es.openrtve.domain.ContentKind
 import es.openrtve.domain.HomeFeed
 import es.openrtve.domain.HomeRow
 import es.openrtve.domain.ProgramDetail
-import es.openrtve.domain.QuickFilter
-import es.openrtve.domain.RelatedKind
 import es.openrtve.domain.SearchResults
-import es.openrtve.domain.VideoDetail
 
 /**
  * Repositorio de pruebas: cada método delega en una lambda sustituible y
@@ -26,14 +23,9 @@ open class FakeCatalogRepository : CatalogRepository {
 
     var portada: suspend (url: String, forceRefresh: Boolean, cachedOnly: Boolean) -> CatalogLoad<HomeFeed> = { _, _, _ -> unsupported() }
     var module: suspend (row: HomeRow, forceRefresh: Boolean, cachedOnly: Boolean) -> CatalogLoad<CatalogModule> = { _, _, _ -> unsupported() }
-    var quickFilters: suspend () -> CatalogLoad<List<QuickFilter>> = { unsupported() }
-    var quickFilterItems: suspend (filter: QuickFilter) -> CatalogLoad<CatalogModule> = { unsupported() }
     var search: suspend (query: String) -> SearchResults = { unsupported() }
     var searchPage: suspend (relativeQuery: String, page: Int) -> CatalogPage = { _, _ -> unsupported() }
-    /** Sin configurar no hay similares: es contenido secundario y no debe romper otros tests. */
-    var related: suspend (kind: RelatedKind, id: String) -> CatalogLoad<List<CatalogItem>> = { _, _ -> CatalogLoad(emptyList(), false) }
     var program: suspend (programId: String, forceRefresh: Boolean) -> CatalogLoad<ProgramDetail> = { _, _ -> unsupported() }
-    var video: suspend (videoId: String, forceRefresh: Boolean) -> CatalogLoad<VideoDetail> = { _, _ -> unsupported() }
     var nextVideo: suspend (videoId: String) -> CatalogItem? = { null }
     /** Sin configurar, la cadena no tiene listado A-Z. */
     var channelPrograms: suspend (channelId: String, cachedOnly: Boolean) -> CatalogLoad<List<CatalogItem>> = { _, _ -> CatalogLoad(emptyList(), false) }
@@ -57,16 +49,6 @@ open class FakeCatalogRepository : CatalogRepository {
         return channelPrograms(channelId, cachedOnly)
     }
 
-    override suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>> {
-        calls += "quickFilters()"
-        return quickFilters()
-    }
-
-    override suspend fun loadQuickFilterItems(filter: QuickFilter): CatalogLoad<CatalogModule> {
-        calls += "quickFilterItems(${filter.title})"
-        return quickFilterItems(filter)
-    }
-
     override suspend fun search(query: String): SearchResults {
         calls += "search($query)"
         return search.invoke(query)
@@ -77,16 +59,9 @@ open class FakeCatalogRepository : CatalogRepository {
         return searchPage.invoke(relativeQuery, page)
     }
 
-    override suspend fun loadRelated(kind: RelatedKind, id: String): CatalogLoad<List<CatalogItem>> = related(kind, id)
-
     override suspend fun loadProgram(programId: String, forceRefresh: Boolean): CatalogLoad<ProgramDetail> {
         calls += "program($programId, force=$forceRefresh)"
         return program(programId, forceRefresh)
-    }
-
-    override suspend fun loadVideo(videoId: String, forceRefresh: Boolean): CatalogLoad<VideoDetail> {
-        calls += "video($videoId, force=$forceRefresh)"
-        return video(videoId, forceRefresh)
     }
 
     override suspend fun loadNextVideo(videoId: String): CatalogItem? {

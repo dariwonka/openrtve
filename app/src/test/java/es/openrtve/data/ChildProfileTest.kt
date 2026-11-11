@@ -1,36 +1,11 @@
 package es.openrtve.data
 
-import es.openrtve.domain.RelatedKind
-import es.openrtve.testing.FakeCatalogRepository
-import es.openrtve.testing.catalogItem
-import es.openrtve.testing.loaded
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class ClanCatalogRepositoryTest {
-    private val general = FakeCatalogRepository()
-    private val clan = ClanCatalogRepository(general)
-
-    @Test
-    fun `recommendations from the general catalogue are never shown`() = runTest {
-        general.related = { _, _ -> loaded(listOf(catalogItem("adulto"))) }
-
-        assertTrue(clan.loadRelated(RelatedKind.PROGRAM, "1").value.isEmpty())
-        assertTrue(general.calls.isEmpty())
-    }
-
-    @Test
-    fun `text search goes through, the general quick searches do not`() = runTest {
-        general.search = { query -> es.openrtve.domain.SearchResults(listOf(catalogItem(query)), emptyList()) }
-        general.quickFilters = { error("no deben consultarse las búsquedas predefinidas") }
-
-        assertEquals(listOf("corona"), clan.search("corona").programs.map { it.id })
-        assertTrue(clan.loadQuickFilters().value.isEmpty())
-        assertEquals(listOf("search(corona)"), general.calls)
-    }
-
+class ChildProfileTest {
     @Test
     fun `the child profile is what the official Clan app sends`() = runTest {
         val requested = mutableListOf<String>()
@@ -46,14 +21,6 @@ class ClanCatalogRepositoryTest {
         repository.search("corona mágica")
 
         assertEquals("https://api.rtve.es/api/search/results?search=corona+m%C3%A1gica&context=tve&tipology=video&type=completo&isChild=true", requested.single())
-    }
-
-    @Test
-    fun `portadas and details pass through untouched`() = runTest {
-        general.nextVideo = { catalogItem("siguiente") }
-
-        assertEquals("siguiente", clan.loadNextVideo("1")?.id)
-        assertEquals(listOf("nextVideo(1)"), general.calls)
     }
 
     @Test

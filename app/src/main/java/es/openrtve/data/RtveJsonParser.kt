@@ -3,10 +3,8 @@ package es.openrtve.data
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.CatalogModule
 import es.openrtve.domain.CatalogPage
-import es.openrtve.domain.QuickFilter
 import es.openrtve.domain.RowLayout
 import es.openrtve.domain.SearchResults
-import es.openrtve.domain.VideoDetail
 import es.openrtve.domain.ContentKind
 import es.openrtve.domain.HomeFeed
 import es.openrtve.domain.HomeLink
@@ -105,15 +103,6 @@ class RtveJsonParser(
             videosQuery = videos?.text("query")?.takeIf { it.startsWith("/") && !it.startsWith("//") },
         )
     }
-
-    fun parseQuickFilters(raw: String): List<QuickFilter> =
-        json.parseToJsonElement(raw).jsonObject.array("items")
-            .orEmpty()
-            .mapNotNull { it as? JsonObject }
-            .mapNotNull { item ->
-                val url = item.text("nav-pag_url")?.takeIf(hostPolicy::isAllowed) ?: return@mapNotNull null
-                QuickFilter(title = item.text("nav-pag_name") ?: return@mapNotNull null, contentUrl = url)
-            }
 
     /** Accesos inline de una fila `links`; `enlaceExterno` (web) se omite. */
     private fun homeLinks(row: JsonObject): List<HomeLink> = row.array("links")
@@ -350,30 +339,6 @@ class RtveJsonParser(
 
     private fun isContainer(program: JsonObject): Boolean =
         programStructure(program.text("programTypeId", "programTypeID"), program.text("programType")).isCollection
-
-    fun parseVideo(raw: String): VideoDetail {
-        val root = json.parseToJsonElement(raw).jsonObject
-        val video = root.obj("page")?.array("items")?.firstOrNull() as? JsonObject
-            ?: throw IllegalArgumentException("El vídeo no tiene ficha")
-        val item = toCatalogItem(video) ?: throw IllegalArgumentException("Vídeo sin id")
-        val previews = video.obj("previews")
-        return VideoDetail(
-            item = item,
-            backdropUrl = firstAllowed(previews?.text("horizontal2", "horizontal"), video.text("thumbnail", "imageSEO"))
-                ?: derivedImage("v", item.id, "horizontal2", BACKDROP_WIDTH),
-            description = video.text("description", "longDescription", "shortDescription"),
-            promo = video.text("promoDesc"),
-            programTitle = video.obj("programInfo")?.text("title"),
-            year = video.text("productionDate")?.let(::productionYear),
-            ageRating = video.text("ageRange"),
-            genres = video.genres(),
-            director = video.people("director"),
-            cast = video.peopleList("casting"),
-            originalLanguage = video.text("languageOriginal"),
-            expirationDate = video.text("expirationDate"),
-            webUrl = video.text("htmlUrl")?.let(hostPolicy::sanitize),
-        )
-    }
 
     /**
      * Un programa solo es reproducible a través de su último medio; su propio ID

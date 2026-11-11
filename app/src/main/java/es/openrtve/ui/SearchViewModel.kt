@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import es.openrtve.data.CatalogRepository
 import es.openrtve.domain.CatalogItem
-import es.openrtve.domain.QuickFilter
 import es.openrtve.domain.SearchResults
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -18,19 +17,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Contenido del filtro rápido seleccionado: cargando, cargado (quizá vacío) o fallido. */
-sealed interface FilterState {
-    data object Loading : FilterState
-    data class Loaded(val items: List<CatalogItem>) : FilterState
-    data class Failed(val error: LoadError) : FilterState
-}
-
 data class SearchUiState(
     val query: String = "",
-    val filters: List<QuickFilter> = emptyList(),
-    val selectedFilter: QuickFilter? = null,
-    /** Items del filtro rápido seleccionado (cuando no hay texto). */
-    val filter: FilterState = FilterState.Loading,
     /** Resultados del texto escrito (a partir de [MIN_QUERY_LENGTH] caracteres). */
     val results: SearchResults? = null,
     val isSearching: Boolean = false,
@@ -48,60 +36,21 @@ data class SearchUiState(
 }
 
 /**
- * Buscador al estilo de la app oficial: campo de texto y, debajo, pestañas de
- * búsquedas predefinidas mientras no se escribe nada.
+ * Buscador: campo de texto y resultados paginados de RTVE.
  */
 class SearchViewModel(
     private val repository: CatalogRepository,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = mutableUiState.asStateFlow()
-    private var filterJob: Job? = null
     private var moreVideosJob: Job? = null
 
     init {
-        loadFilters()
         observeQuery()
-    }
-
-    private fun loadFilters() {
-        filterJob?.cancel()
-        mutableUiState.update { it.copy(filter = FilterState.Loading) }
-        filterJob = viewModelScope.launch {
-            try {
-                val filters = repository.loadQuickFilters().value
-                mutableUiState.update { it.copy(filters = filters) }
-                val first = filters.firstOrNull()
-                if (first != null) selectFilter(first) else mutableUiState.update { it.copy(filter = FilterState.Loaded(emptyList())) }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                // En el sitio de los filtros, con su reintento: si no, la pantalla se queda en blanco.
-                mutableUiState.update { it.copy(filter = FilterState.Failed(error.toLoadError())) }
-            }
-        }
     }
 
     fun setQuery(query: String) {
         mutableUiState.update { it.copy(query = query) }
-    }
-
-    fun selectFilter(filter: QuickFilter) {
-        val current = mutableUiState.value
-        if (filter == current.selectedFilter && current.filter is FilterState.Loaded) return
-        filterJob?.cancel()
-        mutableUiState.update { it.copy(selectedFilter = filter, filter = FilterState.Loading) }
-        filterJob = viewModelScope.launch {
-            val loaded = try {
-                FilterState.Loaded(repository.loadQuickFilterItems(filter).value.items)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                // El fallo se pinta en el sitio del filtro, con su reintento; no como aviso suelto.
-                FilterState.Failed(error.toLoadError())
-            }
-            mutableUiState.update { it.copy(filter = loaded) }
-        }
     }
 
     /** Repite la búsqueda actual tras un fallo. */

@@ -8,8 +8,6 @@ import es.openrtve.domain.EpisodeOrder
 import es.openrtve.domain.episodeOrder
 import es.openrtve.domain.isFirstSeason
 import es.openrtve.domain.ProgramDetail
-import es.openrtve.domain.structure
-import es.openrtve.domain.RelatedKind
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,8 +29,6 @@ data class ProgramUiState(
     val order: EpisodeOrder = EpisodeOrder.NEWEST_FIRST,
     /** Fragmentos, avances y tráilers; nunca se mezclan con los episodios completos. */
     val extras: PagedItemsState = PagedItemsState(),
-    /** "Similares" de RTVE (`recomsys`); vacío si no hay o falló: es contenido secundario. */
-    val related: List<CatalogItem> = emptyList(),
     /**
      * Páginas cargadas de la lista completa ("Todos") y su orden: de ellas sale el
      * botón grande, que no debe cambiar al mirar otra temporada.
@@ -77,10 +73,6 @@ class ProgramViewModel(
                 val detail = repository.loadProgram(programId).value
                 mutableUiState.update { it.copy(detail = detail, title = detail.title.ifBlank { it.title }) }
                 if (detail.showFragments) extrasLoader.load(firstPage = true)
-                if (!detail.structure.isCollection) launch {
-                    val related = loadRelatedOrEmpty(repository, RelatedKind.PROGRAM, programId)
-                    mutableUiState.update { it.copy(related = related) }
-                }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {

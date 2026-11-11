@@ -1,12 +1,9 @@
 package es.openrtve.data
 
-import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.SearchResults
 import es.openrtve.testing.FakeCatalogRepository
 import es.openrtve.testing.MainDispatcherRule
 import es.openrtve.testing.catalogItem
-import es.openrtve.testing.loaded
-import es.openrtve.ui.FilterState
 import es.openrtve.ui.SearchViewModel
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -109,7 +106,6 @@ class DataRecoveryTest {
         val oldResponse = CompletableDeferred<SearchResults>()
         val newResponse = CompletableDeferred<SearchResults>()
         val repo = FakeCatalogRepository().apply {
-            quickFilters = { loaded(emptyList()) }
             search = { query -> if (query == "primera") oldResponse.await() else newResponse.await() }
         }
         val vm = SearchViewModel(repo)
@@ -134,13 +130,5 @@ class DataRecoveryTest {
 
     private fun temporaryDirectory(prefix: String): File = File.createTempFile(prefix, "").apply {
         check(delete() && mkdirs())
-    }
-
-    @Test fun anEmptyFilterFeedLeavesLoadingState() = runTest(main.dispatcher) {
-        val repo = FakeCatalogRepository().apply { quickFilters = { loaded(emptyList()) } }
-        val vm = SearchViewModel(repo)
-        advanceUntilIdle()
-        assertEquals(FilterState.Loaded(emptyList<CatalogItem>()), vm.uiState.value.filter)
-        assertTrue(vm.uiState.value.filters.isEmpty())
     }
 }

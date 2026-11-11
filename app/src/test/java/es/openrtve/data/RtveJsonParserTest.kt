@@ -92,18 +92,6 @@ class RtveJsonParserTest {
     }
 
     @Test
-    fun `quick filters keep only allowed urls`() {
-        val filters = parser.parseQuickFilters(
-            """{"items":[
-              {"nav-pag_name":"MÁS BUSCADOS","nav-pag_url":"https://recomsys.rtve.es/recommendation/tops?recoId=x"},
-              {"nav-pag_name":"AJENO","nav-pag_url":"https://example.org/x"}
-            ]}""",
-        )
-
-        assertEquals(listOf("MÁS BUSCADOS"), filters.map { it.title })
-    }
-
-    @Test
     fun `collection is flattened and last multimedia becomes playable`() {
         val result = parser.parseModule(
             raw = """

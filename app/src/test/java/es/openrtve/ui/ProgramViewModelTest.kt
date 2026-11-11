@@ -49,26 +49,6 @@ class ProgramViewModelTest {
     }
 
     @Test
-    fun `API film containers do not request program recommendations`() = runTest(mainDispatcher.dispatcher) {
-        var recommendations = 0
-        repository.related = { _, _ ->
-            recommendations++
-            loaded(listOf(catalogItem("related")))
-        }
-        repository.program = { id, _ -> loaded(detail(id).copy(programTypeId = "137310")) }
-        val container = ProgramViewModel(repository, "container", "")
-        advanceUntilIdle()
-        assertEquals(0, recommendations)
-        assertTrue(container.uiState.value.related.isEmpty())
-
-        repository.program = { id, _ -> loaded(detail(id).copy(programTypeId = "136525", programType = "Entrevistas")) }
-        val program = ProgramViewModel(repository, "program", "")
-        advanceUntilIdle()
-        assertEquals(1, recommendations)
-        assertEquals(listOf("related"), program.uiState.value.related.map { it.id })
-    }
-
-    @Test
     fun `load more appends the next page and ignores duplicates and double taps`() = runTest(mainDispatcher.dispatcher) {
         val secondPage = CompletableDeferred<Unit>()
         repository.programVideos = { _, _, pageNumber, _, _ ->

@@ -20,21 +20,9 @@ object RtveUrls {
     const val CLAN_MOVIES_PORTADA = "https://www.rtve.es/play/clan/peliculas-infantiles/index_apps.json"
     /** Cadena Clan en la API (`cadenas/417`), la misma que usa su portada en "Para ver hoy". */
     const val CLAN_CHANNEL_ID = "417"
-    const val QUICK_SEARCHES = "https://www.rtve.es/m/configs/buscador/predefinidos.json"
     const val SEARCH = "https://api.rtve.es/api/search/results"
     /** Base de las páginas siguientes de cada bloque de búsqueda: se le añade su `query` relativo. */
     const val SEARCH_PAGES = "https://api.rtve.es/api/search"
-    const val RECOMMENDATIONS = "https://recomsys.rtve.es/recommendation"
-}
-
-/**
- * Recomendaciones editoriales de RTVE (`recomsys`): "Similares" de una ficha.
- * Cada tipo tiene su modelo y su forma de identificar el item.
- */
-enum class RelatedKind(val path: String, val itemPrefix: String) {
-    PROGRAM("program", "pr"),
-    FILM("film", "v"),
-    DOCUMENTARY("documental", "v"),
 }
 
 /** Qué recorte pinta cada presentación, con sus respaldos; la única definición para móvil y TV. */
@@ -294,12 +282,6 @@ data class SearchResults(
     val isEmpty: Boolean get() = programs.isEmpty() && videos.isEmpty()
     val hasMoreVideos: Boolean get() = videosQuery != null && videosPage < videosTotalPages
 }
-
-/** Pestaña de búsqueda predefinida ("Más buscados", "Series TV"...). */
-data class QuickFilter(
-    val title: String,
-    val contentUrl: String,
-)
 
 /** Ficha completa de un vídeo (`videos/{id}.json`); [item] trae sus derechos y su programa. */
 data class VideoDetail(

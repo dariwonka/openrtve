@@ -8,12 +8,9 @@ import es.openrtve.domain.EpisodeOrder
 import es.openrtve.domain.HomeFeed
 import es.openrtve.domain.HomeRow
 import es.openrtve.domain.ProgramDetail
-import es.openrtve.domain.QuickFilter
-import es.openrtve.domain.RelatedKind
 import es.openrtve.domain.RtveTypes
 import es.openrtve.domain.RtveUrls
 import es.openrtve.domain.SearchResults
-import es.openrtve.domain.VideoDetail
 import java.io.IOException
 import java.net.URLEncoder
 import kotlinx.coroutines.CancellationException
@@ -28,8 +25,6 @@ interface CatalogRepository {
     /** Con [cachedOnly], devuelve la copia local de cualquier antigüedad sin tocar la red, o lanza [NotCachedException]. */
     suspend fun loadPortada(url: String, forceRefresh: Boolean = false, cachedOnly: Boolean = false): CatalogLoad<HomeFeed>
     suspend fun loadModule(row: HomeRow, forceRefresh: Boolean = false, cachedOnly: Boolean = false): CatalogLoad<CatalogModule>
-    suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>>
-    suspend fun loadQuickFilterItems(filter: QuickFilter): CatalogLoad<CatalogModule>
     suspend fun search(query: String): SearchResults
 
     /** Página [page] de un bloque de búsqueda, a partir de su `query` relativo (ver [SearchResults.videosQuery]). */
@@ -41,10 +36,7 @@ interface CatalogRepository {
      */
     suspend fun loadChannelPrograms(channelId: String, cachedOnly: Boolean = false): CatalogLoad<List<CatalogItem>>
 
-    /** "Similares" según RTVE (`recomsys`), sin el propio item ni contenido de pago. */
-    suspend fun loadRelated(kind: RelatedKind, id: String): CatalogLoad<List<CatalogItem>>
     suspend fun loadProgram(programId: String, forceRefresh: Boolean = false): CatalogLoad<ProgramDetail>
-    suspend fun loadVideo(videoId: String, forceRefresh: Boolean = false): CatalogLoad<VideoDetail>
 
     /** Siguiente episodio según RTVE (`videos/{id}/next.json`), o `null` si no hay. */
     suspend fun loadNextVideo(videoId: String): CatalogItem?
@@ -98,22 +90,6 @@ class DefaultCatalogRepository(
         parse = parser::parseHome,
     )
 
-    override suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>> = loadDocument(
-        url = RtveUrls.QUICK_SEARCHES,
-        forceRefresh = false,
-        freshForMillis = CONFIG_FRESH_MS,
-        staleForMillis = CONFIG_STALE_MS,
-        parse = parser::parseQuickFilters,
-    )
-
-    override suspend fun loadQuickFilterItems(filter: QuickFilter): CatalogLoad<CatalogModule> = loadDocument(
-        url = filter.contentUrl,
-        forceRefresh = false,
-        freshForMillis = MODULE_FRESH_MS,
-        staleForMillis = MODULE_STALE_MS,
-        parse = { parser.parseModule(it, filter.title) },
-    )
-
     // Las búsquedas no se persisten: solo interesa el resultado del momento.
     override suspend fun search(query: String): SearchResults {
         val url = "${RtveUrls.SEARCH}?search=${encode(query)}&context=tve&tipology=video&type=completo" +
@@ -123,18 +99,6 @@ class DefaultCatalogRepository(
 
     override suspend fun searchPage(relativeQuery: String, page: Int): CatalogPage =
         fetchParsed("${RtveUrls.SEARCH_PAGES}$relativeQuery&page=$page", parser::parseVideoPage)
-
-    override suspend fun loadRelated(kind: RelatedKind, id: String): CatalogLoad<List<CatalogItem>> = loadDocument(
-        url = "${RtveUrls.RECOMMENDATIONS}/${kind.path}?source=apps&item=/${kind.itemPrefix}/${encode(id)}",
-        forceRefresh = false,
-        freshForMillis = PROGRAM_FRESH_MS,
-        staleForMillis = PROGRAM_STALE_MS,
-        parse = { raw ->
-            parser.parseVideoPage(raw).items
-                .filter { it.id != id && !it.paid }
-                .take(MAX_RELATED)
-        },
-    )
 
     override suspend fun loadChannelPrograms(channelId: String, cachedOnly: Boolean): CatalogLoad<List<CatalogItem>> {
         val programs = mutableListOf<CatalogItem>()
@@ -182,17 +146,6 @@ class DefaultCatalogRepository(
         freshForMillis = PROGRAM_FRESH_MS,
         staleForMillis = PROGRAM_STALE_MS,
         parse = parser::parseProgram,
-    )
-
-    override suspend fun loadVideo(
-        videoId: String,
-        forceRefresh: Boolean,
-    ): CatalogLoad<VideoDetail> = loadDocument(
-        url = "$VIDEOS_BASE/${encode(videoId)}.json",
-        forceRefresh = forceRefresh,
-        freshForMillis = PROGRAM_FRESH_MS,
-        staleForMillis = PROGRAM_STALE_MS,
-        parse = parser::parseVideo,
     )
 
     override suspend fun loadNextVideo(videoId: String): CatalogItem? =
@@ -306,7 +259,6 @@ class DefaultCatalogRepository(
         const val CONFIG_STALE_MS = 7 * 24 * 60 * 60 * 1_000L
         const val PROGRAMS_BASE = "https://www.rtve.es/api/programas"
         const val VIDEOS_BASE = "https://api.rtve.es/api/videos"
-        const val MAX_RELATED = 24
         const val CHANNELS_BASE = "https://api2.rtve.es/api/cadenas"
         const val AZ_PAGE_SIZE = 500
         const val AZ_MAX_PAGES = 6
