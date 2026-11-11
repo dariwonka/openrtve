@@ -5,8 +5,6 @@ import es.openrtve.R
 import es.openrtve.domain.BlockReason
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.LiveInfo
-import es.openrtve.domain.ProgramDetail
-import es.openrtve.domain.VideoDetail
 import es.openrtve.domain.canHaveNextEpisode
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -86,45 +84,6 @@ fun CatalogItem.metaLine(context: Context, episodic: Boolean = canHaveNextEpisod
 /** "52 min", redondeando; nada por debajo del medio minuto (un "0 min" no dice nada). */
 private fun minutesLabel(context: Context, durationMs: Long): String? =
     ((durationMs + 30_000L) / 60_000L).toInt().takeIf { it > 0 }?.let { context.getString(R.string.meta_minutes, it) }
-
-/**
- * Línea de datos de la cabecera, como en Google TV: "2018 · 108 min · +12 ·
- * Comedia, Drama", omitiendo lo que falte. Los géneros, como mucho dos.
- */
-fun VideoDetail.metaLine(context: Context): String? =
-    headerMetaLine(year, item.durationMs?.let { minutesLabel(context, it) }, ageRating, genres)
-
-/** La misma línea para un programa: "2024 · +12 · Drama"; el horario de emisión va aparte. */
-fun ProgramDetail.metaLine(): String? = headerMetaLine(year, minutes = null, ageRating, genres)
-
-private fun headerMetaLine(year: String?, minutes: String?, ageRating: String?, genres: List<String>): String? = listOfNotNull(
-    year,
-    minutes,
-    ageBadge(ageRating),
-    genres.take(MAX_HEADER_GENRES).joinToString(", ").ifBlank { null },
-).takeIf { it.isNotEmpty() }?.joinToString(" · ")
-
-/**
- * Calificación por edades en su forma corta, la de las carátulas y las guías:
- * "No recomendable para menores de 7 años" -> "+7", "Recomendable para todos los
- * públicos" -> "TP", "Especialmente recomendada para la infancia" -> "Infantil".
- * Lo que no se reconoce no se muestra en la cabecera: la frase entera no cabe.
- */
-fun ageBadge(ageRange: String?): String? {
-    val text = ageRange?.lowercase() ?: return null
-    val minimumAge = AGE_DIGITS.find(text)?.groupValues?.get(1)
-    return when {
-        minimumAge != null -> "+$minimumAge"
-        "todos los públicos" in text -> "TP"
-        "infancia" in text -> "Infantil"
-        else -> null
-    }
-}
-
-private val AGE_DIGITS = Regex("menores de (\\d+)")
-
-/** Géneros que caben en la línea de datos de la cabecera; el resto va a la ficha técnica. */
-internal const val MAX_HEADER_GENRES = 2
 
 /** Fecha del feed (`dd-MM-yyyy HH:mm:ss`) como `dd/MM/yyyy`. */
 fun String.feedDateToDisplay(): String = take(10).replace('-', '/')

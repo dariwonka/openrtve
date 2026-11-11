@@ -258,21 +258,3 @@ data class SearchResults(
     val hasMoreVideos: Boolean get() = videosQuery != null && videosPage < videosTotalPages
 }
 
-/** Ficha completa de un vídeo (`videos/{id}.json`); [item] trae sus derechos y su programa. */
-data class VideoDetail(
-    val item: CatalogItem,
-    val backdropUrl: String?,
-    /** Puede contener HTML; la UI lo renderiza. */
-    val description: String?,
-    /** Reclamo corto (`promoDesc`): una frase para un destacado, distinta de la sinopsis. */
-    val promo: String? = null,
-    val programTitle: String?,
-    val year: String?,
-    val ageRating: String?,
-    val genres: List<String>,
-    val director: String?,
-    val cast: List<String>,
-    val originalLanguage: String?,
-    val expirationDate: String?,
-    val webUrl: String?,
-)
