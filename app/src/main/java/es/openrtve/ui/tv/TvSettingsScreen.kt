@@ -33,6 +33,7 @@ fun TvSettingsScreen(
     onMessage: (String) -> Unit,
     removed: List<es.openrtve.ui.RemovedTitle> = emptyList(),
     onRestore: (String) -> Unit = {},
+    onBackupRestored: () -> Unit = {},
 ) {
     val screen = rememberSettingsScreen(container)
     val viewModel = screen.viewModel
@@ -40,6 +41,7 @@ fun TvSettingsScreen(
     val cacheBytes = screen.cacheBytes
     val versionName = screen.versionName
     val cleared = stringResource(R.string.settings_cache_cleared)
+    val backup = rememberBackupActions(container, onMessage, onBackupRestored)
 
     // Todo el menú a ~80 %: más ajustado, sin que parezca para un cartel.
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -75,6 +77,13 @@ fun TvSettingsScreen(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(onClick = { viewModel.clearCache { onMessage(cleared) } }) { Text(stringResource(R.string.settings_clear_cache)) }
             Text(stringResource(R.string.settings_cache_size, cacheBytes?.let(::formatBytes) ?: "…"), style = MaterialTheme.typography.bodyLarge)
+        }
+        Spacer(Modifier.height(8.dp))
+        TvSettingsLabel(stringResource(R.string.settings_backup))
+        Text(stringResource(R.string.settings_backup_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Button(onClick = backup.save) { Text(stringResource(R.string.settings_backup_save)) }
+            Button(onClick = backup.restore) { Text(stringResource(R.string.settings_backup_restore)) }
         }
         if (removed.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))

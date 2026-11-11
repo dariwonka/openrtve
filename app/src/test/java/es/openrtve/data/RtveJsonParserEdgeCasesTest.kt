@@ -2,7 +2,6 @@ package es.openrtve.data
 
 import es.openrtve.domain.ContentKind
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -56,43 +55,6 @@ class RtveJsonParserEdgeCasesTest {
             } catch (_: IllegalArgumentException) {
             }
         }
-    }
-
-    @Test
-    fun `sprite vtt accepts minutes-only timestamps and skips malformed cues`() {
-        val sprite = parser.parseSpriteVtt(
-            """
-            WEBVTT
-
-            00:00.000 --> 00:10.000
-            sprite.jpg#xywh=0,0,160,90
-
-            00:10.000 --> 01:00:00.500
-            sprite.jpg#xywh=160,0,160,90
-
-            garbage --> 00:20.000
-            sprite.jpg#xywh=1,2,3,4
-
-            00:20.000 --> 00:30.000
-            sprite.jpg
-            """.trimIndent(),
-            "https://img.rtve.es/sprite.jpg",
-        )
-
-        assertEquals(2, sprite.cues.size)
-        assertEquals(0L, sprite.cues[0].startMs)
-        assertEquals(10_000L, sprite.cues[0].endMs)
-        assertEquals(3_600_500L, sprite.cues[1].endMs)
-    }
-
-    @Test
-    fun `sprite info is only used when available and from rtve`() {
-        assertNull(parser.parseSpriteInfo("""{"state":"PROCESSING","sprite_url":"https://videopreviews.rtve.es/s.jpg","vtt_url":"https://videopreviews.rtve.es/s.vtt"}"""))
-        assertNull(parser.parseSpriteInfo("""{"state":"AVAILABLE","sprite_url":"https://evil.example.org/s.jpg","vtt_url":"https://videopreviews.rtve.es/s.vtt"}"""))
-        assertEquals(
-            "https://videopreviews.rtve.es/s.jpg" to "https://videopreviews.rtve.es/s.vtt",
-            parser.parseSpriteInfo("""{"state":"AVAILABLE","sprite_url":"http://videopreviews.rtve.es/s.jpg","vtt_url":"https://videopreviews.rtve.es/s.vtt"}"""),
-        )
     }
 
     @Test

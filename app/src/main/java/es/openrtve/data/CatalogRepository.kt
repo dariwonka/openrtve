@@ -8,7 +8,6 @@ import es.openrtve.domain.EpisodeOrder
 import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.HomeFeed
 import es.openrtve.domain.HomeRow
-import es.openrtve.domain.PreviewSprite
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.QuickFilter
 import es.openrtve.domain.RelatedKind
@@ -54,7 +53,6 @@ interface CatalogRepository {
     suspend fun loadNextVideo(videoId: String): CatalogItem?
 
     /** Miniaturas para la barra de progreso, o `null` si el vídeo no las tiene. */
-    suspend fun loadPreviewSprite(videoId: String): PreviewSprite?
 
     /**
      * Episodios de un programa o de una temporada. `completeOnly` pide solo
@@ -237,12 +235,6 @@ class DefaultCatalogRepository(
     override suspend fun loadNextVideo(videoId: String): CatalogItem? =
         fetchParsed("$VIDEOS_BASE/${encode(videoId)}/next.json") { parser.parseVideoPage(it).items.firstOrNull() }
 
-    override suspend fun loadPreviewSprite(videoId: String): PreviewSprite? {
-        val (spriteUrl, vttUrl) = fetchParsed("$PREVIEWS_BASE/sprite?idasset=${encode(videoId)}", parser::parseSpriteInfo)
-            ?: return null
-        return fetchParsed(vttUrl) { parser.parseSpriteVtt(it, spriteUrl) }
-    }
-
     override suspend fun loadProgramVideos(
         programId: String,
         seasonId: String?,
@@ -351,7 +343,6 @@ class DefaultCatalogRepository(
         const val CONFIG_STALE_MS = 7 * 24 * 60 * 60 * 1_000L
         const val PROGRAMS_BASE = "https://www.rtve.es/api/programas"
         const val VIDEOS_BASE = "https://api.rtve.es/api/videos"
-        const val PREVIEWS_BASE = "https://videopreviews.rtve.es/tiivii-previews/api"
         const val MAX_RELATED = 24
         const val CHANNELS_BASE = "https://api2.rtve.es/api/cadenas"
         const val AZ_PAGE_SIZE = 500

@@ -386,21 +386,3 @@ data class VideoDetail(
     val expirationDate: String?,
     val webUrl: String?,
 )
-
-/** Miniaturas de la barra de progreso: un sprite y las regiones que corresponden a cada tramo. */
-data class PreviewSprite(
-    val imageUrl: String,
-    val cues: List<SpriteCue>,
-) {
-    fun cueAt(positionMs: Long): SpriteCue? = cues.firstOrNull { positionMs >= it.startMs && positionMs < it.endMs }
-        ?: cues.lastOrNull()?.takeIf { positionMs >= it.endMs }
-}
-
-data class SpriteCue(
-    val startMs: Long,
-    val endMs: Long,
-    val x: Int,
-    val y: Int,
-    val width: Int,
-    val height: Int,
-)

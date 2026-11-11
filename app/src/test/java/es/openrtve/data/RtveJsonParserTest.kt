@@ -502,31 +502,6 @@ class RtveJsonParserTest {
     }
 
     @Test
-    fun `preview sprite info and vtt regions are parsed`() {
-        val info = parser.parseSpriteInfo(
-            """{"state":"AVAILABLE","sprite_url":"https://videopreviews.rtve.es/s.jpg","vtt_url":"https://videopreviews.rtve.es/s.vtt"}""",
-        )
-        assertEquals("https://videopreviews.rtve.es/s.jpg" to "https://videopreviews.rtve.es/s.vtt", info)
-        assertNull(parser.parseSpriteInfo("""{"state":"PROCESSING"}"""))
-
-        val sprite = parser.parseSpriteVtt(
-            """
-            WEBVTT
-            00:00:00 --> 00:00:10
-            /x/s.jpg#xywh=0,0,200,112
-
-            00:00:10 --> 01:00:20.500
-            /x/s.jpg#xywh=200,0,200,112
-            """.trimIndent(),
-            spriteUrl = "https://videopreviews.rtve.es/s.jpg",
-        )
-        assertEquals(2, sprite.cues.size)
-        assertEquals(200, sprite.cueAt(15_000)!!.x)
-        assertEquals(3_620_500L, sprite.cues[1].endMs)
-        assertEquals(200, sprite.cueAt(9_999_999)!!.x)
-    }
-
-    @Test
     fun `fast channels without title get one from description or permalink`() {
         val result = parser.parseModule(
             raw = """{"page":{"items":[

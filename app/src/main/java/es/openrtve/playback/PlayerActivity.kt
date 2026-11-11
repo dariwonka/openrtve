@@ -62,11 +62,8 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.common.Tracks
 import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.DefaultTimeBar
-import androidx.media3.ui.TimeBar
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.canHaveNextEpisode
-import es.openrtve.domain.PreviewSprite
 import androidx.media3.ui.PlayerView
 import android.content.res.Configuration
 import android.view.LayoutInflater
@@ -106,10 +103,9 @@ class PlayerActivity : ComponentActivity() {
     private var title by mutableStateOf("")
     private var liveState by mutableStateOf<LiveState?>(null)
     private var menu by mutableStateOf<PlayerMenu?>(null)
-    private var sprite by mutableStateOf<PreviewSprite?>(null)
     /** Posición y fracción de la barra mientras el usuario arrastra. */
-    private var scrub by mutableStateOf<Pair<Long, Float>?>(null)
-    private var seekLabel by mutableStateOf<String?>(null)
+    /** Mientras se salta con el mando: punto al que se llega y minutos de diferencia con el de partida. */
+    private var seekShown by mutableStateOf<Pair<Long, Long>?>(null)
     private var paused by mutableStateOf(false)
     internal var controlsVisible by mutableStateOf(false)
     /** Título del catálogo que se ofrece borrar cuando el vídeo ya no está en RTVE. */
@@ -216,10 +212,7 @@ class PlayerActivity : ComponentActivity() {
                         }
                     },
                     onCloseMenu = { menu = null },
-                    sprite = sprite,
-                    scrub = scrub,
-                    onScrub = { scrub = it },
-                    seekLabel = seekLabel,
+                    seekShown = seekShown,
                     paused = paused,
                     controlsVisible = controlsVisible,
                     removeName = removeName,
@@ -301,16 +294,14 @@ class PlayerActivity : ComponentActivity() {
     private val seekHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var seekPending = false
     private var seekOrigin = 0L
-    private val confirmSeek = Runnable {
-        if (seekPending) controller?.seekTo(seekTarget)
+    private val endSeek = Runnable {
         seekPending = false
-        scrub = null
-        seekLabel = null
+        seekShown = null
     }
 
     /**
-     * Cada pulsación solo mueve un destino: se enseña la miniatura y el tiempo ("+3 min · 42:10")
-     * y el salto real se hace al soltar, tras un instante sin teclas.
+     * Cada pulsación salta de verdad y al momento (la barra se mueve en vivo); mientras se
+     * pulsa se enseña en grande el punto al que se llega y, tras un instante sin teclas, se oculta.
      */
     private fun seekByKey(view: PlayerView, forward: Boolean, repeat: Int) {
         val player = view.player ?: return
@@ -333,11 +324,10 @@ class PlayerActivity : ComponentActivity() {
         if (duration > 0) target = target.coerceAtMost(duration)
         seekTarget = target
         seekLastStep = now
-        if (duration > 0) scrub = target to (target.toFloat() / duration)
-        val minutes = Math.round((target - seekOrigin) / 60_000.0)
-        seekLabel = "${if (minutes >= 0) "+" else "−"}${kotlin.math.abs(minutes)} min · ${formatClock(target)}"
-        seekHandler.removeCallbacks(confirmSeek)
-        seekHandler.postDelayed(confirmSeek, SEEK_CONFIRM_DELAY_MS)
+        player.seekTo(target)
+        seekShown = target to (target - seekOrigin)
+        seekHandler.removeCallbacks(endSeek)
+        seekHandler.postDelayed(endSeek, SEEK_HIDE_DELAY_MS)
         view.showController()
     }
 
@@ -436,10 +426,8 @@ class PlayerActivity : ComponentActivity() {
      */
     override fun onStop() {
         super.onStop()
-        seekHandler.removeCallbacks(confirmSeek)
-        seekPending = false
-        scrub = null
-        seekLabel = null
+        seekHandler.removeCallbacks(endSeek)
+        endSeek.run()
         saveProgress()
         val inPictureInPicture = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
         if (!inPictureInPicture || isFinishing) {
@@ -629,24 +617,14 @@ class PlayerActivity : ComponentActivity() {
     private val history get() = (application as OpenRtveApplication).container.watchHistory
     private val container get() = (application as OpenRtveApplication).container
 
-    /** Previews de la barra y siguiente episodio: extras que no bloquean la reproducción. */
+    /** Siguiente episodio: un extra que no bloquea la reproducción. */
     private fun loadExtras(videoId: String?) {
         extrasJob?.cancel()
-        sprite = null
         nextItem = null
         showNext = false
         nextCountdown = null
         if (videoId == null) return
         extrasJob = lifecycleScope.launch {
-            launch {
-                sprite = try {
-                    container.catalogRepository.loadPreviewSprite(videoId)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    null
-                }
-            }
             launch {
                 val current = container.watchHistory.entryFor(videoId)?.item
                 nextItem = try {
@@ -841,7 +819,7 @@ class PlayerActivity : ComponentActivity() {
         private const val SEEK_MAX_FACTOR = 10L
         private const val SEEK_HOLD_DELAY_MS = 450L
         private const val SEEK_REPEAT_INTERVAL_MS = 300L
-        private const val SEEK_CONFIRM_DELAY_MS = 700L
+        private const val SEEK_HIDE_DELAY_MS = 900L
         private const val SAVED_REQUEST = "active-playback"
         private const val EXTRA_URI = "playback_uri"
         private const val EXTRA_MIME_TYPE = "playback_mime_type"
@@ -880,10 +858,7 @@ private fun PlaybackScreen(
     onOpenMenu: () -> Unit,
     onSelectOption: (PlayerOption) -> Unit,
     onCloseMenu: () -> Unit,
-    sprite: PreviewSprite?,
-    scrub: Pair<Long, Float>?,
-    onScrub: (Pair<Long, Float>?) -> Unit,
-    seekLabel: String?,
+    seekShown: Pair<Long, Long>?,
     paused: Boolean,
     controlsVisible: Boolean,
     removeName: String?,
@@ -934,17 +909,6 @@ private fun PlaybackScreen(
                         onOpenMenu()
                     }
                     view.findViewById<ImageButton>(R.id.player_next).setOnClickListener { onPlayNext() }
-                    view.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress).addListener(
-                        object : TimeBar.OnScrubListener {
-                            override fun onScrubStart(timeBar: TimeBar, position: Long) = report(position)
-                            override fun onScrubMove(timeBar: TimeBar, position: Long) = report(position)
-                            override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) = onScrub(null)
-                            private fun report(position: Long) {
-                                val duration = view.player?.duration ?: return
-                                if (duration > 0) onScrub(position to (position.toFloat() / duration))
-                            }
-                        },
-                    )
                     view.findViewById<ImageButton>(R.id.player_aspect).setOnClickListener {
                         view.resizeMode = if (view.resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT) {
                             AspectRatioFrameLayout.RESIZE_MODE_ZOOM
@@ -1002,20 +966,7 @@ private fun PlaybackScreen(
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        if (sprite != null && scrub != null) {
-            ScrubPreview(sprite, scrub.first, scrub.second)
-        }
-        seekLabel?.let {
-            Text(
-                text = it,
-                color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .background(Color.Black.copy(alpha = 0.6f), MaterialTheme.shapes.small)
-                    .padding(horizontal = 18.dp, vertical = 8.dp),
-            )
-        }
+        seekShown?.let { (position, delta) -> SeekIndicator(position, delta) }
         if (paused && !controlsVisible && menu == null && errorRes == null) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),

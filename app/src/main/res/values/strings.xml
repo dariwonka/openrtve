@@ -36,6 +36,15 @@
     <string name="pin_cancel">Cancelar</string>
     <string name="pin_erase">Borrar dígito</string>
     <string name="unavailable_notice">Este vídeo ya no está disponible en RTVE.</string>
+    <string name="settings_backup">Copia de seguridad</string>
+    <string name="settings_backup_hint">Guarda lo anclado, lo eliminado y lo visto para cambiar de tele o reinstalar</string>
+    <string name="settings_backup_save">Guardar copia</string>
+    <string name="settings_backup_restore">Restaurar copia</string>
+    <string name="settings_backup_saved">Copia guardada</string>
+    <string name="settings_backup_saved_downloads">Copia guardada en Descargas</string>
+    <string name="settings_backup_restored">Copia restaurada</string>
+    <string name="settings_backup_invalid">Ese fichero no es una copia válida</string>
+    <string name="settings_backup_unavailable">Este dispositivo no puede guardar ni leer ficheros</string>
     <string name="settings_removed">Eliminados</string>
     <string name="settings_removed_hint">Elige un título para volver a mostrarlo</string>
     <string name="removed_unnamed">Título sin nombre (vuelve al actualizar)</string>

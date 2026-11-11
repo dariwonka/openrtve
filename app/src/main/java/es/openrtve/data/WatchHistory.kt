@@ -63,6 +63,11 @@ class WatchHistory(
         writer.launch { for (ignored in writes) persist(mutableEntries.value) }
     }
 
+    /** Vuelve a leer el fichero (tras restaurar una copia de seguridad). */
+    fun reload() {
+        mutableEntries.value = load()
+    }
+
     fun entryFor(itemId: String): WatchEntry? = mutableEntries.value.firstOrNull { it.item.id == itemId }
 
     /** Registra el item antes de reproducirlo para que el progreso tenga a qué asociarse. */

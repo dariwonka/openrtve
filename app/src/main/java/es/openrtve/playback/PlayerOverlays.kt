@@ -1,11 +1,9 @@
 package es.openrtve.playback
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,12 +11,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -36,21 +32,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil3.imageLoader
-import coil3.request.ImageRequest
-import coil3.toBitmap
+import androidx.compose.ui.unit.sp
 import es.openrtve.R
-import es.openrtve.domain.PreviewSprite
 
 /**
  * Panel de ajustes del reproductor, como el de RTVE Play: calidad, velocidad,
@@ -134,52 +123,32 @@ private fun OptionRow(option: PlayerOption, modifier: Modifier, onClick: () -> U
     }
 }
 
-/** Miniatura sobre la barra mientras se arrastra: recorta la región del sprite que toca. */
+/** Punto actual al saltar con el mando, en grande, y los minutos de diferencia con el de partida. */
 @Composable
-internal fun ScrubPreview(sprite: PreviewSprite, positionMs: Long, fraction: Float) {
-    val context = LocalContext.current
-    val cue = sprite.cueAt(positionMs) ?: return
-    val bitmap by androidx.compose.runtime.produceState<android.graphics.Bitmap?>(null, sprite.imageUrl) {
-        val result = context.imageLoader.execute(ImageRequest.Builder(context).data(sprite.imageUrl).build())
-        value = result.image?.toBitmap()
-    }
-    val image = bitmap ?: return
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val width = 200.dp
-        val height = width * cue.height / cue.width.coerceAtLeast(1)
-        val maxX = maxWidth - width
-        val x = (maxWidth * fraction - width / 2).coerceIn(0.dp, maxX.coerceAtLeast(0.dp))
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+internal fun SeekIndicator(positionMs: Long, deltaMs: Long) {
+    val minutes = Math.round(deltaMs / 60_000.0)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxSize().wrapContentSize(Alignment.Center),
+    ) {
+        Text(
+            text = formatTime(positionMs),
+            color = Color.White,
+            fontSize = 72.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .offset(x = x, y = (-92).dp),
-        ) {
-            Canvas(
-                Modifier
-                    .size(width, height)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black),
-            ) {
-                drawIntoCanvas { canvas ->
-                    canvas.nativeCanvas.drawBitmap(
-                        image,
-                        android.graphics.Rect(cue.x, cue.y, cue.x + cue.width, cue.y + cue.height),
-                        android.graphics.RectF(0f, 0f, size.width, size.height),
-                        null,
-                    )
-                }
-            }
-            Text(
-                text = formatTime(positionMs),
-                color = Color.White,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            )
-        }
+                .background(Color.Black.copy(alpha = 0.55f), MaterialTheme.shapes.medium)
+                .padding(horizontal = 28.dp, vertical = 8.dp),
+        )
+        Text(
+            text = "${if (minutes >= 0) "+" else "−"}${kotlin.math.abs(minutes)} min",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .background(Color.Black.copy(alpha = 0.55f), MaterialTheme.shapes.small)
+                .padding(horizontal = 14.dp, vertical = 4.dp),
+        )
     }
 }
 

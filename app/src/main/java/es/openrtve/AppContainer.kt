@@ -2,6 +2,7 @@ package es.openrtve
 
 import android.content.Context
 import es.openrtve.data.AppSettings
+import es.openrtve.data.CatalogBackup
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.ClanCatalogRepository
 import es.openrtve.data.ClanCatalogStore
@@ -48,6 +49,7 @@ class AppContainer(private val context: Context) {
     val clanCatalogStore = ClanCatalogStore(context.filesDir.resolve("clan-catalog.json"))
     val deepLinkResolver = DeepLinkResolver(catalogRepository)
     val watchHistory = WatchHistory(context.filesDir.resolve("watch-history.json"))
+    val backup = CatalogBackup(context.filesDir.resolve("clan-catalog.json"), context.filesDir.resolve("watch-history.json"))
     val playbackResolver = PlaybackResolver()
     val drmTokenClient = DrmTokenClient(httpClient)
 }

@@ -308,21 +308,28 @@ class ClanCatalogTest {
         val alfa = program("4", "Alfa")
         val day1 = ClanCatalogViewModel(online(old, alfa, zeta), store, clock = { now })
         advanceUntilIdle()
-        // Los dos son novedades de RTVE: anclados y delante, sin límite; el resto, detrás.
+        // Con copia guardada las primeras filas no cambian durante la sesión: las novedades entran detrás...
         assertEquals(setOf("4", "5"), day1.uiState.value.pinnedIds)
-        assertEquals(listOf("Alfa", "Zeta", "Antiguo"), day1.uiState.value.catalog.series.map { it.title })
+        assertEquals(listOf("Antiguo", "Alfa", "Zeta"), day1.uiState.value.catalog.series.map { it.title })
+        // ...y en el siguiente arranque van delante, sin límite.
+        val restart1 = ClanCatalogViewModel(online(old, alfa, zeta), store, clock = { now })
+        advanceUntilIdle()
+        assertEquals(listOf("Alfa", "Zeta", "Antiguo"), restart1.uiState.value.catalog.series.map { it.title })
 
-        // Una novedad más reciente va la primera.
+        // Una novedad más reciente va la primera al arrancar de nuevo.
         now += 1_000
         val nueva = program("6", "Nueva")
         val day2 = ClanCatalogViewModel(online(old, alfa, zeta, nueva), store, clock = { now })
         advanceUntilIdle()
-        assertEquals(listOf("Nueva", "Alfa", "Zeta", "Antiguo"), day2.uiState.value.catalog.series.map { it.title })
+        assertEquals(listOf("Alfa", "Zeta", "Antiguo", "Nueva"), day2.uiState.value.catalog.series.map { it.title })
+        val restart2 = ClanCatalogViewModel(online(old, alfa, zeta, nueva), store, clock = { now })
+        advanceUntilIdle()
+        assertEquals(listOf("Nueva", "Alfa", "Zeta", "Antiguo"), restart2.uiState.value.catalog.series.map { it.title })
 
         // El usuario desancla Zeta: vuelve a su sitio y RTVE no la ancla otra vez.
-        day2.togglePin(zeta)
+        restart2.togglePin(zeta)
         advanceUntilIdle()
-        assertEquals(listOf("Nueva", "Alfa", "Antiguo", "Zeta"), day2.uiState.value.catalog.series.map { it.title })
+        assertEquals(listOf("Nueva", "Alfa", "Antiguo", "Zeta"), restart2.uiState.value.catalog.series.map { it.title })
         val day3 = ClanCatalogViewModel(online(old, alfa, zeta, nueva), store, clock = { now })
         advanceUntilIdle()
         assertEquals(setOf("4", "6"), day3.uiState.value.pinnedIds)

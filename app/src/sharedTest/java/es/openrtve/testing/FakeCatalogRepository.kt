@@ -10,7 +10,6 @@ import es.openrtve.domain.ContentKind
 import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.HomeFeed
 import es.openrtve.domain.HomeRow
-import es.openrtve.domain.PreviewSprite
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.QuickFilter
 import es.openrtve.domain.RelatedKind
@@ -40,7 +39,6 @@ open class FakeCatalogRepository : CatalogRepository {
     var nextVideo: suspend (videoId: String) -> CatalogItem? = { null }
     /** Sin configurar, la cadena no tiene listado A-Z. */
     var channelPrograms: suspend (channelId: String, cachedOnly: Boolean) -> CatalogLoad<List<CatalogItem>> = { _, _ -> CatalogLoad(emptyList(), false) }
-    var previewSprite: suspend (videoId: String) -> PreviewSprite? = { null }
     var programVideos: suspend (programId: String, seasonId: String?, page: Int, completeOnly: Boolean, forceRefresh: Boolean) -> CatalogLoad<CatalogPage> =
         { _, _, _, _, _ -> unsupported() }
     var programExtras: suspend (programId: String, page: Int, forceRefresh: Boolean) -> CatalogLoad<CatalogPage> =
@@ -101,11 +99,6 @@ open class FakeCatalogRepository : CatalogRepository {
     override suspend fun loadNextVideo(videoId: String): CatalogItem? {
         calls += "nextVideo($videoId)"
         return nextVideo(videoId)
-    }
-
-    override suspend fun loadPreviewSprite(videoId: String): PreviewSprite? {
-        calls += "previewSprite($videoId)"
-        return previewSprite(videoId)
     }
 
     override suspend fun loadProgramVideos(

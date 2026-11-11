@@ -15,8 +15,6 @@ import es.openrtve.domain.HomeLink
 import es.openrtve.domain.HomeRow
 import es.openrtve.domain.LinkKind
 import es.openrtve.domain.LiveInfo
-import es.openrtve.domain.PreviewSprite
-import es.openrtve.domain.SpriteCue
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.ProgramSeason
 import es.openrtve.domain.RtveHostPolicy
@@ -460,47 +458,6 @@ class RtveJsonParser(
     private fun titleCase(value: String): String =
         if (value != value.uppercase()) value
         else value.lowercase().split(' ').joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
-
-    /** Respuesta de `tiivii-previews/api/sprite`: URLs del sprite y de su VTT, o `null` si no está disponible. */
-    fun parseSpriteInfo(raw: String): Pair<String, String>? {
-        val root = json.parseToJsonElement(raw).jsonObject
-        if (root.text("state") != "AVAILABLE") return null
-        val sprite = root.text("sprite_url")?.let(hostPolicy::sanitize) ?: return null
-        val vtt = root.text("vtt_url")?.let(hostPolicy::sanitize) ?: return null
-        return sprite to vtt
-    }
-
-    /** VTT de regiones: `00:00:10 --> 00:00:20` y una URL con `#xywh=x,y,w,h`. */
-    fun parseSpriteVtt(vtt: String, spriteUrl: String): PreviewSprite {
-        val cues = mutableListOf<SpriteCue>()
-        val lines = vtt.lines()
-        var index = 0
-        while (index < lines.size) {
-            val line = lines[index].trim()
-            val arrow = line.indexOf("-->")
-            if (arrow > 0) {
-                val start = parseVttTime(line.substring(0, arrow).trim())
-                val end = parseVttTime(line.substring(arrow + 3).trim())
-                val region = lines.getOrNull(index + 1)?.substringAfter("#xywh=", "")?.split(',')?.mapNotNull { it.trim().toIntOrNull() }
-                if (start != null && end != null && region != null && region.size == 4) {
-                    cues += SpriteCue(start, end, region[0], region[1], region[2], region[3])
-                }
-                index += 2
-            } else {
-                index++
-            }
-        }
-        return PreviewSprite(spriteUrl, cues)
-    }
-
-    private fun parseVttTime(value: String): Long? {
-        val parts = value.split(':')
-        if (parts.size !in 2..3) return null
-        val seconds = parts.last().toDoubleOrNull() ?: return null
-        val minutes = parts[parts.size - 2].toLongOrNull() ?: return null
-        val hours = if (parts.size == 3) parts[0].toLongOrNull() ?: return null else 0L
-        return ((hours * 3600 + minutes * 60) * 1000 + (seconds * 1000).toLong())
-    }
 
     private fun isContainer(program: JsonObject): Boolean =
         programStructure(program.text("programTypeId", "programTypeID"), program.text("programType")).isCollection

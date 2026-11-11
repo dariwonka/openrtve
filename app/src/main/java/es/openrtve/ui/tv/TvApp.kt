@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -25,7 +26,12 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import coil3.imageLoader
+import coil3.request.ImageRequest
 import es.openrtve.AppContainer
+import es.openrtve.domain.RowLayout
+import es.openrtve.domain.imageFor
+import es.openrtve.ui.CATALOG_HEAD_SIZE
 import es.openrtve.domain.ContentKind
 import es.openrtve.ui.ClanCatalogViewModel
 import es.openrtve.ui.ClanSection
@@ -38,7 +44,10 @@ import es.openrtve.ui.Tab
 import es.openrtve.ui.UiMessage
 import es.openrtve.ui.rememberCatalogActions
 import es.openrtve.ui.text
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Raíz de la app: una barra superior fija (Series, Películas y Ajustes)
@@ -138,7 +147,7 @@ fun TvApp(container: AppContainer) {
                             onOpenProgram = actions.openProgram,
                             onOpenItem = actions.openItem,
                         )
-                        GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage, removed = catalog.removed, onRestore = catalogViewModel::restore)
+                        GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage, removed = catalog.removed, onRestore = catalogViewModel::restore, onBackupRestored = catalogViewModel::reloadFromStore)
                         // Dos raíces: el buscador y los títulos de Clan. Una serie abre su página; un vídeo se reproduce.
                         null -> if (nav.tab == Tab.SEARCH) TvSearchScreen(
                             repository = repository,
@@ -187,9 +196,21 @@ fun TvApp(container: AppContainer) {
             }
         }
     }
-    // Pantalla de inicio hasta que el catálogo está estable: así no se ve el cambio de la copia a lo actual.
+    // Pantalla de inicio hasta que hay catálogo definitivo y sus tres primeras filas ya tienen la imagen:
+    // así no se ve cómo cambia nada al arrancar.
+    var headDrawn by remember { mutableStateOf(false) }
+    LaunchedEffect(catalog.ready) {
+        if (!catalog.ready || headDrawn) return@LaunchedEffect
+        val head = catalog.catalog.series.take(CATALOG_HEAD_SIZE)
+        withTimeoutOrNull(HEAD_IMAGES_TIMEOUT_MS) {
+            head.mapNotNull { it.imageFor(RowLayout.LANDSCAPE) }.map { url ->
+                async { context.imageLoader.execute(ImageRequest.Builder(context).data(url).build()) }
+            }.awaitAll()
+        }
+        headDrawn = true
+    }
     androidx.compose.animation.AnimatedVisibility(
-        visible = !catalog.ready,
+        visible = !(catalog.ready && headDrawn),
         exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(350)),
     ) {
         androidx.compose.foundation.Image(
@@ -203,3 +224,4 @@ fun TvApp(container: AppContainer) {
 }
 
 private const val MESSAGE_VISIBLE_MS = 4_000L
+private const val HEAD_IMAGES_TIMEOUT_MS = 1_500L

@@ -146,15 +146,18 @@ data class ClanCatalogUiState(
     val pinnedIds: Set<String> = emptySet(),
     /** Ids de todo lo que ya está en la base de datos (series y películas). */
     val knownIds: Set<String> = emptySet(),
-    /** El catálogo ya está estable: hasta entonces se enseña la pantalla de inicio. */
+    /** Hay algo definitivo que enseñar: hasta entonces se ve la pantalla de inicio. */
     val ready: Boolean = false,
     val isLoading: Boolean = true,
     /** Solo si no hay ningún título que enseñar. */
     val error: LoadError? = null,
 )
 
-/** Si el catálogo tarda más en estabilizarse, se enseña lo que haya. */
+/** Sin copia guardada, si el catálogo tarda más en descargarse se enseña lo que haya. */
 private const val READY_TIMEOUT_MS = 8_000L
+
+/** Títulos que se ven al abrir (tres filas de cuatro): con copia guardada no cambian durante la sesión. */
+const val CATALOG_HEAD_SIZE = 12
 private const val BASELINE_KEY = "#baseline"
 
 /** Lo que trae una vuelta de descargas. */
@@ -194,6 +197,9 @@ class ClanCatalogViewModel(
     private var job: Job? = null
     private var stored = StoredCatalog(emptyList(), emptyList())
     private var started = false
+    /** Los primeros títulos de cada lista, fijos tras abrir con copia guardada (las novedades entran al siguiente arranque). */
+    private var headSeries: List<String>? = null
+    private var headMovies: List<String>? = null
     /** Todo título visto alguna vez (fijos y descargados), para dar nombre a los eliminados. */
     private val known = mutableMapOf<String, CatalogItem>()
 
@@ -225,6 +231,7 @@ class ClanCatalogViewModel(
 
     /** Vuelve a mostrar un título eliminado; si no se tiene entero, vuelve en la próxima descarga. */
     fun restore(id: String) {
+        unlockHead()
         val item = stored.removedItems.firstOrNull { it.id == id } ?: known[id]
         stored = stored.copy(
             removed = stored.removed - id,
@@ -243,6 +250,7 @@ class ClanCatalogViewModel(
      */
     fun togglePin(result: CatalogItem) {
         val item = entryFor(result) ?: return
+        unlockHead()
         addEntry(item)
         stored = if (item.id in stored.pinned) {
             stored.copy(pinned = stored.pinned - item.id, pinnedFresh = stored.pinnedFresh - item.id, unpinned = stored.unpinned + item.id)
@@ -272,12 +280,22 @@ class ClanCatalogViewModel(
     /** Añade a la lista un resultado del buscador que aún no está en la base de datos. */
     fun add(result: CatalogItem) {
         val entry = entryFor(result) ?: return
+        unlockHead()
         addEntry(entry)
         persist()
         publish()
     }
 
     /** El reproductor puede haber eliminado un título; al volver a la lista se refleja. */
+    /** Sustituye todo lo que se muestra por lo guardado (tras restaurar una copia de seguridad). */
+    fun reloadFromStore() {
+        viewModelScope.launch {
+            stored = store?.read() ?: return@launch
+            unlockHead()
+            publish()
+        }
+    }
+
     fun syncFromStore() {
         viewModelScope.launch {
             val saved = store?.read() ?: return@launch
@@ -307,8 +325,29 @@ class ClanCatalogViewModel(
         return fresh.sortedByDescending { stored.pinnedFresh[it.id] } + older + rest
     }
 
+    /** Mantiene en su sitio los títulos de cabecera fijados; lo nuevo va detrás. */
+    private fun List<CatalogItem>.keepingHead(head: List<String>?): List<CatalogItem> {
+        if (head == null) return this
+        val byId = associateBy { it.id }
+        val first = head.mapNotNull { byId[it] }
+        val taken = first.mapTo(HashSet()) { it.id }
+        return first + filter { it.id !in taken }
+    }
+
+    private fun lockHead() {
+        val current = mutableUiState.value.catalog
+        headSeries = current.series.take(CATALOG_HEAD_SIZE).map { it.id }
+        headMovies = current.movies.take(CATALOG_HEAD_SIZE).map { it.id }
+    }
+
+    /** Una acción del usuario (anclar, añadir, restaurar) reordena en el acto. */
+    private fun unlockHead() {
+        headSeries = null
+        headMovies = null
+    }
+
     private fun publish() {
-        val catalog = ClanCatalog(stored.series.pinnedFirst(), stored.movies.pinnedFirst())
+        val catalog = ClanCatalog(stored.series.pinnedFirst().keepingHead(headSeries), stored.movies.pinnedFirst().keepingHead(headMovies))
         val removedTitles = stored.removed.keys.map { id ->
             RemovedTitle(id, (stored.removedItems.firstOrNull { it.id == id } ?: known[id])?.title)
         }.sortedWith(compareBy({ it.name == null }, { it.name?.lowercase() }))
@@ -337,6 +376,11 @@ class ClanCatalogViewModel(
                 }
                 publish()
                 if (!mutableUiState.value.catalog.isEmpty) mutableUiState.update { it.copy(isLoading = false) }
+                if (saved != null && !mutableUiState.value.catalog.isEmpty) {
+                    // Hay una copia: se enseña ya, con las primeras filas definitivas; la descarga solo sumará detrás.
+                    lockHead()
+                    markReady()
+                }
             }
             try {
                 val result = download()

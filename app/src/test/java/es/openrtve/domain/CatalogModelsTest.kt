@@ -39,20 +39,6 @@ class CatalogModelsTest {
     }
 
     @Test
-    fun `sprite cues are looked up by position with the last one covering the tail`() {
-        val sprite = PreviewSprite(
-            "https://img.rtve.es/sprite.jpg",
-            listOf(SpriteCue(0, 10_000, 0, 0, 160, 90), SpriteCue(10_000, 20_000, 160, 0, 160, 90)),
-        )
-
-        assertEquals(0, sprite.cueAt(0)!!.x)
-        assertEquals(0, sprite.cueAt(9_999)!!.x)
-        assertEquals(160, sprite.cueAt(10_000)!!.x)
-        assertEquals("más allá del último tramo vale el último", 160, sprite.cueAt(25_000)!!.x)
-        assertNull(PreviewSprite("https://img.rtve.es/s.jpg", emptyList()).cueAt(5))
-    }
-
-    @Test
     fun `pagination and row flags derive from the feed values`() {
         assertTrue(CatalogPage(emptyList(), page = 1, totalPages = 3).hasMore)
         assertFalse(CatalogPage(emptyList(), page = 3, totalPages = 3).hasMore)
