@@ -292,7 +292,7 @@ class ClanCatalogTest {
         vm.remove(found)
         assertEquals(false, "9" in vm.uiState.value.knownIds)
 
-        val long = catalogItem("7", title = "Largo").copy(mediaTypeId = RtveTypes.COMPLETE, durationMs = 41 * 60_000L)
+        val long = catalogItem("7", title = "Largo").copy(mediaTypeId = RtveTypes.COMPLETE, durationMs = 59 * 60_000L)
         assertEquals("7", catalogEntryOf(long)?.id)
         assertEquals(true, buildClanCatalog(listOf(LoadedRow("", listOf(long)))).movies.any { it.id == "7" })
     }
@@ -351,7 +351,7 @@ class ClanCatalogTest {
                 es.openrtve.domain.CatalogPage(
                     when (programId) {
                         "1" -> listOf(video("10", "1", "Peligro en el tren nocturno", 86))
-                        "2" -> listOf(video("20", "2", "El cartel", 45), video("21", "2", "Camping", 7))
+                        "2" -> listOf(video("20", "2", "El cartel", 60), video("22", "2", "Especial", 45), video("21", "2", "Camping", 7))
                         else -> emptyList()
                     },
                     page = 1,
@@ -364,7 +364,7 @@ class ClanCatalogTest {
         advanceUntilIdle()
         val catalog = viewModel.uiState.value.catalog
         assertEquals(listOf("Bluey"), catalog.series.map { it.title })
-        assertEquals(listOf("Bluey: El cartel", "Los Cinco: Peligro en el tren nocturno"), catalog.movies.map { it.title })
+        assertEquals(listOf("Bluey - El cartel", "Los Cinco - Peligro en el tren nocturno"), catalog.movies.map { it.title })
         // La serie vacía no vuelve en la siguiente descarga.
         val later = ClanCatalogViewModel(repository, store)
         advanceUntilIdle()

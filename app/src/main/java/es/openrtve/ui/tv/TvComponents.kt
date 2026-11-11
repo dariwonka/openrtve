@@ -122,7 +122,7 @@ internal val TvVerticalMargin = 27.dp
 internal val TvRowPadding = PaddingValues(horizontal = TvHorizontalMargin)
 internal val TvCardShape = RoundedCornerShape(12.dp)
 /** Color del selector: el borde de la tarjeta enfocada. */
-internal val TvFocusColor = Color(0xFFFF1744)
+internal val TvFocusColor = Color(0xFFFFD600)
 
 /**
  * Separación entre la imagen de una tarjeta y su título. Al enfocarla, la imagen
@@ -242,7 +242,7 @@ internal fun TvItemCard(
     /** Posición en un ranking ("Lo más visto"); se pinta grande sobre la imagen. */
     rank: Int? = null,
     onLongClick: (() -> Unit)? = null,
-    /** Favorito: lleva una estrella roja arriba a la derecha. */
+    /** Favorito: lleva una estrella amarilla con contorno negro arriba a la derecha. */
     favorite: Boolean = false,
 ) {
     val live = item.live
@@ -252,12 +252,11 @@ internal fun TvItemCard(
                 TvArtwork(item.imageFor(layout), Modifier.fillMaxSize())
                 rank?.let { TvRankBadge(it, Modifier.align(Alignment.BottomStart)) }
                 if (favorite) {
-                    androidx.tv.material3.Icon(
-                        androidx.compose.material.icons.Icons.Filled.Star,
-                        contentDescription = null,
-                        tint = TvFocusColor,
-                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp),
-                    )
+                    Box(Modifier.align(Alignment.TopEnd).padding(5.dp), contentAlignment = Alignment.Center) {
+                        // La misma estrella en negro, 1 dp mayor por cada lado, hace de contorno.
+                        androidx.tv.material3.Icon(androidx.compose.material.icons.Icons.Filled.Star, contentDescription = null, tint = Color.Black, modifier = Modifier.size(25.dp))
+                        androidx.tv.material3.Icon(androidx.compose.material.icons.Icons.Filled.Star, contentDescription = null, tint = TvFocusColor, modifier = Modifier.size(22.dp))
+                    }
                 }
                 progress?.let { TvProgressStrip(it, Modifier.align(Alignment.BottomCenter)) }
             }

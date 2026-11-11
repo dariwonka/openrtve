@@ -68,7 +68,7 @@ class ClanCatalogStore(
                 unpinned = (root["unpinned"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
                 removedItems = root.items("removedItems"),
                 firstSeen = (root["firstSeen"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
-                scanned = (root["scanned"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
+                scanned = (root["scanned2"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
                 filmOnly = (root["filmOnly"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
             ).takeIf { it.series.isNotEmpty() || it.movies.isNotEmpty() || it.removed.isNotEmpty() || it.pinned.isNotEmpty() || it.unpinned.isNotEmpty() || it.removedItems.isNotEmpty() }
         }.getOrNull()
@@ -101,7 +101,7 @@ class ClanCatalogStore(
                 put("pinnedFresh", buildJsonObject { catalog.pinnedFresh.forEach { (id, at) -> put(id, at) } })
                 put("unpinned", buildJsonArray { catalog.unpinned.forEach { add(JsonPrimitive(it)) } })
                 put("firstSeen", buildJsonObject { catalog.firstSeen.forEach { (id, at) -> put(id, at) } })
-                put("scanned", buildJsonObject { catalog.scanned.forEach { (id, at) -> put(id, at) } })
+                put("scanned2", buildJsonObject { catalog.scanned.forEach { (id, at) -> put(id, at) } })
                 put("filmOnly", buildJsonArray { catalog.filmOnly.forEach { add(JsonPrimitive(it)) } })
             }.toString()
             val pending = File(file.parentFile, file.name + ".tmp")

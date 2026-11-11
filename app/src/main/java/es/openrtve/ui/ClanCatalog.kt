@@ -79,7 +79,7 @@ fun buildClanCatalog(rows: List<LoadedRow>, sorted: Boolean = true): ClanCatalog
                 ContentKind.PROGRAM -> (if (movieRow) movies else programs).addTitle(item.copy(subtitle = null))
                 ContentKind.VIDEO -> when {
                     item.mediaForm == MediaForm.EXTRA -> item.seriesTitle()?.let(fromEpisodes::addTitle)
-                    // Lo que dura 40 minutos o más es una película, venga de donde venga.
+                    // Lo que dura 58 minutos o más es una película, venga de donde venga.
                     movieRow || item.isFullMovie || item.parentStructure == ProgramStructure.MOVIES ||
                         (item.durationMs ?: 0L) >= MOVIE_MIN_MS ->
                         movies.addTitle(item.copy(subtitle = null))
@@ -98,7 +98,7 @@ fun buildClanCatalog(rows: List<LoadedRow>, sorted: Boolean = true): ClanCatalog
 }
 
 /** Duración a partir de la cual un vídeo cuenta como película. */
-const val MOVIE_MIN_MS = 40L * 60_000L
+const val MOVIE_MIN_MS = 58L * 60_000L
 
 /** Por debajo de esto un vídeo es un avance o un corte: no se enseña. */
 const val EPISODE_MIN_MS = 4L * 60_000L
@@ -166,7 +166,7 @@ private const val BASELINE_KEY = "#baseline"
 /** Lo que hay dentro de una serie. */
 private class ProgramScan(
     val programId: String,
-    /** Sus vídeos de 40 minutos o más. */
+    /** Sus vídeos de 58 minutos o más. */
     val films: List<CatalogItem>,
     /** No tiene ningún capítulo normal. */
     val onlyFilms: Boolean,
@@ -473,7 +473,7 @@ class ClanCatalogViewModel(
     }
 
     /**
-     * Mira dentro de cada serie: lo que dura 40 minutos o más es una película y pasa, suelta,
+     * Mira dentro de cada serie: lo que dura 58 minutos o más es una película y pasa, suelta,
      * a Películas. Si la serie no tiene nada más, deja de salir entre las series. Cada serie
      * se revisa de nuevo cada pocos días, por si le llega una película.
      */
@@ -529,10 +529,12 @@ class ClanCatalogViewModel(
         for (scan in results) {
             scanned[scan.programId] = now
             val program = series.firstOrNull { it.id == scan.programId } ?: known[scan.programId]
-            val have = movies.mapTo(HashSet()) { it.id }
-            val added = scan.films.filter { it.id !in before.removed && it.id !in have }.map { it.asFilmOf(program?.title) }
-            added.forEach { known[it.id] = it }
-            movies = movies + added
+            val films = scan.films.filter { it.id !in before.removed }.map { it.asFilmOf(program?.title) }
+            val filmIds = films.mapTo(HashSet()) { it.id }
+            films.forEach { known[it.id] = it }
+            // Se sustituyen las que ya estaban (por si cambia el título) y se devuelve a su serie
+            // lo que se sacó de ella sin llegar a la duración de una película.
+            movies = movies.filter { it.id !in filmIds && !(it.programId == scan.programId && (it.durationMs ?: Long.MAX_VALUE) < MOVIE_MIN_MS) } + films
             if (scan.onlyFilms) {
                 // Si la serie estaba anclada, lo anclado pasan a ser sus películas.
                 if (pinned.remove(scan.programId)) {
@@ -563,11 +565,15 @@ class ClanCatalogViewModel(
         if (stored.series != before.series || stored.movies != before.movies || stored.pinned != before.pinned) publish()
     }
 
-    /** Una película sacada de una serie lleva delante el nombre de la serie, si no lo dice ya. */
-    private fun CatalogItem.asFilmOf(series: String?): CatalogItem = copy(
-        subtitle = null,
-        title = if (series.isNullOrBlank() || title.contains(series, ignoreCase = true)) title else "$series: $title",
-    )
+    /** Una película sacada de una serie se titula "Serie - E2 · Título": primero de dónde viene. */
+    private fun CatalogItem.asFilmOf(series: String?): CatalogItem {
+        val number = episode?.takeUnless { Regex("\\b$it\\b").containsMatchIn(title) }
+        val own = if (number != null) "E$number · $title" else title
+        return copy(
+            subtitle = null,
+            title = if (series.isNullOrBlank() || title.startsWith(series, ignoreCase = true)) own else "$series - $own",
+        )
+    }
 
     /** Lanza el primer fallo solo si ninguna fuente ha dado títulos. */
     private suspend fun download(): Download = coroutineScope {
