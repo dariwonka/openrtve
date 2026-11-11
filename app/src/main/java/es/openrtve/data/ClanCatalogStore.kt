@@ -37,6 +37,10 @@ data class StoredCatalog(
     val firstSeen: Map<String, Long> = emptyMap(),
     /** Los títulos eliminados, enteros, para poder restaurarlos aunque RTVE ya no los ofrezca. */
     val removedItems: List<CatalogItem> = emptyList(),
+    /** Cuándo se miró por última vez qué películas hay dentro de cada serie. */
+    val scanned: Map<String, Long> = emptyMap(),
+    /** Series que solo contienen películas: no salen entre las series, sus películas van sueltas. */
+    val filmOnly: Set<String> = emptySet(),
 )
 
 /**
@@ -64,6 +68,8 @@ class ClanCatalogStore(
                 unpinned = (root["unpinned"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
                 removedItems = root.items("removedItems"),
                 firstSeen = (root["firstSeen"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
+                scanned = (root["scanned"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
+                filmOnly = (root["filmOnly"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
             ).takeIf { it.series.isNotEmpty() || it.movies.isNotEmpty() || it.removed.isNotEmpty() || it.pinned.isNotEmpty() || it.unpinned.isNotEmpty() || it.removedItems.isNotEmpty() }
         }.getOrNull()
     }
@@ -95,6 +101,8 @@ class ClanCatalogStore(
                 put("pinnedFresh", buildJsonObject { catalog.pinnedFresh.forEach { (id, at) -> put(id, at) } })
                 put("unpinned", buildJsonArray { catalog.unpinned.forEach { add(JsonPrimitive(it)) } })
                 put("firstSeen", buildJsonObject { catalog.firstSeen.forEach { (id, at) -> put(id, at) } })
+                put("scanned", buildJsonObject { catalog.scanned.forEach { (id, at) -> put(id, at) } })
+                put("filmOnly", buildJsonArray { catalog.filmOnly.forEach { add(JsonPrimitive(it)) } })
             }.toString()
             val pending = File(file.parentFile, file.name + ".tmp")
             pending.writeText(raw)

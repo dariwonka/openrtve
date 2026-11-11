@@ -17,6 +17,8 @@ object RtveUrls {
     const val CLAN_MOVIES_TOPS = "https://recomsys.rtve.es/recommendation/tops?source=apps&recoId=peliculasInfantil&contentType=video"
     /** Programas contenedores de cine para niños: Cine en Familia y Cine Clan. */
     val CLAN_MOVIE_PROGRAMS = listOf("1001122", "134773")
+    /** Colección "Cine infantil" de la portada de cine de RTVE Play: también trae las de animación de otros contenedores. */
+    const val KIDS_MOVIES_COLLECTION = "https://api.rtve.es/api/collection/2836.json"
     const val CLAN_MOVIES_PORTADA = "https://www.rtve.es/play/clan/peliculas-infantiles/index_apps.json"
     /** Cadena Clan en la API (`cadenas/417`), la misma que usa su portada en "Para ver hoy". */
     const val CLAN_CHANNEL_ID = "417"

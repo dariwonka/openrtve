@@ -22,6 +22,7 @@ import es.openrtve.R
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.CatalogItem
+import es.openrtve.ui.EPISODE_MIN_MS
 import es.openrtve.ui.rememberProgramScreen
 import es.openrtve.ui.text
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -39,13 +40,17 @@ fun TvProgramScreen(
     history: WatchHistory,
     program: CatalogItem,
     onPlay: (CatalogItem) -> Unit,
+    /** Vídeos que no se enseñan aquí: los que ya salen sueltos en Películas y los eliminados. */
+    hiddenIds: Set<String> = emptySet(),
 ) {
     val screen = rememberProgramScreen(repository, history, program)
     val viewModel = screen.viewModel
     val state = screen.state
     val episodes = state.episodes
     // Los vídeos de menos de 4 minutos (avances, cortes) no se enseñan.
-    val shown = remember(episodes.items) { episodes.items.filter { it.durationMs?.let { ms -> ms >= MIN_EPISODE_MS } != false } }
+    val shown = remember(episodes.items, hiddenIds) {
+        episodes.items.filter { it.id !in hiddenIds && it.durationMs?.let { ms -> ms >= EPISODE_MIN_MS } != false }
+    }
     val error = episodes.error
     val context = LocalContext.current
     val gridState = rememberLazyGridState()
@@ -102,4 +107,3 @@ fun TvProgramScreen(
     }
 }
 
-private const val MIN_EPISODE_MS = 4 * 60_000L

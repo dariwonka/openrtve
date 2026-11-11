@@ -342,6 +342,36 @@ class ClanCatalogTest {
     }
 
     @Test
+    fun `films inside a series go loose to the films list, and a series of only films disappears`() = runTest(mainDispatcher.dispatcher) {
+        fun video(id: String, programId: String, title: String, minutes: Long) =
+            catalogItem(id, title = title, programId = programId).copy(mediaTypeId = RtveTypes.COMPLETE, durationMs = minutes * 60_000L)
+        val repository = online(program("1", "Los Cinco"), program("2", "Bluey"))
+        repository.programVideos = { programId, _, _, _, _ ->
+            loaded(
+                es.openrtve.domain.CatalogPage(
+                    when (programId) {
+                        "1" -> listOf(video("10", "1", "Peligro en el tren nocturno", 86))
+                        else -> listOf(video("20", "2", "El cartel", 45), video("21", "2", "Camping", 7))
+                    },
+                    page = 1,
+                    totalPages = 1,
+                ),
+            )
+        }
+        val store = tempStore()
+        val viewModel = ClanCatalogViewModel(repository, store)
+        advanceUntilIdle()
+        val catalog = viewModel.uiState.value.catalog
+        assertEquals(listOf("Bluey"), catalog.series.map { it.title })
+        assertEquals(listOf("Bluey: El cartel", "Los Cinco: Peligro en el tren nocturno"), catalog.movies.map { it.title })
+        // La serie vacía no vuelve en la siguiente descarga.
+        val later = ClanCatalogViewModel(repository, store)
+        advanceUntilIdle()
+        assertEquals(listOf("Bluey"), later.uiState.value.catalog.series.map { it.title })
+        assertEquals(2, later.uiState.value.catalog.movies.size)
+    }
+
+    @Test
     fun `the splash waits for the catalogue to settle`() = runTest(mainDispatcher.dispatcher) {
         val viewModel = ClanCatalogViewModel(online(program("2", "Bluey")), tempStore())
         advanceUntilIdle()

@@ -90,7 +90,7 @@ fun TvSearchScreen(
     val results = state.results
     val searchError = state.searchError
     // Una serie solo enseña su título; un vídeo conserva debajo el nombre de su serie.
-    val found = remember(results) { results?.let { it.programs.map { program -> program.copy(subtitle = null) } + it.videos.filter { v -> v.durationMs?.let { ms -> ms >= 4 * 60_000L } != false} }.orEmpty().distinctBy { it.kind to it.id } }
+    val found = remember(results) { results?.let { it.programs.map { program -> program.copy(subtitle = null) } + it.videos.filter { v -> v.durationMs?.let { ms -> ms >= es.openrtve.ui.EPISODE_MIN_MS } != false} }.orEmpty().distinctBy { it.kind to it.id } }
     SearchMenus(menuItem, pinFor, knownIds, pinnedIds, { menuItem = it }, { pinFor = it }, onAdd, onTogglePin, onRemove, isRemovalUnlocked, onUnlockRemoval)
     ProvideTvCenteredScroll {
         LazyVerticalGrid(

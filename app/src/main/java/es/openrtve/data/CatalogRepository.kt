@@ -57,6 +57,11 @@ interface CatalogRepository {
         forceRefresh: Boolean = false,
     ): CatalogLoad<CatalogPage>
 
+    /**
+     * Vídeos completos de un programa en páginas grandes y sin guardarlos en disco:
+     * sirve para clasificarlos (qué es película), no para pintarlos.
+     */
+    suspend fun scanProgramVideos(programId: String, page: Int): CatalogPage = loadProgramVideos(programId, page = page).value
 }
 
 class DefaultCatalogRepository(
@@ -168,6 +173,9 @@ class DefaultCatalogRepository(
         )
     }
 
+    override suspend fun scanProgramVideos(programId: String, page: Int): CatalogPage =
+        fetchParsed("$PROGRAMS_BASE/${encode(programId)}/videos.json?page=$page&type=${RtveTypes.COMPLETE}&size=$SCAN_PAGE_SIZE", parser::parseVideoPage)
+
     private fun encode(segment: String): String = URLEncoder.encode(segment, "UTF-8")
 
     /** Descarga en IO y parseo en Default: ningún endpoint devuelve el trabajo de JSON/VTT a Main. */
@@ -240,6 +248,7 @@ class DefaultCatalogRepository(
         const val PROGRAMS_BASE = "https://www.rtve.es/api/programas"
         const val VIDEOS_BASE = "https://api.rtve.es/api/videos"
         const val CHANNELS_BASE = "https://api2.rtve.es/api/cadenas"
+        const val SCAN_PAGE_SIZE = 60
         const val AZ_PAGE_SIZE = 500
         const val AZ_MAX_PAGES = 6
     }

@@ -100,6 +100,9 @@ fun buildClanCatalog(rows: List<LoadedRow>, sorted: Boolean = true): ClanCatalog
 /** Duración a partir de la cual un vídeo cuenta como película. */
 const val MOVIE_MIN_MS = 40L * 60_000L
 
+/** Por debajo de esto un vídeo es un avance o un corte: no se enseña. */
+const val EPISODE_MIN_MS = 4L * 60_000L
+
 /**
  * El título del catálogo que corresponde a un resultado cualquiera: el propio programa,
  * la película, o la serie a la que pertenece un capítulo. `null` si no encaja (un avance...).
@@ -160,6 +163,15 @@ private const val READY_TIMEOUT_MS = 8_000L
 const val CATALOG_HEAD_SIZE = 12
 private const val BASELINE_KEY = "#baseline"
 
+/** Lo que hay dentro de una serie. */
+private class ProgramScan(
+    val programId: String,
+    /** Sus vídeos de 40 minutos o más. */
+    val films: List<CatalogItem>,
+    /** No tiene ningún capítulo normal. */
+    val onlyFilms: Boolean,
+)
+
 /** Lo que trae una vuelta de descargas. */
 private class Download(
     /** Con la lista fija incluida. */
@@ -181,7 +193,8 @@ private class Download(
  * - el listado A-Z de la cadena Clan aporta sus series;
  * - las portadas de Clan (principal, tres edades y películas) aportan las películas y
  *   las series que el listado no traiga;
- * - los favoritos y los títulos nuevos (carrusel) viven en la misma copia.
+ * - los favoritos y los títulos nuevos (carrusel) viven en la misma copia;
+ * - las películas que haya dentro de una serie salen sueltas en Películas ([scanForFilms]).
  */
 class ClanCatalogViewModel(
     private val repository: CatalogRepository,
@@ -195,6 +208,7 @@ class ClanCatalogViewModel(
     private val mutableUiState = MutableStateFlow(ClanCatalogUiState())
     val uiState: StateFlow<ClanCatalogUiState> = mutableUiState.asStateFlow()
     private var job: Job? = null
+    private var scanJob: Job? = null
     private var stored = StoredCatalog(emptyList(), emptyList())
     private var started = false
     /** Los primeros títulos de cada lista, fijos tras abrir con copia guardada (las novedades entran al siguiente arranque). */
@@ -360,6 +374,7 @@ class ClanCatalogViewModel(
 
     private fun load() {
         job?.cancel()
+        scanJob?.cancel()
         job = viewModelScope.launch {
             mutableUiState.update { it.copy(isLoading = it.catalog.isEmpty, error = null) }
             if (!started) {
@@ -386,6 +401,7 @@ class ClanCatalogViewModel(
                 val result = download()
                 merge(result)
                 mutableUiState.update { it.copy(isLoading = false, ready = true) }
+                scanJob = viewModelScope.launch { scanForFilms() }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -416,7 +432,7 @@ class ClanCatalogViewModel(
             }
             return merged.values.filter { it.id !in removed }.alphabetical()
         }
-        val series = mergeList(before.series, result.all.series, result.all.movies)
+        val series = mergeList(before.series, result.all.series, result.all.movies).filter { it.id !in before.filmOnly }
         val movies = mergeList(before.movies, result.all.movies, result.all.series)
         val firstSeen = before.firstSeen.toMutableMap()
         if (result.complete) {
@@ -449,10 +465,109 @@ class ClanCatalogViewModel(
             before.unpinned,
             firstSeen,
             removedItems = before.removedItems.filter { it.id in removed },
+            scanned = before.scanned,
+            filmOnly = before.filmOnly,
         )
         if (stored != before) persist()
         publish()
     }
+
+    /**
+     * Mira dentro de cada serie: lo que dura 40 minutos o más es una película y pasa, suelta,
+     * a Películas. Si la serie no tiene nada más, deja de salir entre las series. Cada serie
+     * se revisa de nuevo cada pocos días, por si le llega una película.
+     */
+    private suspend fun scanForFilms() {
+        val now = clock()
+        val due = (stored.series.filter { it.kind == ContentKind.PROGRAM }.map { it.id } + stored.filmOnly)
+            .distinct()
+            .filter { id -> stored.scanned[id]?.let { now - it !in 0 until RESCAN_MS } ?: true }
+            .sortedBy { stored.scanned[it] ?: 0L }
+        val permits = Semaphore(MAX_PARALLEL_SCANS)
+        for (batch in due.chunked(SCAN_BATCH)) {
+            val results = coroutineScope { batch.map { id -> async { permits.withPermit { scanProgram(id) } } }.awaitAll() }.filterNotNull()
+            if (results.isNotEmpty()) applyScan(results, now)
+        }
+    }
+
+    /** `null` si RTVE no responde: se reintenta en el próximo arranque. */
+    private suspend fun scanProgram(programId: String): ProgramScan? = try {
+        val films = mutableListOf<CatalogItem>()
+        var episodes = false
+        var page = 1
+        var more: Boolean
+        do {
+            val result = repository.scanProgramVideos(programId, page)
+            for (video in result.items) {
+                if (video.kind != ContentKind.VIDEO || video.mediaForm == MediaForm.EXTRA) continue
+                val ms = video.durationMs
+                when {
+                    ms == null -> episodes = true
+                    ms >= MOVIE_MIN_MS -> films += video
+                    ms >= EPISODE_MIN_MS -> episodes = true
+                }
+            }
+            more = result.hasMore && result.items.isNotEmpty()
+            page++
+        } while (more && page <= MAX_SCAN_PAGES)
+        // Si quedan páginas sin mirar no se puede afirmar que solo tenga películas.
+        ProgramScan(programId, films.distinctBy { it.id }, onlyFilms = films.isNotEmpty() && !episodes && !more)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        null
+    }
+
+    private fun applyScan(results: List<ProgramScan>, now: Long) {
+        val before = stored
+        var series = before.series
+        var movies = before.movies
+        var filmOnly = before.filmOnly
+        val pinned = before.pinned.toMutableSet()
+        val fresh = before.pinnedFresh.toMutableMap()
+        val scanned = before.scanned.toMutableMap()
+        for (scan in results) {
+            scanned[scan.programId] = now
+            val program = series.firstOrNull { it.id == scan.programId } ?: known[scan.programId]
+            val have = movies.mapTo(HashSet()) { it.id }
+            val added = scan.films.filter { it.id !in before.removed && it.id !in have }.map { it.asFilmOf(program?.title) }
+            added.forEach { known[it.id] = it }
+            movies = movies + added
+            if (scan.onlyFilms) {
+                // Si la serie estaba anclada, lo anclado pasan a ser sus películas.
+                if (pinned.remove(scan.programId)) {
+                    val at = fresh.remove(scan.programId)
+                    for (film in scan.films) {
+                        if (film.id in before.removed || film.id in before.unpinned) continue
+                        pinned += film.id
+                        if (at != null) fresh[film.id] = at
+                    }
+                }
+                series = series.filter { it.id != scan.programId }
+                filmOnly = filmOnly + scan.programId
+            } else if (scan.programId in filmOnly) {
+                // Le han llegado capítulos: vuelve a ser una serie.
+                filmOnly = filmOnly - scan.programId
+                if (program != null && program.id !in before.removed) series = series + program
+            }
+        }
+        stored = before.copy(
+            series = if (series == before.series) series else series.alphabetical(),
+            movies = if (movies == before.movies) movies else movies.alphabetical(),
+            pinned = pinned,
+            pinnedFresh = fresh,
+            scanned = scanned,
+            filmOnly = filmOnly,
+        )
+        persist()
+        if (stored.series != before.series || stored.movies != before.movies || stored.pinned != before.pinned) publish()
+    }
+
+    /** Una película sacada de una serie lleva delante el nombre de la serie, si no lo dice ya. */
+    private fun CatalogItem.asFilmOf(series: String?): CatalogItem = copy(
+        subtitle = null,
+        title = if (series.isNullOrBlank() || title.contains(series, ignoreCase = true)) title else "$series: $title",
+    )
 
     /** Lanza el primer fallo solo si ninguna fuente ha dado títulos. */
     private suspend fun download(): Download = coroutineScope {
@@ -494,6 +609,13 @@ class ClanCatalogViewModel(
                     all.toList()
                 }.orEmpty()
             }
+        }
+        val kidsCollection = async {
+            quiet {
+                repository.loadModule(
+                    HomeRow(id = -2, title = SEED_ROW_TITLE, order = 0, moduleType = null, presentation = null, contentUrl = RtveUrls.KIDS_MOVIES_COLLECTION),
+                ).value.items
+            }.orEmpty()
         }
         val listing = async { orNull { repository.loadChannelPrograms(RtveUrls.CLAN_CHANNEL_ID).value } }
         // La portada de Clan, sus tres franjas de edad y la de películas, a la vez.
@@ -538,7 +660,7 @@ class ClanCatalogViewModel(
             }
         val highlighted = buildClanCatalog(highlightRows, sorted = false).let { it.series + it.movies }
         val seedRows = listOf(LoadedRow(SEED_ROW_TITLE, seed), LoadedRow(SEED_ROW_TITLE, movieSeed, true))
-        val networkRows = listOf(LoadedRow(SEED_ROW_TITLE, topMovies.await(), true)) +
+        val networkRows = listOf(LoadedRow(SEED_ROW_TITLE, topMovies.await(), true), LoadedRow(SEED_ROW_TITLE, kidsCollection.await(), true)) +
             containerMovies.map { LoadedRow(SEED_ROW_TITLE, it.await(), true) } + linked + loaded +
             // El listado va al final: la imagen y el nombre de una portada mandan sobre los suyos.
             LoadedRow(AZ_ROW_TITLE, listing.await().orEmpty())
@@ -552,6 +674,11 @@ class ClanCatalogViewModel(
     private companion object {
         const val MAX_PARALLEL_ROWS = 6
         const val MAX_MOVIE_PAGES = 8
+        const val MAX_PARALLEL_SCANS = 4
+        const val SCAN_BATCH = 16
+        /** Páginas de 60 vídeos: hasta 720 por serie. */
+        const val MAX_SCAN_PAGES = 12
+        const val RESCAN_MS = 3L * 24 * 60 * 60 * 1_000
         /** Nombre interno de la "fila" del listado A-Z; no es de películas. */
         const val AZ_ROW_TITLE = "A-Z"
         const val SEED_ROW_TITLE = "Infantil"

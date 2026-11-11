@@ -26,12 +26,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import coil3.imageLoader
-import coil3.request.ImageRequest
 import es.openrtve.AppContainer
-import es.openrtve.domain.RowLayout
-import es.openrtve.domain.imageFor
-import es.openrtve.ui.CATALOG_HEAD_SIZE
 import es.openrtve.domain.ContentKind
 import es.openrtve.ui.ClanCatalogViewModel
 import es.openrtve.ui.ClanSection
@@ -43,10 +38,7 @@ import es.openrtve.ui.ProvideClock
 import es.openrtve.ui.Tab
 import es.openrtve.ui.rememberCatalogActions
 import es.openrtve.ui.text
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Raíz de la app: una barra superior fija (Series, Películas y Ajustes)
@@ -70,6 +62,10 @@ fun TvApp(container: AppContainer) {
     val seriesGrid = rememberLazyGridState()
     val moviesGrid = rememberLazyGridState()
     var lastOpened by rememberSaveable { mutableStateOf<String?>(null) }
+    // Lo que ya sale suelto en Películas (o se ha eliminado) no se repite dentro de su serie.
+    val outsideSeries = remember(catalog.catalog.movies, catalog.removed) {
+        catalog.catalog.movies.mapTo(HashSet()) { it.id } + catalog.removed.map { it.id }
+    }
 
     // El reproductor puede eliminar un título; al volver se refleja.
     val lifecycle = (context as? androidx.activity.ComponentActivity)?.lifecycle
@@ -122,6 +118,7 @@ fun TvApp(container: AppContainer) {
                             history = container.watchHistory,
                             program = current.item,
                             onPlay = actions.playItem,
+                            hiddenIds = outsideSeries,
                         )
                         GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage, removed = catalog.removed, onRestore = catalogViewModel::restore, onBackupRestored = catalogViewModel::reloadFromStore)
                         // Dos raíces: el buscador y los títulos de Clan. Una serie abre su página; un vídeo se reproduce.
@@ -172,22 +169,10 @@ fun TvApp(container: AppContainer) {
             }
         }
     }
-    // Pantalla de inicio hasta que hay catálogo definitivo y sus tres primeras filas ya tienen la imagen:
-    // así no se ve cómo cambia nada al arrancar.
-    var headDrawn by remember { mutableStateOf(false) }
-    LaunchedEffect(catalog.ready) {
-        if (!catalog.ready || headDrawn) return@LaunchedEffect
-        val head = catalog.catalog.series.take(CATALOG_HEAD_SIZE)
-        withTimeoutOrNull(HEAD_IMAGES_TIMEOUT_MS) {
-            head.mapNotNull { it.imageFor(RowLayout.LANDSCAPE) }.map { url ->
-                async { context.imageLoader.execute(ImageRequest.Builder(context).data(url).build()) }
-            }.awaitAll()
-        }
-        headDrawn = true
-    }
+    // Pantalla de inicio solo hasta que hay catálogo: con copia guardada, nada más leerla.
     androidx.compose.animation.AnimatedVisibility(
-        visible = !(catalog.ready && headDrawn),
-        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(350)),
+        visible = !catalog.ready,
+        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(SPLASH_FADE_MS)),
     ) {
         androidx.compose.foundation.Image(
             painter = androidx.compose.ui.res.painterResource(es.openrtve.R.drawable.splash),
@@ -200,4 +185,4 @@ fun TvApp(container: AppContainer) {
 }
 
 private const val MESSAGE_VISIBLE_MS = 4_000L
-private const val HEAD_IMAGES_TIMEOUT_MS = 1_500L
+private const val SPLASH_FADE_MS = 150
