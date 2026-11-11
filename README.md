@@ -27,13 +27,23 @@ son marcas de la Corporación de Radio y Televisión Española.
 - **Recorrido de corrido.** En las cuadrículas, la derecha en la última columna
   pasa a la fila siguiente y la izquierda en la primera, a la anterior.
 - **Audio en español** por defecto cuando el vídeo lo trae.
-- **Solo infantil.** No hay Explorar, los "Similares" del recomendador general
-  están cerrados y la app no abre enlaces externos de `rtve.es`
-  (`ClanCatalogRepository`).
+- **Solo infantil.** No hay Explorar, ni "Similares" del recomendador general,
+  ni enlaces externos de `rtve.es`.
+- **Anclados.** Mantener pulsado un título abre su menú: *Anclar* lo sube arriba
+  con una estrella roja; *Eliminar* (con PIN) lo quita de la lista. Las novedades
+  de RTVE se anclan solas. Los eliminados se recuperan desde Ajustes.
+- **Buscador con alta.** Mantener pulsado un resultado que no está en la lista
+  ofrece *Añadir a la lista* o *Anclar* (que también lo añade).
+- **Copia de seguridad.** Ajustes → Guardar/Restaurar copia: anclados, eliminados
+  y lo visto en un fichero, para cambiar de tele o reinstalar.
+- **Arranque inmediato** con el catálogo guardado y pantalla de inicio hasta que
+  las tres primeras filas están dibujadas.
+- **Películas ≥ 40 min** van a Películas; **mejor calidad** disponible al empezar.
 - **Solo Android TV**, con identidad propia (`es.clanpeques`): se instala junto
   a OpenRTVE.
 
-El reproductor, la caché y el historial de lo visto son los de OpenRTVE.
+El reproductor es el de OpenRTVE, con saltos de un minuto, tiempo grande al
+saltar, siguiente episodio y reanudación automáticos.
 
 ## De dónde sale el catálogo
 
@@ -51,9 +61,9 @@ Lo infantil del archivo de RTVE que no sale en ninguna de esas portadas (por
 ejemplo, "La corona mágica") solo se encuentra con el buscador: falta saber qué
 campo de la API lo marca como infantil para poder listarlo.
 
-`buildClanCatalog` lo funde todo en dos listas de títulos únicos. La última copia
-se guarda (`ClanCatalogStore`) y es lo que se pinta al abrir la app; la versión
-nueva se descarga después y la sustituye solo si ha cambiado.
+`buildClanCatalog` lo funde todo en dos listas de títulos únicos que **solo
+crecen**. La última copia se guarda (`ClanCatalogStore`) y es lo que se pinta al
+abrir la app; la descarga nueva se suma por detrás.
 
 ## Instalar
 
@@ -75,10 +85,11 @@ anterior. No vale para publicar en una tienda.
 
 Sin SDK en el host, con Docker: `docker build --output type=local,dest=build/docker .`
 
-## Documentación heredada
+## Documentación
 
-Los documentos de `docs/` son los de OpenRTVE y describen la API de RTVE y la
-arquitectura original, incluida la interfaz de móvil que aquí no existe.
+[`docs/architecture.md`](docs/architecture.md) resume cómo está montada la app.
+Los demás documentos de `docs/` describen la API de RTVE y su reproducción
+(heredados de OpenRTVE).
 
 ## Licencia
 

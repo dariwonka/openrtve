@@ -1,272 +1,46 @@
-# Arquitectura inicial
+# Arquitectura
 
-## Principios
-
-OpenRTVE empieza como una aplicación de un solo módulo. La separación es por
-paquetes y por dirección de dependencias, no por una colección de módulos
-Gradle vacíos:
+Un solo módulo Android (Kotlin, Jetpack Compose para TV, Media3). Estado inmutable
+con `StateFlow`, un ViewModel por pantalla y una inyección manual (`AppContainer`).
 
 ```text
-UI móvil ─┐  NavigationViewModel (una pila por pestaña + destino global)
-          ├──> PortadaViewModel ──┐
-UI TV ────┘    ModuleViewModel   ├─> CatalogRepository ─> HTTPS + caché
-               ProgramViewModel  │
-               SearchViewModel   │
-               ExploreViewModel ─┘
+TvActivity ─> TvApp ─┬─ TvCatalogScreen   (Series / Películas)  ─ ClanCatalogViewModel
+                     ├─ TvSearchScreen    (buscador)            ─ SearchViewModel
+                     ├─ TvProgramScreen   (página de una serie) ─ ProgramViewModel
+                     └─ TvSettingsScreen  (ajustes, copia, eliminados)
 
-UI ─> PlaybackResolver ─> PlayerActivity ─> MediaController
-                                      └───> MediaSessionService + ExoPlayer
+TvApp ─> CatalogActions ─> PlayerActivity ─> MediaController ─> PlaybackService (ExoPlayer)
 ```
 
-- Estado inmutable mediante `StateFlow`; un ViewModel por pantalla. El
-  pegamento de cada pantalla (crear el ViewModel, observar su estado, cruzarlo
-  con el historial, entregar los errores una vez) está en `ui/ScreenStates.kt`
-  y lo comparten móvil y TV; las pantallas solo pintan. Las acciones comunes
-  (abrir fichas, reproducir o explicar por qué no, mensajes) están en
-  `CatalogActions`.
-- Navegación propia y pequeña, siguiendo los principios de Navigation de
-  Android: Inicio es el destino inicial fijo y cada una de las tres pestañas
-  conserva su pila. Ajustes es un destino global y nunca se guarda dentro de
-  una pestaña; elegir una pestaña lo cierra y recupera la posición anterior.
-  Los enlaces externos construyen una pila sintética `Inicio -> ficha`. Cada
-  entrada (clave `pestaña/posición` o `global/ajustes`) tiene su
-  propio `ViewModelStore`, que se libera al salir de ella, y `DestinationHost`
-  la envuelve en un `SaveableStateHolder`: al volver atrás se recuperan scroll y
-  foco, y los ViewModels de las fichas no se acumulan durante la sesión. Las
-  rutas mínimas (pestaña, pilas y destino global) también se escriben en un
-  `SavedStateHandle`, por lo que Android puede reconstruirlas tras matar el
-  proceso; los datos completos se vuelven a cargar desde el repositorio.
-- La presentación de cada fila (`RowLayout`) se deduce del `tipo` editorial
-  en el parser; la UI solo decide tamaños.
-- La portada carga cada fila por separado (máximo seis en paralelo) para
-  que una sección lenta o rota no bloquee las demás; las vacías se ocultan.
-  El patrón de secciones + carrusel + tarjeta con imagen procede de Findroid.
-- Toda captura de excepciones en corrutinas relanza `CancellationException`:
-  un `runCatching` alrededor de una suspensión convertiría una cancelación en
-  un error visible. Las llamadas bloqueantes de OkHttp van bajo
-  `runInterruptible(Dispatchers.IO)` y `SafeHttpsClient` cancela la llamada si
-  interrumpen el hilo: un refresh o salir de la pantalla corta la descarga en
-  vez de dejarla ocupando un permiso del semáforo hasta el timeout. El parseo
-  de JSON y VTT corre en `Dispatchers.Default`, nunca en Main: una búsqueda
-  grande no retrasa frames ni toques.
-- Un repositorio como única entrada al catálogo.
-- JSON dinámico convertido inmediatamente a modelos pequeños del dominio.
-- Inyección manual en `Application`; no hay un grafo que justifique Hilt.
-- Corrutinas para trabajo bloqueante y acceso de UI consciente del ciclo de
-  vida.
-- La caché es una mejora de disponibilidad, nunca la fuente de URLs temporales,
-  tokens o licencias.
+## Datos
 
-## Móvil y TV
+- `CatalogRepository` (`DefaultCatalogRepository`) habla con la API de RTVE por
+  HTTPS (`SafeHttpsClient`, con lista de hosts permitidos) y guarda las respuestas
+  en `RawDocumentCache`. Siempre usa el perfil infantil en las búsquedas.
+- `ClanCatalogViewModel` construye las dos listas (series y películas) fundiendo
+  varias fuentes (`buildClanCatalog`) y las **acumula**: nada que se haya visto
+  alguna vez desaparece. Lo guardado vive en `ClanCatalogStore`
+  (`clan-catalog.json`): listas, anclados, desanclados a mano, eliminados y la
+  primera vez que se vio cada título.
+- `WatchHistory` (`watch-history.json`) guarda la posición y los vistos.
+- `CatalogBackup` empaqueta ambos ficheros en un solo JSON para cambiar de tele.
 
-Datos, estado y política son comunes. Las superficies no lo son:
+## Reglas del catálogo
 
-- móvil usa Material 3, ventana edge-to-edge y `NavigationSuiteScaffold`: la
-  navegación cambia entre barra inferior y rail según el tamaño y la postura
-  de ventana que calcula Material, incluidos multiventana y plegables;
-- TV sigue las guías de Compose for TV (patrón de la muestra JetStream):
-  `NavigationDrawer` en el borde izquierdo, `Carousel` destacado en la portada,
-  filas con `focusRestorer`, tarjetas que escalan al enfocar, márgenes de
-  overscan de 48/27 dp y nada que dependa del táctil; atrás lo maneja el
-  mando;
-- el player se aloja en un único `MediaSessionService`, controlado por una
-  actividad efímera en ambos dispositivos. La actividad distingue una orden
-  nueva de una reconexión:
-  continuar o reiniciar se aplican incluso al mismo `mediaId`; recrear la
-  actividad conserva pausa y posición. La identidad para historial y siguiente
-  episodio viaja en los metadatos de la sesión, también al volver desde la
-  notificación sin extras. PiP y pantalla
-  inmersiva se activan solo para vídeo.
-
-La actividad móvil no bloquea la orientación. El reproductor pide
-`sensorLandscape` (en tablets y plegables Android lo ignora) y el launcher
-exclusivo de Android TV declara `landscape`, como exige la checklist de TV.
-
-### Fichas: estructura del programa y secciones
-
-`MediaClassification` es la única definición de los tipos de RTVE: la forma
-de un medio (completo o extra), su tema (película, documental) y la
-estructura del programa (`ProgramStructure`: una serie con capítulos o un
-contenedor de películas, documentales o vídeos). Nada se deduce del título y
-ninguna pantalla repite los ids.
-
-`ContentSections` reparte las dos listas paginadas de la API (completos y
-extras) en secciones: la principal de la estructura (Capítulos, Películas,
-Documentales, Vídeos), Extras y, aparte, Similares. Cada sección sabe de qué
-fuentes sale para pedir más o reintentar, y `opensDetails` decide si una pieza
-abre su ficha (contenedores, películas) o se reproduce (capítulos, extras).
-
-El fallo de los metadatos del programa se conserva aparte del de sus listas:
-se pueden recorrer los vídeos disponibles y reintentar la ficha sin perderlos.
-La ficha de vídeo lleva debajo solo lo que no está en la cabecera: un capítulo,
-los de su temporada (y los extras del programa); una película o un documental,
-Similares si RTVE los tiene. El programa o la colección (un ciclo de cine) se
-abre siempre desde la cabecera, así que una pieza de una colección no repite
-debajo el resto de la colección. El enlace de un capítulo es el nombre de su
-serie; el de una pieza dice que lleva a más títulos, "Más en Cine de siempre",
-porque el nombre de un ciclo no lo cuenta solo (en TV, el mismo texto en el botón).
-
-Cada lista paginada es un `PagedItemsState` y la carga `PagedItemsLoader`
-(primera página o siguiente, sin duplicados, con el fallo en la propia lista),
-el mismo en la ficha de programa y en la de vídeo. Los errores de las fichas se
-explican en su sección con su reintento, nunca como un aviso pasajero: un aviso
-que se descarta dejaría la sección diciendo que está vacía. Los textos que
-comparten móvil y TV (título de sección, botón grande, etiqueta de cada pieza)
-salen de `UiText`.
-
-- Móvil (Material 3): pestañas solo para colecciones; con una, su título. La
-  ficha técnica no es una pestaña: va con la sinopsis y se despliega con ella.
-- TV (página de detalles de Google TV): cabecera grande y una fila por
-  sección; las temporadas son `FilterChip`, que se eligen al pulsar; la ficha
-  técnica cierra la página. Un contenedor no tiene botón de reproducir y el
-  foco empieza en su catálogo.
-
-### Foco y desplazamiento en TV
-
-- `ProvideTvVerticalScroll` lleva la fila enfocada arriba con su título (la
-  anterior sale de la pantalla); las filas horizontales conservan el pivote
-  estándar de TV con `TvLazyRow`.
-- El foco inicial es estado de la pantalla (`ProvideScreenInitialFocus`): un
-  elemento de una lista perezosa que vuelve a componerse no puede robar el
-  foco al usuario. Cada destino y cada diálogo tienen el suyo.
-- Las tarjetas dejan `TvCardCaptionGap` entre la imagen y el título: al
-  enfocarlas crecen un 8 % con borde y brillo.
-
-## Arranque
-
-La portada raíz se pinta primero desde la copia local (`cachedOnly`), sin
-esperar a la red, y después se revalida: las filas que ya estaban conservan su
-contenido y solo cambian si la respuesta difiere. Sin red, esa copia se marca
-como antigua en vez de mostrar un error. El Baseline Profile del módulo
-`baselineprofile` recorre portada, Explorar, una categoría, Buscar, una ficha y
-el reproductor; el plugin lo incrusta en el release como `assets/dexopt/baseline.prof`.
-`StartupBenchmark` (mismo módulo) mide arranque en frío y scroll de la portada
-con ese perfil; sus tiempos solo son representativos en hardware físico.
-`PerformanceTest` (androidTest) comprueba que Main sigue libre durante el
-parseo, registra tiempos de frame de una portada sintética y mide cuánto tarda
-el reproductor en recibir el item (ejecutarlo solo, para que la sesión arranque
-en frío). La portada avisa con `ReportDrawnWhen` cuando su primera fila tiene
-contenido: es el "Fully drawn" del arranque.
-
-## Directos, "Seguir viendo" y refresco
-
-El feed de directos trae programa en emisión (`titulo`), categoría
-(`antetitulo`), `live`, `inicio`, `duracion`, `porcentaje` y `logo` del canal;
-el parser lo convierte en `LiveInfo` y la UI calcula el progreso con el reloj
-(un `LocalNowMillis` compartido que avanza cada 30 s), así la barra se mueve sin
-red. Un directo programado (`live=false` con `inicio` futuro) se muestra con su
-horario y el resolver lo bloquea hasta la hora.
-
-"Seguir viendo" es local (`WatchHistory`, un JSON en `filesDir` escrito con
-`AtomicFile` fuera del hilo principal por un único escritor con un aviso
-pendiente como máximo, así que una ráfaga de cambios no encola escrituras
-repetidas): el reproductor guarda la posición cada
-10 s y al salir; por debajo de 30 s no
-cuenta y al 95 % el episodio pasa a "visto" (sale de la fila, pero la ficha del
-programa lo usa para proponer el siguiente: `suggestPlay`, con Reproducir /
-Continuar / Siguiente). La portada raíz pinta la fila tras el hero.
-
-Refresco como la app oficial (`refresh: 120` en su configuración): la portada se
-recarga al volver a primer plano si tiene más de dos minutos y, mientras está
-visible, las filas de directos se recargan cada minuto (con ETag, un 304 si no
-hay cambios).
-
-En Explorar, los canales temáticos (`portadaCanalTematico`) son directos 24 h: se
-pinta lo que emite cada uno con la misma tarjeta que en la portada, se renueva
-cada minuto en pantalla y al tocarlo se reproduce. Los canales del menú
-(el submenú cuyas entradas traen `logo`) salen solo en su grupo: RTVE los repite
-en el bloque principal y en "Otras temáticas", a veces con otra URL. Al abrir
-una categoría, su cabecera toma del feed la grafía del nombre ("LA REVUELTA" del
-menú pasa a "La Revuelta"); las barras de las pantallas secundarias se funden con
-el fondo y se tiñen al desplazar, como la de las fichas.
-
-## Enlaces
-
-`parseDeepLink` es una función pura sobre la URL (formatos del manifiesto de
-RTVE Play y URLs web; `content?uri=` se decodifica una sola vez) y
-`DeepLinkResolver` la convierte en un item con la red necesaria: `videos/{id}`,
-`programas/{id}`, `lives/{idAsset}`; un permalink de programa se
-casa contra el `htmlUrl` de los resultados del buscador y uno de directo contra
-el feed de "Ahora en emisión". `MainActivity` (`singleTask`) recibe `VIEW` y
-`SEND`; el segundo es el que no depende de la verificación de dominio. Los
-enlaces llegan a la UI por un `LinkInbox` (canal conflated, se consumen una
-vez); en TV, `MainActivity` reenvía el intent a `TvActivity` y esta lo trata igual.
+- Todo vídeo de 40 minutos o más es una película; un vídeo de menos de 4 no se
+  enseña.
+- **Anclados:** los pone el usuario o RTVE (sus novedades); solo el usuario los quita.
+  Van arriba, por orden alfabético, salvo las novedades de RTVE recién llegadas,
+  que van las primeras. Lo desanclado a mano no lo vuelve a anclar RTVE.
+- **Eliminar** pide el PIN (una vez por sesión) y se puede deshacer desde Ajustes.
+  Un título eliminado solo reaparece si RTVE lo retira y más tarde lo repone.
+- Al abrir con copia guardada se pinta al instante, y las tres primeras filas
+  (`CATALOG_HEAD_SIZE`) no cambian durante esa sesión; las novedades entran en el
+  siguiente arranque o al anclar/añadir algo.
 
 ## Reproductor
 
-`PlayerView` de Media3 con un layout de controles propio
-(`res/layout/player_controls.xml`) que replica la estructura del reproductor
-de Findroid: acciones arriba, transporte en el centro, tiempos y barra abajo.
-Los botones con id `exo_audio_track`, `exo_subtitle` y `exo_playback_speed`
-los enlaza `PlayerControlView`, que abre sus propios selectores; los nuestros
-(`player_back`, `player_pip`, `player_lock`, `player_aspect`) los maneja la
-actividad. `PlayerGestures` añade toque, doble toque y deslizamientos. Findroid
-es GPLv3: se toma el diseño, no el código.
-
-Como en RTVE Play, un solo engranaje abre el panel de ajustes (`PlayerSettingsPanel`):
-calidad (alturas reales de las pistas del stream; series y cine traen
-1080/720/576/360), velocidad, audio (`qaa` = versión original, `ads` =
-audiodescripción) y subtítulos, todo aplicado con `TrackSelectionParameters`.
-Las miniaturas al arrastrar salen del sprite + VTT de `videopreviews.rtve.es`,
-y el siguiente episodio de `videos/{id}/next.json`, con aviso en los últimos
-20 s y encadenado automático si el ajuste está activo.
-
-Ciclo de vida, según la guía de Android para reproductores de vídeo: al salir
-de la pantalla (`onStop`) el vídeo se pausa salvo en PiP, y al cerrarla (atrás
-o cerrar la ventana PiP) se detiene y vacía la sesión. Las cargas de arranque
-pendientes se cancelan al salir sin PiP y solo pueden aplicar su resultado mientras la actividad está
-visible. Una entrada marcada como vista no se utiliza como posición para
-continuar. En el móvil el
-reproductor se abre apaisado (en tablets y plegables Android ignora la
-orientación pedida). La pantalla solo se mantiene encendida mientras se
-reproduce.
-
-## Red y datos
-
-Los streams y las licencias Widevine usan el mismo OkHttp (pool HTTP/2 y
-User-Agent) sin la allowlist: `ztnr` redirige a un CDN y la licencia la sirve
-Axinom, fuera de rtve.es; el texto plano lo prohíbe `network_security_config`.
-El token de licencia se pide al recibir la orden de reproducir, en paralelo a la
-conexión con `PlaybackService`; se usa una vez y se descarta al salir.
-Todas las imágenes de `img.rtve.es` se piden al tamaño en que se pintan
-(`RtveImageSizing`): `/p` y `/v` con `w`/`h`, y los originales de `/imagenes` y
-`/css` (cabeceras, Explorar) a través del redimensionador `img.rtve.es/i/`; si
-este fallase, se pide el original. La caché de imágenes se ajusta a la cuota de
-caché que Android da a la app (`getCacheQuotaBytes`, por debajo de la cual sus
-ficheros son los últimos en borrarse y que crece con el uso y el almacenamiento),
-menos la de documentos, entre 32 y 250 MB. Los hosts de RTVE sirven HTTP/2, así
-que el cliente admite 32 peticiones simultáneas por host en vez de 5 (el servidor
-acepta 100 por conexión).
-La caché de documentos mantiene una contabilidad de tamaño y se poda por
-antigüedad cada vez que supera 32 MB. Sus operaciones se serializan para que el
-cuerpo y el ETag no se mezclen entre escrituras. Un fallo al persistir la caché
-no impide mostrar una respuesta válida de la red.
-
-`RtveHostPolicy` (dominio) es la única allowlist: solo HTTPS, puerto estándar,
-sin credenciales embebidas y host `rtve.es` o subdominio real. La aplican el
-cliente HTTPS en cada salto de redirección, el parser sobre `urlContent` y las
-URLs de imagen (elevando `http://` a HTTPS), y el resolver sobre `filePath`.
-`SafeHttpsClient` corre sobre un único `OkHttpClient` compartido con Coil (una
-conexión HTTP/2 multiplexada para catálogo e imágenes, gzip, pool), aplica la
-allowlist en un interceptor de red (cada salto, redirecciones incluidas),
-limita el tamaño de respuesta y usa los certificados del sistema. El pipeline de Media3 sigue los 302 de `ztnr` por su
-cuenta; la Network Security Config impide cualquier salto en claro.
-
-Los manifests de portada se cachean dos minutos y los módulos cinco. Con copia
-local, la petición lleva `If-None-Match`: RTVE responde 304 si no ha cambiado y
-la copia vuelve a contar como fresca sin descargar nada. Si falla la red se
-admite una copia de hasta 24 horas y la UI la marca como stale. El
-parser conserva strings desconocidos, acepta IDs numéricos o textuales y
-aplana el nivel adicional de las colecciones.
-
-## Cuándo extraer módulos
-
-Solo extraeremos un módulo Gradle cuando exista al menos una de estas razones:
-
-1. frontera de seguridad o API que deba ser imposible atravesar;
-2. tiempo de compilación que mejore de forma medible;
-3. reutilización real por otro artefacto;
-4. equipo o ciclo de entrega independiente.
-
-Los candidatos naturales, cuando se implementen, son reproducción/descargas,
-cuenta y un posible cliente compartido. No se crean por anticipado.
+`PlayerActivity` + `PlayerView` con `res/layout/player_controls.xml`. Las teclas
+del mando se tratan en `dispatchKeyEvent` (saltos de 1 min con aceleración, centro
+= pausa). Al arrancar fuerza la mejor calidad disponible; el selector del panel
+manda después. El siguiente episodio y la posición de reanudación son automáticos.
