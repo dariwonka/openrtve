@@ -1,7 +1,6 @@
 package es.openrtve.data
 
 import es.openrtve.domain.CatalogItem
-import es.openrtve.domain.RtveUrls
 import es.openrtve.domain.SearchResults
 import es.openrtve.testing.FakeCatalogRepository
 import es.openrtve.testing.MainDispatcherRule
@@ -103,7 +102,7 @@ class DataRecoveryTest {
             override fun fetch(url: String, etag: String?) = TextResponse("""{"title":"Valid response","rows":[]}""", null)
         }
         val repo = DefaultCatalogRepository(client, RtveJsonParser(), RawDocumentCache(blocker))
-        assertEquals("Valid response", repo.loadPortada(RtveUrls.TV_HOME).value.title)
+        assertEquals("Valid response", repo.loadPortada("https://www.rtve.es/play/index_apps.json").value.title)
     }
 
     @Test fun aChangedQueryInvalidatesOldResultsBeforeTheDebounceFinishes() = runTest(main.dispatcher) {

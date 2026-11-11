@@ -331,14 +331,6 @@ class PlayerActivity : ComponentActivity() {
         view.showController()
     }
 
-    private fun formatClock(ms: Long): String {
-        val total = ms / 1000
-        val h = total / 3600
-        val m = (total % 3600) / 60
-        val sec = total % 60
-        return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
-    }
-
     /** Si el vídeo ya no está en RTVE y es un título del catálogo, ofrece borrarlo ahí mismo. */
     private fun offerRemoval(error: Int?) {
         val unavailable = error == R.string.player_error_not_found || error == R.string.player_error_nothing || error == R.string.player_error_generic
@@ -372,8 +364,6 @@ class PlayerActivity : ComponentActivity() {
         if (view != null && !locked && view.useController && view.dispatchKeyEvent(event)) return true
         return super.onKeyDown(keyCode, event)
     }
-
-
 
     private fun enterPictureInPictureNow() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && canEnterPictureInPicture()) {

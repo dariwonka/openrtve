@@ -1,6 +1,5 @@
 package es.openrtve.data
 
-import es.openrtve.domain.RtveUrls
 import java.io.IOException
 import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
@@ -23,11 +22,11 @@ class CatalogRepositoryTest {
     @Test
     fun `fresh cache is served without touching the network`() = runBlocking {
         client.response = { home("Primera") }
-        repository.loadPortada(RtveUrls.TV_HOME)
+        repository.loadPortada("https://www.rtve.es/play/index_apps.json")
 
         client.response = { home("Segunda") }
         now += 60_000
-        val result = repository.loadPortada(RtveUrls.TV_HOME)
+        val result = repository.loadPortada("https://www.rtve.es/play/index_apps.json")
 
         assertEquals("Primera", result.value.title)
         assertEquals(1, client.calls)
@@ -37,25 +36,25 @@ class CatalogRepositoryTest {
     @Test
     fun `expired cache goes to the network and force refresh ignores freshness`() = runBlocking {
         client.response = { home("Primera") }
-        repository.loadPortada(RtveUrls.TV_HOME)
+        repository.loadPortada("https://www.rtve.es/play/index_apps.json")
 
         client.response = { home("Segunda") }
         now += 3 * 60_000
-        assertEquals("Segunda", repository.loadPortada(RtveUrls.TV_HOME).value.title)
+        assertEquals("Segunda", repository.loadPortada("https://www.rtve.es/play/index_apps.json").value.title)
 
         client.response = { home("Tercera") }
-        assertEquals("Tercera", repository.loadPortada(RtveUrls.TV_HOME, forceRefresh = true).value.title)
+        assertEquals("Tercera", repository.loadPortada("https://www.rtve.es/play/index_apps.json", forceRefresh = true).value.title)
         assertEquals(3, client.calls)
     }
 
     @Test
     fun `network failure falls back to a stale copy and is reported as such`() = runBlocking {
         client.response = { home("Primera") }
-        repository.loadPortada(RtveUrls.TV_HOME)
+        repository.loadPortada("https://www.rtve.es/play/index_apps.json")
 
         client.response = { throw IOException("offline") }
         now += 6 * 60 * 60_000
-        val result = repository.loadPortada(RtveUrls.TV_HOME)
+        val result = repository.loadPortada("https://www.rtve.es/play/index_apps.json")
 
         assertEquals("Primera", result.value.title)
         assertTrue(result.isStale)
@@ -65,11 +64,11 @@ class CatalogRepositoryTest {
     fun `an unchanged etag revalidates without downloading and keeps the copy fresh`() = runBlocking {
         client.etag = "W/\"abc\""
         client.response = { home("Primera") }
-        repository.loadPortada(RtveUrls.TV_HOME)
+        repository.loadPortada("https://www.rtve.es/play/index_apps.json")
 
         now += 3 * 60_000
         client.response = { error("no debería descargar") }
-        val result = repository.loadPortada(RtveUrls.TV_HOME)
+        val result = repository.loadPortada("https://www.rtve.es/play/index_apps.json")
 
         assertEquals("Primera", result.value.title)
         assertEquals("W/\"abc\"", client.lastRequestedEtag)
@@ -77,22 +76,22 @@ class CatalogRepositoryTest {
 
         // Tras el 304 la copia vuelve a contar como fresca: sin red hasta que caduque.
         now += 60_000
-        repository.loadPortada(RtveUrls.TV_HOME)
+        repository.loadPortada("https://www.rtve.es/play/index_apps.json")
         assertEquals(2, client.calls)
     }
 
     @Test
     fun `cached only returns any local copy without network and fails when there is none`() = runBlocking {
         try {
-            repository.loadPortada(RtveUrls.TV_HOME, cachedOnly = true)
+            repository.loadPortada("https://www.rtve.es/play/index_apps.json", cachedOnly = true)
             fail("sin copia local")
         } catch (_: NotCachedException) {
         }
         client.response = { home("Primera") }
-        repository.loadPortada(RtveUrls.TV_HOME)
+        repository.loadPortada("https://www.rtve.es/play/index_apps.json")
 
         now += 3 * 60 * 60_000
-        val copy = repository.loadPortada(RtveUrls.TV_HOME, cachedOnly = true)
+        val copy = repository.loadPortada("https://www.rtve.es/play/index_apps.json", cachedOnly = true)
         assertEquals("Primera", copy.value.title)
         assertTrue("caducada pero disponible", copy.isStale)
         assertEquals(1, client.calls)
@@ -101,12 +100,12 @@ class CatalogRepositoryTest {
     @Test
     fun `too old cache is not used and the network error surfaces`() = runBlocking {
         client.response = { home("Primera") }
-        repository.loadPortada(RtveUrls.TV_HOME)
+        repository.loadPortada("https://www.rtve.es/play/index_apps.json")
 
         client.response = { throw IOException("offline") }
         now += 48 * 60 * 60_000
         try {
-            repository.loadPortada(RtveUrls.TV_HOME)
+            repository.loadPortada("https://www.rtve.es/play/index_apps.json")
             fail("expected the network error")
         } catch (error: IOException) {
             assertEquals("offline", error.message)

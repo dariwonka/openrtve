@@ -41,7 +41,6 @@ import es.openrtve.ui.GlobalDestination
 import es.openrtve.ui.NavigationViewModel
 import es.openrtve.ui.ProvideClock
 import es.openrtve.ui.Tab
-import es.openrtve.ui.UiMessage
 import es.openrtve.ui.rememberCatalogActions
 import es.openrtve.ui.text
 import kotlinx.coroutines.async
@@ -82,7 +81,7 @@ fun TvApp(container: AppContainer) {
 
     val message = nav.message?.text(context)
     val pending = nav.message
-    if (pending != null && pending != UiMessage.OpeningLink) {
+    if (pending != null) {
         LaunchedEffect(pending) {
             delay(MESSAGE_VISIBLE_MS)
             navigation.dismissMessage(pending)

@@ -3,8 +3,6 @@ package es.openrtve.data
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.CatalogModule
 import es.openrtve.domain.CatalogPage
-import es.openrtve.domain.ExploreCategory
-import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.QuickFilter
 import es.openrtve.domain.RowLayout
 import es.openrtve.domain.SearchResults
@@ -116,111 +114,6 @@ class RtveJsonParser(
                 val url = item.text("nav-pag_url")?.takeIf(hostPolicy::isAllowed) ?: return@mapNotNull null
                 QuickFilter(title = item.text("nav-pag_name") ?: return@mapNotNull null, contentUrl = url)
             }
-
-    /**
-     * Categorías del menú de la app oficial (`menuBloques` de televisión), solo
-     * las públicas. Cada `submenu` ("Otras temáticas", "Canales", "Canales
-     * temáticos") es un grupo con su propio título editorial. El árbol `radio`
-     * de la configuración no se expone: RTVE Play tampoco lo pinta (remite a la
-     * app RTVE Audio).
-     */
-    fun parseExplore(raw: String): List<ExploreGroup> {
-        val root = json.parseToJsonElement(raw).jsonObject
-        // "CLAN" es un enlace a la app de Clan; su portada es la infantil de la propia configuración.
-        val blocks = root.obj("television")?.array("menuBloques").orEmpty().mapNotNull { it as? JsonObject }
-        val clanPortada = root.obj("television")?.obj("secciones")?.obj("portadaInfantil")
-            ?.text("urlContent")?.let(hostPolicy::sanitize)
-        val groups = blocks.flatMap { block -> exploreGroups(block.flag("infantil") == true, block.array("menuItems"), clanPortada) }
-        // El grupo de canales es el submenú cuyas entradas traen logo ("CANALES").
-        val channelGroups = blocks
-            .flatMap { it.array("menuItems").orEmpty() }
-            .mapNotNull { it as? JsonObject }
-            .filter { menu -> menu.text("tipo") == "submenu" && menu.array("menuItems").orEmpty().any { (it as? JsonObject)?.text("logo") != null } }
-            .mapNotNull { it.text("title")?.let(::sentenceCase) }
-            .toSet()
-        return withChannelsTogether(groups, channelGroups)
-    }
-
-    /**
-     * El menú oficial repite los canales: Clan, TDP o La 2 Cat están también en el
-     * bloque principal, y Playz en "Otras temáticas". Cada canal sale solo en su
-     * grupo; fuera de él se quita lo que lleva a la misma portada o tiene el mismo
-     * nombre (La 2 Cat llega con dos URLs). Si la copia del canal no trae fondo,
-     * conserva el de la que se quita. El resto de entradas no se toca: "70 años" y
-     * "Archivo" llevan al mismo sitio, pero son dos accesos editoriales.
-     */
-    private fun withChannelsTogether(groups: List<ExploreGroup>, channelGroups: Set<String>): List<ExploreGroup> {
-        val channels = groups.filter { it.title in channelGroups }.flatMap { it.categories }
-        if (channels.isEmpty()) return groups
-        val urls = channels.map { it.contentUrl }.toSet()
-        val names = channels.map { it.title.lowercase().trim() }.toSet()
-        fun ExploreCategory.isChannel() = contentUrl in urls || title.lowercase().trim() in names
-        val repeatedImages = groups.filter { it.title !in channelGroups }.flatMap { it.categories }
-            .filter { it.isChannel() && it.imageUrl != null }
-        return groups.mapNotNull { group ->
-            if (group.title in channelGroups) {
-                group.copy(
-                    categories = group.categories.map { channel ->
-                        channel.copy(
-                            imageUrl = channel.imageUrl ?: repeatedImages.firstOrNull {
-                                it.contentUrl == channel.contentUrl || it.title.lowercase().trim() == channel.title.lowercase().trim()
-                            }?.imageUrl,
-                        )
-                    },
-                )
-            } else {
-                group.copy(categories = group.categories.filterNot { it.isChannel() }).takeIf { it.categories.isNotEmpty() }
-            }
-        }
-    }
-
-    /** Imagen de cada portada del menú, por su URL; sirve de reserva para la otra configuración. */
-    fun parseExploreImages(raw: String): Map<String, String> = parseExplore(raw)
-        .flatMap { it.categories }
-        .mapNotNull { category -> category.imageUrl?.let { category.contentUrl to it } }
-        .toMap()
-
-    /**
-     * Las portadas directas de un bloque forman un grupo sin título (el nombre del
-     * bloque es interno); cada `submenu` forma el suyo ("OTRAS TEMÁTICAS" -> "Otras
-     * temáticas"). Un bloque sin portadas (cuenta, configuración, apps) no produce grupo.
-     */
-    private fun exploreGroups(isKids: Boolean, items: JsonArray?, clanPortada: String?): List<ExploreGroup> {
-        // La app oficial respeta el orden del JSON, no `orden`.
-        val objects = items.orEmpty().mapNotNull { it as? JsonObject }
-        val direct = exploreCategories(objects, clanPortada)
-        val submenus = objects
-            .filter { it.text("tipo") == "submenu" && it.flag("subscriptor") != true }
-            .mapNotNull { submenu ->
-                val title = submenu.text("title")?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-                val children = submenu.array("menuItems").orEmpty().mapNotNull { it as? JsonObject }
-                // Dentro de un submenú ("Otras apps" en la configuración de TV) el enlace a la
-                // app de Clan sobra: Clan ya tiene su bloque y saldría como "APP CLAN".
-                val categories = exploreCategories(children, clanPortada = null)
-                if (categories.isEmpty()) null else ExploreGroup(sentenceCase(title), categories)
-            }
-        return listOfNotNull(direct.takeIf { it.isNotEmpty() }?.let { ExploreGroup(title = null, categories = it, isKids = isKids) }) + submenus
-    }
-
-    /** Portadas, el enlace a la app de Clan (como su portada) y los canales temáticos en directo. */
-    private fun exploreCategories(items: List<JsonObject>, clanPortada: String?): List<ExploreCategory> = items
-        .filter { it.flag("subscriptor") != true }
-        .mapNotNull { item ->
-            val title = item.text("title") ?: return@mapNotNull null
-            val tipo = item.text("tipo")
-            val contentUrl = when (tipo) {
-                "portada", "portadaCanalTematico" -> item.text("urlContent")?.let(hostPolicy::sanitize)
-                "intentApp" -> clanPortada?.takeIf { item.text("appAndroid") == CLAN_PACKAGE }
-                else -> null
-            } ?: return@mapNotNull null
-            ExploreCategory(
-                title = title,
-                imageUrl = item.text("imgBackground")?.let(hostPolicy::sanitize),
-                contentUrl = contentUrl,
-                isLive = tipo == "portadaCanalTematico",
-            )
-        }
-        .distinctBy(ExploreCategory::contentUrl)
 
     /** Accesos inline de una fila `links`; `enlaceExterno` (web) se omite. */
     private fun homeLinks(row: JsonObject): List<HomeLink> = row.array("links")
@@ -450,10 +343,6 @@ class RtveJsonParser(
     private fun editorialTitle(value: String): String =
         value.substringAfterLast(" > ").trim().ifEmpty { value }
 
-    /** "OTRAS TEMÁTICAS" -> "Otras temáticas"; los títulos del menú llegan en mayúsculas. */
-    private fun sentenceCase(value: String): String =
-        if (value != value.uppercase()) value else value.lowercase().replaceFirstChar { it.uppercase() }
-
     /** "LA VUELTA 2026" -> "La Vuelta 2026"; los antetítulos llegan en mayúsculas. */
     private fun titleCase(value: String): String =
         if (value != value.uppercase()) value
@@ -611,7 +500,6 @@ class RtveJsonParser(
         val LIVE_EDITORIAL_TYPES = setOf("broadcast", "peticion", "directo")
         val NON_CATALOG_ROWS = setOf("noticias", "parrilla")
         val YEAR = Regex("\\b(?:19|20)\\d{2}\\b")
-        private const val CLAN_PACKAGE = "com.rtve.clan"
         const val IMAGE_SERVICE = "https://img.rtve.es"
         const val LANDSCAPE_WIDTH = 960
         const val POSTER_WIDTH = 480

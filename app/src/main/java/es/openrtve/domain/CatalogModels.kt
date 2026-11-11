@@ -1,7 +1,6 @@
 package es.openrtve.domain
 
 object RtveUrls {
-    const val TV_HOME = "https://www.rtve.es/play/index_apps.json"
     /** Portada de Clan con todas las edades (`television.secciones.portadaInfantil` de la configuración). */
     const val CLAN_HOME = "https://www.rtve.es/play/clan/index_apps.json"
     /**
@@ -21,9 +20,6 @@ object RtveUrls {
     const val CLAN_MOVIES_PORTADA = "https://www.rtve.es/play/clan/peliculas-infantiles/index_apps.json"
     /** Cadena Clan en la API (`cadenas/417`), la misma que usa su portada en "Para ver hoy". */
     const val CLAN_CHANNEL_ID = "417"
-    const val REMOTE_CONFIG = "https://www.rtve.es/m/configs/rtve_play/2026/estructura2.json"
-    /** La que lee la app oficial de Android TV: su propio menú y sus propias imágenes. */
-    const val REMOTE_CONFIG_TV = "https://www.rtve.es/m/configs/rtve_play/2026/estructuraAndroidTV2.json"
     const val QUICK_SEARCHES = "https://www.rtve.es/m/configs/buscador/predefinidos.json"
     const val SEARCH = "https://api.rtve.es/api/search/results"
     /** Base de las páginas siguientes de cada bloque de búsqueda: se le añade su `query` relativo. */
@@ -74,17 +70,6 @@ fun collectionRow(url: String, title: String) = HomeRow(
     presentation = "ColeccionPoster",
     contentUrl = url,
     layout = RowLayout.POSTER,
-)
-
-/** Fila sintética de directos sobre un feed de `lives`, para abrir un directo que no viene de una portada. */
-fun liveRow(url: String, title: String = "") = HomeRow(
-    id = -1,
-    title = title,
-    order = 0,
-    moduleType = "livesCollection",
-    presentation = "directosTV",
-    contentUrl = url,
-    layout = RowLayout.LANDSCAPE,
 )
 
 /**
@@ -338,34 +323,6 @@ data class SearchResults(
 data class QuickFilter(
     val title: String,
     val contentUrl: String,
-)
-
-/** Entrada del menú de Explorar: una portada, o un canal temático en directo (`broadcasts/{id}.json`). */
-data class ExploreCategory(
-    val title: String,
-    val imageUrl: String?,
-    val contentUrl: String,
-    val isLive: Boolean = false,
-    /**
-     * Imagen de la misma portada en la otra configuración (móvil o TV), por si la
-     * propia no carga: RTVE deja a veces imágenes rotas en una de las dos.
-     */
-    val fallbackImageUrl: String? = null,
-    /**
-     * Lo que emite ahora un canal temático ([isLive]): su tarjeta es la de un directo,
-     * como en la portada, y al tocarla se reproduce. `null` hasta que llega o si falla.
-     */
-    val nowPlaying: CatalogItem? = null,
-)
-
-/**
- * Sección de Explorar. Sin [title] es el bloque principal del menú (se presenta como
- * "Temáticas", la pareja de "Otras temáticas"); [isKids] es el bloque infantil (`infantil: true`).
- */
-data class ExploreGroup(
-    val title: String?,
-    val categories: List<ExploreCategory>,
-    val isKids: Boolean = false,
 )
 
 /** Ficha completa de un vídeo (`videos/{id}.json`); [item] trae sus derechos y su programa. */

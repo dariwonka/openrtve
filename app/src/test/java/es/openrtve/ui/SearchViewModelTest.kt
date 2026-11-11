@@ -86,21 +86,6 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `query is trimmed and clearing it drops the results`() = runTest(mainDispatcher.dispatcher) {
-        val viewModel = SearchViewModel(repository)
-        advanceUntilIdle()
-
-        viewModel.setQuery("  cine  ")
-        advanceUntilIdle()
-        assertEquals(listOf("search(cine)"), repository.calls.filter { it.startsWith("search") })
-
-        viewModel.clearQuery()
-        advanceUntilIdle()
-        assertNull(viewModel.uiState.value.results)
-        assertEquals("", viewModel.uiState.value.query)
-    }
-
-    @Test
     fun `search failures are shown in place and retry repeats the same query`() = runTest(mainDispatcher.dispatcher) {
         var fail = true
         repository.search = { query -> if (fail) throw UnknownHostException() else SearchResults(emptyList(), listOf(catalogItem("r-$query"))) }
@@ -151,42 +136,6 @@ class SearchViewModelTest {
         advanceUntilIdle()
         assertEquals(listOf("r-cine"), viewModel.uiState.value.results!!.videos.map { it.id })
         assertNull("una búsqueda con éxito no tiene error", viewModel.uiState.value.searchError)
-    }
-
-    @Test
-    fun `retrying after a failing filter feed reloads the filters`() = runTest(mainDispatcher.dispatcher) {
-        var fail = true
-        val working = repository.quickFilters
-        repository.quickFilters = { if (fail) throw HttpStatusException(500) else working() }
-        val viewModel = SearchViewModel(repository)
-        advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.filter is FilterState.Failed)
-
-        fail = false
-        viewModel.retryFilter()
-        advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.filters.isNotEmpty())
-        assertTrue(viewModel.uiState.value.filter is FilterState.Loaded)
-    }
-
-    @Test
-    fun `a failing quick filter is reported in place and can be retried`() = runTest(mainDispatcher.dispatcher) {
-        var failFilter = true
-        repository.quickFilterItems = { filter ->
-            if (failFilter) throw HttpStatusException(503) else loaded(CatalogModule(filter.title, listOf(catalogItem("${filter.title}-1"))))
-        }
-        val viewModel = SearchViewModel(repository)
-        advanceUntilIdle()
-
-        assertEquals(FilterState.Failed(LoadError.Http(503)), viewModel.uiState.value.filter)
-        assertNull("el fallo del filtro no es un fallo de búsqueda", viewModel.uiState.value.searchError)
-        assertTrue(viewModel.uiState.value.filterItems.isEmpty())
-
-        failFilter = false
-        viewModel.retryFilter()
-        assertEquals(FilterState.Loading, viewModel.uiState.value.filter)
-        advanceUntilIdle()
-        assertEquals(listOf("Más buscados-1"), viewModel.uiState.value.filterItems.map { it.id })
     }
 
     private companion object {

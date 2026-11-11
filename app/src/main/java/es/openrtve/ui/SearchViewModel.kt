@@ -86,8 +86,6 @@ class SearchViewModel(
         mutableUiState.update { it.copy(query = query) }
     }
 
-    fun clearQuery() = setQuery("")
-
     fun selectFilter(filter: QuickFilter) {
         val current = mutableUiState.value
         if (filter == current.selectedFilter && current.filter is FilterState.Loaded) return
@@ -104,13 +102,6 @@ class SearchViewModel(
             }
             mutableUiState.update { it.copy(filter = loaded) }
         }
-    }
-
-    /** Vuelve a pedir el filtro seleccionado tras un fallo, o la lista de filtros si fue ella la que falló. */
-    fun retryFilter() {
-        val filter = mutableUiState.value.selectedFilter ?: return loadFilters()
-        mutableUiState.update { it.copy(filter = FilterState.Loading) }
-        selectFilter(filter)
     }
 
     /** Repite la búsqueda actual tras un fallo. */

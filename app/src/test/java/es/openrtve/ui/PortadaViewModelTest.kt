@@ -8,7 +8,6 @@ import es.openrtve.domain.CatalogModule
 import es.openrtve.domain.CatalogPage
 import es.openrtve.domain.EpisodeOrder
 import es.openrtve.domain.ContentKind
-import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.HomeFeed
 import es.openrtve.domain.HomeLink
 import es.openrtve.domain.HomeRow
@@ -211,7 +210,6 @@ class PortadaViewModelTest {
 
         override suspend fun loadModule(row: HomeRow, forceRefresh: Boolean, cachedOnly: Boolean): CatalogLoad<CatalogModule> =
             if (cachedOnly) cachedModules[row.id] ?: throw NotCachedException() else modules.getValue(row.id).await()
-        override suspend fun loadExplore(forceRefresh: Boolean, tv: Boolean): CatalogLoad<List<ExploreGroup>> = throw UnsupportedOperationException()
         override suspend fun loadQuickFilters(): CatalogLoad<List<QuickFilter>> = throw UnsupportedOperationException()
         override suspend fun loadQuickFilterItems(filter: QuickFilter): CatalogLoad<CatalogModule> = throw UnsupportedOperationException()
         override suspend fun search(query: String): SearchResults = throw UnsupportedOperationException()

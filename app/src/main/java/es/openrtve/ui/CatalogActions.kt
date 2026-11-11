@@ -8,7 +8,6 @@ import es.openrtve.AppContainer
 import es.openrtve.domain.BlockReason
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ContentKind
-import es.openrtve.domain.ExploreCategory
 import es.openrtve.domain.HomeLink
 import es.openrtve.domain.HomeRow
 import es.openrtve.domain.PlaybackDecision
@@ -43,13 +42,6 @@ class CatalogActions(
 
     val playItem: (CatalogItem) -> Unit = { play(it) }
 
-    /** Quita un item de "Seguir viendo" (la portada lo refleja al momento) y ofrece deshacerlo. */
-    val removeFromHistory: (CatalogItem) -> Unit = { item ->
-        container.watchHistory.remove(item.id)?.let { navigation.show(UiMessage.RemovedFromHistory(it)) }
-    }
-
-    fun undoRemoveFromHistory(message: UiMessage.RemovedFromHistory) = container.watchHistory.restore(message.entry)
-
     /** Programas y vídeos abren su ficha; los directos se reproducen al momento. */
     val openItem: (CatalogItem) -> Unit = { item ->
         when (item.kind) {
@@ -63,8 +55,6 @@ class CatalogActions(
 
     val openLink: (HomeLink) -> Unit = { link -> link.destination()?.let(navigation::push) }
 
-    val openCategory: (ExploreCategory) -> Unit = { navigation.push(it.destination()) }
-
     val openProgram: (programId: String, title: String) -> Unit = { id, title ->
         navigation.push(Destination.Program(referenceItem(id, ContentKind.PROGRAM, title)))
     }
@@ -73,31 +63,6 @@ class CatalogActions(
 
     val showMessage: (String) -> Unit = { navigation.show(UiMessage.Text(it)) }
 
-    /** Enlace recibido (VIEW o Compartir): construye Inicio -> ficha, como una navegación manual. */
-    suspend fun openIncomingLink(url: String) {
-        // Resolver un permalink puede costar una búsqueda: se avisa en vez de no hacer nada.
-        navigation.show(UiMessage.OpeningLink)
-        val item = try {
-            container.deepLinkResolver.resolve(url)
-        } catch (error: kotlinx.coroutines.CancellationException) {
-            navigation.dismissMessage(UiMessage.OpeningLink)
-            throw error
-        } catch (error: Exception) {
-            // Sin red el enlace no es "inexistente": se dice qué pasó.
-            navigation.show(UiMessage.Error(error.toLoadError()))
-            return
-        }
-        if (item == null) {
-            navigation.show(UiMessage.LinkNotFound)
-            return
-        }
-        navigation.dismissMessage(UiMessage.OpeningLink)
-        when (item.kind) {
-            ContentKind.PROGRAM -> navigation.openDeepLink(Destination.Program(item))
-            ContentKind.VIDEO -> navigation.openDeepLink(Destination.Video(item))
-            else -> play(item)
-        }
-    }
 }
 
 @Composable

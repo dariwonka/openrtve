@@ -6,7 +6,6 @@ import es.openrtve.R
 import es.openrtve.data.WatchEntry
 import es.openrtve.domain.BlockReason
 import es.openrtve.domain.CatalogItem
-import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.LiveInfo
 import es.openrtve.domain.ProgramDetail
 import es.openrtve.domain.ProgramStructure
@@ -74,9 +73,6 @@ fun UiMessage.text(context: Context): String = when (this) {
     is UiMessage.Blocked -> reason.text(context)
     is UiMessage.Text -> text
     is UiMessage.StartsAt -> context.getString(R.string.blocked_starts_at, schedule)
-    UiMessage.LinkNotFound -> context.getString(R.string.deeplink_not_found)
-    UiMessage.OpeningLink -> context.getString(R.string.deeplink_opening)
-    is UiMessage.RemovedFromHistory -> context.getString(R.string.continue_removed, entry.item.title)
 }
 
 /**
@@ -111,12 +107,6 @@ fun portadaTitle(given: String, feedTitle: String): String {
     val start = feedTitle.indexOf(given, ignoreCase = true)
     if (start >= 0) return feedTitle.substring(start, start + given.length)
     return given.lowercase().replaceFirstChar { it.uppercase() }
-}
-
-/** Todos los grupos llevan cabecera: el bloque principal, "Temáticas"; el infantil, "Infantil". */
-fun ExploreGroup.header(context: Context): String = when {
-    isKids -> context.getString(R.string.explore_kids)
-    else -> title ?: context.getString(R.string.explore_topics)
 }
 
 /**

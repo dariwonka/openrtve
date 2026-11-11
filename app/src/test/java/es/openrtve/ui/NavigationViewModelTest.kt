@@ -1,7 +1,6 @@
 package es.openrtve.ui
 
 import androidx.lifecycle.SavedStateHandle
-import es.openrtve.domain.BlockReason
 import es.openrtve.domain.ContentKind
 import es.openrtve.domain.HomeLink
 import es.openrtve.domain.HomeRow
@@ -77,19 +76,6 @@ class NavigationViewModelTest {
     }
 
     @Test
-    fun `reselecting the active tab returns to its root and other tabs keep their stacks`() {
-        val program = Destination.Program(catalogItem("p"))
-        viewModel.push(program)
-        viewModel.selectTab(Tab.EXPLORE)
-        viewModel.push(Destination.Portada("https://www.rtve.es/play/x.json", "X"))
-        viewModel.selectTab(Tab.EXPLORE)
-        assertTrue(state.stack.isEmpty())
-
-        viewModel.selectTab(Tab.HOME)
-        assertEquals(listOf(program), state.stack)
-    }
-
-    @Test
     fun `entry keys are stable per position and the visible one follows the stack`() {
         assertEquals("HOME/root", state.currentKey)
         viewModel.push(Destination.Program(catalogItem("p")))
@@ -98,20 +84,6 @@ class NavigationViewModelTest {
         assertEquals(setOf("HOME/root", "HOME/0", "HOME/1", "SEARCH/root", "EXPLORE/root"), state.liveKeys)
         viewModel.pop()
         assertEquals("HOME/0", state.currentKey)
-    }
-
-    @Test
-    fun `a deep link never reuses the saved state of the entry it replaces`() {
-        viewModel.push(Destination.Program(catalogItem("a")))
-        val before = state.currentKey
-        viewModel.openDeepLink(Destination.Program(catalogItem("b")))
-        assertTrue("otra clave: scroll y pestaña empiezan de cero", state.currentKey != before)
-        assertTrue(state.currentKey in state.liveKeys)
-
-        val restored = NavigationViewModel(SavedStateHandle().also { handle ->
-            handle.saveNavigationState(state)
-        })
-        assertEquals("la clave sobrevive a la muerte del proceso", state.currentKey, restored.state.value.currentKey)
     }
 
     @Test
@@ -145,26 +117,6 @@ class NavigationViewModelTest {
     }
 
     @Test
-    fun `settings is global and never becomes part of a tab stack`() {
-        val category = Destination.Portada("https://www.rtve.es/play/cine/index_apps.json", "Cine")
-        viewModel.selectTab(Tab.EXPLORE)
-        viewModel.push(category)
-        viewModel.openGlobal(GlobalDestination.Settings)
-
-        assertEquals(GlobalDestination.Settings, state.current)
-        assertEquals(GlobalDestination.Settings, state.global)
-        assertEquals(listOf(category), state.stack)
-        assertEquals("global/settings", state.currentKey)
-
-        // Elegir Inicio cierra Ajustes; Explorar conserva su propia pila sin Ajustes.
-        viewModel.selectTab(Tab.HOME)
-        assertNull(state.global)
-        assertNull(state.current)
-        viewModel.selectTab(Tab.EXPLORE)
-        assertEquals(category, state.current)
-    }
-
-    @Test
     fun `back from global settings reveals the exact underlying destination`() {
         val video = Destination.Video(catalogItem("v"))
         viewModel.push(video)
@@ -177,45 +129,6 @@ class NavigationViewModelTest {
         assertEquals(video, state.current)
         assertNull(state.global)
         assertTrue("el estado global se libera al cerrarlo", settingsModel.cleared)
-    }
-
-    @Test
-    fun `deep link builds a synthetic home stack and clears previous destinations`() {
-        viewModel.selectTab(Tab.EXPLORE)
-        viewModel.push(Destination.Portada("https://www.rtve.es/play/cine/index_apps.json", "Cine"))
-        viewModel.openGlobal(GlobalDestination.Settings)
-        val video = Destination.Video(catalogItem("deep"))
-
-        viewModel.openDeepLink(video)
-
-        assertEquals(Tab.HOME, state.tab)
-        assertEquals(listOf(video), state.stack)
-        assertNull(state.global)
-        assertEquals(video, state.current)
-        viewModel.pop()
-        assertNull("atrás vuelve al inicio fijo", state.current)
-    }
-
-    @Test
-    fun `tab stacks and global destination survive process recreation`() {
-        val savedState = SavedStateHandle()
-        val original = NavigationViewModel(savedState)
-        val program = Destination.Program(catalogItem("programa"))
-        val category = Destination.Portada("https://www.rtve.es/play/cine/index_apps.json", "Cine")
-
-        original.push(program)
-        original.selectTab(Tab.EXPLORE)
-        original.push(category)
-        original.openGlobal(GlobalDestination.Settings)
-
-        val restored = NavigationViewModel(savedState)
-        assertEquals(Tab.EXPLORE, restored.state.value.tab)
-        assertEquals(GlobalDestination.Settings, restored.state.value.current)
-        assertEquals(listOf(program), restored.state.value.stacks.getValue(Tab.HOME))
-        assertEquals(listOf(category), restored.state.value.stacks.getValue(Tab.EXPLORE))
-
-        restored.pop()
-        assertEquals(category, restored.state.value.current)
     }
 
     @Test
@@ -253,16 +166,6 @@ class NavigationViewModelTest {
         override fun onCleared() {
             cleared = true
         }
-    }
-
-    @Test
-    fun `messages are shown once and dismissed`() {
-        viewModel.show(UiMessage.Blocked(BlockReason.GEO_RESTRICTED))
-        assertEquals(UiMessage.Blocked(BlockReason.GEO_RESTRICTED), state.message)
-        viewModel.show(UiMessage.LinkNotFound)
-        assertEquals("el último mensaje sustituye al anterior", UiMessage.LinkNotFound, state.message)
-        viewModel.dismissMessage()
-        assertNull(state.message)
     }
 
     @Test

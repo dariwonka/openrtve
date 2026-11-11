@@ -87,47 +87,6 @@ class VideoViewModelTest {
     }
 
     @Test
-    fun `a film of a cycle never repeats the cycle below because the header opens it`() = runTest(mainDispatcher.dispatcher) {
-        val film = catalogItem("film", programId = "cine").copy(
-            mediaSubtypeName = "Película", seasonId = "editorial-group", programShowsFragments = true,
-        )
-        repository.video = { _, _ -> loaded(detail(film.copy(programType = "Contenedor Películas"))) }
-        repository.programVideos = { _, _, _, _, _ -> page(listOf(film, catalogItem("other-film").copy(mediaSubtypeName = "Película"))) }
-
-        val viewModel = VideoViewModel(repository, film)
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertTrue("ni capítulos ni el resto del ciclo", state.contentSections.isEmpty())
-        assertTrue("sin Similares, la ficha acaba en su sinopsis", videoTabs(state).isEmpty())
-        assertFalse(repository.calls.any { it.startsWith("programVideos(") || it.startsWith("programExtras(") })
-    }
-
-    @Test
-    fun `a film with recommendations offers only Similares`() = runTest(mainDispatcher.dispatcher) {
-        val film = catalogItem("film", programId = "cine").copy(mediaTypeId = "39816", mediaSubtypeId = "130734", programTypeId = "137310")
-        repository.video = { _, _ -> loaded(detail(film)) }
-        repository.related = { _, _ -> loaded(listOf(catalogItem("similar"))) }
-
-        val viewModel = VideoViewModel(repository, film)
-        advanceUntilIdle()
-
-        assertEquals(listOf(ProgramTab.RELATED), videoTabs(viewModel.uiState.value))
-    }
-
-    @Test
-    fun `an episode keeps its chapters and never gets its program as a second list`() = runTest(mainDispatcher.dispatcher) {
-        val episode = catalogItem("e9", programId = "p1").copy(seasonId = "s5", episode = 9)
-        repository.video = { _, _ -> loaded(detail(episode)) }
-        repository.programVideos = { _, _, _, _, _ -> page(listOf(catalogItem("e8"))) }
-
-        val viewModel = VideoViewModel(repository, episode)
-        advanceUntilIdle()
-
-        assertEquals(listOf(ProgramTab.EPISODES), videoTabs(viewModel.uiState.value))
-    }
-
-    @Test
     fun `a film mixed into a broadcast feed has its own section in the video sheet`() = runTest(mainDispatcher.dispatcher) {
         val broadcast = catalogItem("broadcast", programId = "p1").copy(programType = "Entrevistas")
         val film = catalogItem("film", programId = "p1").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")

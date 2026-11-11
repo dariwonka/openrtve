@@ -6,7 +6,6 @@ import es.openrtve.data.CatalogBackup
 import es.openrtve.data.CatalogRepository
 import es.openrtve.data.ClanCatalogRepository
 import es.openrtve.data.ClanCatalogStore
-import es.openrtve.data.DeepLinkResolver
 import es.openrtve.data.DefaultCatalogRepository
 import es.openrtve.data.DrmTokenClient
 import es.openrtve.data.RawDocumentCache
@@ -47,7 +46,6 @@ class AppContainer(private val context: Context) {
     /** El PIN de borrado se pide una vez por sesión de la app. */
     @Volatile var removalUnlocked: Boolean = false
     val clanCatalogStore = ClanCatalogStore(context.filesDir.resolve("clan-catalog.json"))
-    val deepLinkResolver = DeepLinkResolver(catalogRepository)
     val watchHistory = WatchHistory(context.filesDir.resolve("watch-history.json"))
     val backup = CatalogBackup(context.filesDir.resolve("clan-catalog.json"), context.filesDir.resolve("watch-history.json"))
     val playbackResolver = PlaybackResolver()

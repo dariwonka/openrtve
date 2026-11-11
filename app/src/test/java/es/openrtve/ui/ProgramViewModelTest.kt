@@ -110,26 +110,6 @@ class ProgramViewModelTest {
     }
 
     @Test
-    fun `selecting a season restarts the list and the same season is a no-op`() = runTest(mainDispatcher.dispatcher) {
-        val viewModel = ProgramViewModel(repository, "1", "")
-        advanceUntilIdle()
-        viewModel.loadMore()
-        advanceUntilIdle()
-        assertEquals(2, viewModel.uiState.value.episodes.items.size)
-
-        viewModel.selectSeason("t2")
-        assertTrue(viewModel.uiState.value.episodes.items.isEmpty())
-        advanceUntilIdle()
-        assertEquals(listOf("e1"), viewModel.uiState.value.episodes.items.map { it.id })
-        assertTrue(repository.calls.last().contains("season=t2, page=1"))
-
-        val before = repository.calls.size
-        viewModel.selectSeason("t2")
-        advanceUntilIdle()
-        assertEquals(before, repository.calls.size)
-    }
-
-    @Test
     fun `a missing sheet does not prevent the episodes from loading`() = runTest(mainDispatcher.dispatcher) {
         repository.program = { _, _ -> throw IOException("404") }
         val viewModel = ProgramViewModel(repository, "1", "Título de la fila")
@@ -169,30 +149,6 @@ class ProgramViewModelTest {
     }
 
     @Test
-    fun `the order follows the RTVE Play rule for the program and the selected season`() = runTest(mainDispatcher.dispatcher) {
-        // Serie en emisión con dos temporadas (la más reciente primero): la actual del final, la pasada del principio.
-        repository.program = { id, _ ->
-            loaded(detail(id).copy(seasons = listOf(ProgramSeason("t2", "Temporada 2", 3, order = 2), ProgramSeason("t1", "Temporada 1", 10, order = 1))))
-        }
-        val viewModel = ProgramViewModel(repository, "1", "")
-        advanceUntilIdle()
-        assertEquals(EpisodeOrder.NEWEST_FIRST, viewModel.uiState.value.order)
-
-        viewModel.selectSeason("t2")
-        advanceUntilIdle()
-        assertEquals(EpisodeOrder.NEWEST_FIRST, viewModel.uiState.value.order)
-
-        viewModel.selectSeason("t1")
-        advanceUntilIdle()
-        assertEquals(EpisodeOrder.OLDEST_FIRST, viewModel.uiState.value.order)
-        assertTrue(repository.calls.last().endsWith("order=OLDEST_FIRST)"))
-
-        viewModel.loadMore()
-        advanceUntilIdle()
-        assertTrue("las páginas siguientes mantienen el sentido", repository.calls.last().contains("page=2, complete=true, order=OLDEST_FIRST"))
-    }
-
-    @Test
     fun `a complete series is read from the beginning and one without detail from the end`() = runTest(mainDispatcher.dispatcher) {
         repository.program = { id, _ -> loaded(detail(id).copy(isComplete = true)) }
         val complete = ProgramViewModel(repository, "1", "")
@@ -203,27 +159,6 @@ class ProgramViewModelTest {
         val unknown = ProgramViewModel(repository, "2", "")
         advanceUntilIdle()
         assertEquals(EpisodeOrder.NEWEST_FIRST, unknown.uiState.value.order)
-    }
-
-    @Test
-    fun `chapters beyond the first mixed page become available to the main action and survive season selection`() = runTest(mainDispatcher.dispatcher) {
-        val film = catalogItem("film").copy(mediaTypeId = "39816", mediaSubtypeId = "130734")
-        val episode = catalogItem("episode").copy(mediaTypeId = "39816")
-        repository.program = { id, _ -> loaded(detail(id).copy(programType = "Entrevistas")) }
-        repository.programVideos = { _, season, number, _, _ ->
-            if (season != null) page(listOf(catalogItem("season-episode"))) else page(listOf(if (number == 1) film else episode), number, 2)
-        }
-        val viewModel = ProgramViewModel(repository, "program", "")
-        advanceUntilIdle()
-        val chapters = viewModel.uiState.value.contentSections.first { it.tab == ProgramTab.EPISODES }
-        assertTrue(chapters.items.isEmpty())
-        viewModel.loadMore(chapters)
-        advanceUntilIdle()
-        val state = viewModel.uiState.value
-        assertEquals(listOf("episode"), state.headerEpisodes.filter { it.contentTab(state.structure) == ProgramTab.EPISODES }.map { it.id })
-        viewModel.selectSeason("t1")
-        advanceUntilIdle()
-        assertEquals(listOf("film", "episode"), viewModel.uiState.value.headerEpisodes.map { it.id })
     }
 
     private fun detail(id: String) = ProgramDetail(

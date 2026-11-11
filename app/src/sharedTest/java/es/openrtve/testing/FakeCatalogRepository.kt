@@ -7,7 +7,6 @@ import es.openrtve.domain.CatalogModule
 import es.openrtve.domain.CatalogPage
 import es.openrtve.domain.EpisodeOrder
 import es.openrtve.domain.ContentKind
-import es.openrtve.domain.ExploreGroup
 import es.openrtve.domain.HomeFeed
 import es.openrtve.domain.HomeRow
 import es.openrtve.domain.ProgramDetail
@@ -27,7 +26,6 @@ open class FakeCatalogRepository : CatalogRepository {
 
     var portada: suspend (url: String, forceRefresh: Boolean, cachedOnly: Boolean) -> CatalogLoad<HomeFeed> = { _, _, _ -> unsupported() }
     var module: suspend (row: HomeRow, forceRefresh: Boolean, cachedOnly: Boolean) -> CatalogLoad<CatalogModule> = { _, _, _ -> unsupported() }
-    var explore: suspend (forceRefresh: Boolean) -> CatalogLoad<List<ExploreGroup>> = { unsupported() }
     var quickFilters: suspend () -> CatalogLoad<List<QuickFilter>> = { unsupported() }
     var quickFilterItems: suspend (filter: QuickFilter) -> CatalogLoad<CatalogModule> = { unsupported() }
     var search: suspend (query: String) -> SearchResults = { unsupported() }
@@ -52,11 +50,6 @@ open class FakeCatalogRepository : CatalogRepository {
     override suspend fun loadModule(row: HomeRow, forceRefresh: Boolean, cachedOnly: Boolean): CatalogLoad<CatalogModule> {
         calls += "module(${row.contentUrl}, force=$forceRefresh, cached=$cachedOnly)"
         return module(row, forceRefresh, cachedOnly)
-    }
-
-    override suspend fun loadExplore(forceRefresh: Boolean, tv: Boolean): CatalogLoad<List<ExploreGroup>> {
-        calls += "explore(force=$forceRefresh)"
-        return explore(forceRefresh)
     }
 
     override suspend fun loadChannelPrograms(channelId: String, cachedOnly: Boolean): CatalogLoad<List<CatalogItem>> {

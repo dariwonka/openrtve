@@ -4,22 +4,19 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import es.openrtve.data.WatchEntry
 import es.openrtve.domain.BlockReason
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.ContentKind
-import es.openrtve.domain.ExploreCategory
 import es.openrtve.domain.HomeLink
 import es.openrtve.domain.HomeRow
 import es.openrtve.domain.LinkKind
 import es.openrtve.domain.collectionRow
-import es.openrtve.domain.liveRow
 import es.openrtve.domain.referenceItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class Tab { HOME, SEARCH, EXPLORE }
+enum class Tab { HOME, SEARCH }
 
 /** Cualquier pantalla que puede ocupar el host principal. */
 sealed interface AppDestination
@@ -36,10 +33,6 @@ sealed interface Destination : AppDestination {
 sealed interface GlobalDestination : AppDestination {
     data object Settings : GlobalDestination
 }
-
-/** Una categoría abre su portada; un canal temático, la lista con su directo. */
-fun ExploreCategory.destination(): Destination =
-    if (isLive) Destination.Module(liveRow(contentUrl, title), title) else Destination.Portada(contentUrl, title)
 
 /**
  * Destino de un enlace de portada. Programa y vídeo necesitan el id de su
@@ -59,11 +52,6 @@ sealed interface UiMessage {
     data class Text(val text: String) : UiMessage
     /** Directo programado: "Empieza hoy · 16:10". */
     data class StartsAt(val schedule: String) : UiMessage
-    data object LinkNotFound : UiMessage
-    /** Se quitó un item de "Seguir viendo"; el aviso ofrece deshacerlo. */
-    data class RemovedFromHistory(val entry: WatchEntry) : UiMessage
-    /** Un enlace recibido se está resolviendo (puede llevar una búsqueda): dura hasta que acaba. */
-    data object OpeningLink : UiMessage
 }
 
 /**
@@ -172,27 +160,6 @@ class NavigationViewModel(private val savedStateHandle: SavedStateHandle) : View
         if (current.global == destination) return
         current.global?.let { release(globalEntryKey(it)) }
         navigate(current.copy(global = destination))
-    }
-
-    /**
-     * Un enlace externo crea una pila sintética alcanzable de forma normal:
-     * Inicio -> destino. No hereda la pestaña ni la pila que estuvieran visibles.
-     */
-    fun openDeepLink(destination: Destination) {
-        val current = mutableState.value
-        current.global?.let { release(globalEntryKey(it)) }
-        current.stacks.forEach { (tab, stack) ->
-            stack.indices.forEach { release(entryKey(tab, it, current.generation)) }
-        }
-        val emptyStacks = Tab.entries.associateWith { emptyList<Destination>() }
-        navigate(
-            current.copy(
-                tab = Tab.HOME,
-                stacks = emptyStacks + (Tab.HOME to listOf(destination)),
-                global = null,
-                generation = current.generation + 1,
-            ),
-        )
     }
 
     fun pop() {

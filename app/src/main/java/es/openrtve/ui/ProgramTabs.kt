@@ -28,19 +28,6 @@ enum class ProgramTab {
     RELATED,
 }
 
-/** Pestañas de la ficha de un programa, según los datos que realmente existen. */
-fun programTabs(state: ProgramUiState): List<ProgramTab> = buildList {
-    addAll(state.contentSections.map { it.tab })
-    // Un contenedor es un catálogo: sus piezas ya son "lo siguiente que ver".
-    if (!state.structure.isCollection && state.related.isNotEmpty()) add(ProgramTab.RELATED)
-}
-
-/** Pestañas de la ficha de un vídeo: capítulos o piezas del programa, extras y similares, si los hay. */
-fun videoTabs(state: VideoUiState): List<ProgramTab> = buildList {
-    addAll(state.contentSections.map { it.tab })
-    if (state.related.isNotEmpty()) add(ProgramTab.RELATED)
-}
-
 /**
  * Ficha técnica: lo que no va en la línea de datos de la cabecera (año, edad y
  * géneros ya están ahí). Reparto y dirección van primero: son las que se ven
@@ -67,8 +54,6 @@ data class FichaFacts(
         expirationDate?.let { add(R.string.video_available_until to it.feedDateToDisplay()) }
     }
 
-    /** Cuántas de las primeras filas (reparto, dirección) se ven con la sinopsis plegada. */
-    val compactRowCount: Int = listOf(cast.isNotEmpty(), !director.isNullOrBlank()).count { it }
 }
 
 /** Lo que la línea de datos de la cabecera no dice: en el móvil se despliega con la sinopsis; en TV va en Detalles. */

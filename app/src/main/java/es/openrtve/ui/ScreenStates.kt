@@ -191,8 +191,6 @@ fun rememberSearchScreen(repository: CatalogRepository): SearchScreenState {
     return SearchScreenState(viewModel, state)
 }
 
-class ExploreScreenState(val viewModel: ExploreViewModel, val state: ExploreUiState)
-
 /** Se consume una sola vez por raíz, conservando su scroll al cambiar de sección. */
 @Composable
 fun RootReselectionEffect(request: Int, onReselect: suspend () -> Unit) {
@@ -204,23 +202,6 @@ fun RootReselectionEffect(request: Int, onReselect: suspend () -> Unit) {
             action()
         }
     }
-}
-
-@Composable
-fun rememberExploreScreen(repository: CatalogRepository, tv: Boolean = false): ExploreScreenState {
-    val viewModel: ExploreViewModel = viewModel(factory = viewModelFactory { initializer { ExploreViewModel(repository, tv) } })
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    // Como las filas de directos de la portada: lo que emiten los canales temáticos se renueva cada minuto en pantalla.
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(viewModel) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (true) {
-                delay(LIVE_REFRESH_MS)
-                viewModel.refreshLive()
-            }
-        }
-    }
-    return ExploreScreenState(viewModel, state)
 }
 
 class SettingsScreenState(

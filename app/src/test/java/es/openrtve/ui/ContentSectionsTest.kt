@@ -2,7 +2,6 @@ package es.openrtve.ui
 
 import es.openrtve.domain.ProgramStructure
 
-import es.openrtve.domain.ProgramDetail
 import es.openrtve.testing.catalogItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -93,18 +92,4 @@ class ContentSectionsTest {
         assertTrue(film.opensDetailsIn(state.structure))
     }
 
-    @Test
-    fun `additional content sections do not hide details or recommendations`() {
-        val state = ProgramUiState(
-            "program", "Programa",
-            detail = ProgramDetail("program", "Programa", null, null, null, emptyList(), director = "Directora"),
-            episodes = PagedItemsState(listOf(video, film)),
-            extras = PagedItemsState(listOf(trailer)),
-            related = listOf(catalogItem("related")),
-        )
-        assertEquals(
-            listOf(ProgramTab.EPISODES, ProgramTab.MOVIES, ProgramTab.MORE_VIDEOS, ProgramTab.RELATED),
-            programTabs(state),
-        )
-    }
 }

@@ -95,12 +95,6 @@ class ProgramViewModel(
     private fun orderFor(seasonId: String?): EpisodeOrder =
         mutableUiState.value.detail?.let { it.episodeOrder(isFirstSeason = it.isFirstSeason(seasonId)) } ?: EpisodeOrder.NEWEST_FIRST
 
-    fun selectSeason(seasonId: String?) {
-        if (seasonId == mutableUiState.value.selectedSeasonId) return
-        mutableUiState.update { it.copy(selectedSeasonId = seasonId, episodes = PagedItemsState(), order = orderFor(seasonId)) }
-        episodeLoader.load(firstPage = true)
-    }
-
     fun loadMore() = episodeLoader.loadMore()
 
     /** Sin ficha no hay temporadas, sinopsis ni extras: el reintento empieza por ella. */
