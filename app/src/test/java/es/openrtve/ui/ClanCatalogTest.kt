@@ -342,7 +342,7 @@ class ClanCatalogTest {
     }
 
     @Test
-    fun `films inside a series go loose to the films list, and a series of only films disappears`() = runTest(mainDispatcher.dispatcher) {
+    fun `a series with one video of 58 minutes or more becomes a film, one with several stays a series`() = runTest(mainDispatcher.dispatcher) {
         fun video(id: String, programId: String, title: String, minutes: Long) =
             catalogItem(id, title = title, programId = programId).copy(mediaTypeId = RtveTypes.COMPLETE, durationMs = minutes * 60_000L)
         val repository = online(program("1", "Los Cinco"), program("2", "Bluey"))
@@ -364,12 +364,12 @@ class ClanCatalogTest {
         advanceUntilIdle()
         val catalog = viewModel.uiState.value.catalog
         assertEquals(listOf("Bluey"), catalog.series.map { it.title })
-        assertEquals(listOf("Bluey - El cartel", "Los Cinco - Peligro en el tren nocturno"), catalog.movies.map { it.title })
+        assertEquals(listOf("Los Cinco - Peligro en el tren nocturno"), catalog.movies.map { it.title })
         // La serie vacía no vuelve en la siguiente descarga.
         val later = ClanCatalogViewModel(repository, store)
         advanceUntilIdle()
         assertEquals(listOf("Bluey"), later.uiState.value.catalog.series.map { it.title })
-        assertEquals(2, later.uiState.value.catalog.movies.size)
+        assertEquals(1, later.uiState.value.catalog.movies.size)
     }
 
     @Test

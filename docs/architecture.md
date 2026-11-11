@@ -27,8 +27,9 @@ TvApp ─> CatalogActions ─> PlayerActivity ─> MediaController ─> Playback
 
 ## Reglas del catálogo
 
-- Todo vídeo de 58 minutos o más es una película; un vídeo de menos de 4 no se
-  enseña.
+- Un vídeo suelto de 58 minutos o más es una película; una serie con varios vídeos se
+  queda siempre como serie, y solo si tiene uno único de 58 o más pasa a Películas. Un
+  vídeo de menos de 4 minutos no se enseña.
 - **Anclados:** los pone el usuario o RTVE (sus novedades); solo el usuario los quita.
   Van arriba, por orden alfabético, salvo las novedades de RTVE recién llegadas,
   que van las primeras. Lo desanclado a mano no lo vuelve a anclar RTVE.

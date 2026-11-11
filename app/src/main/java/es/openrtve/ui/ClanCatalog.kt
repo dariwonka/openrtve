@@ -68,7 +68,7 @@ data class LoadedRow(
  *
  * Las filas dejan de existir: solo importa qué títulos contienen.
  */
-fun buildClanCatalog(rows: List<LoadedRow>, sorted: Boolean = true): ClanCatalog {
+fun buildClanCatalog(rows: List<LoadedRow>, sorted: Boolean = true, byDuration: Boolean = true): ClanCatalog {
     val programs = linkedMapOf<String, CatalogItem>()
     val fromEpisodes = linkedMapOf<String, CatalogItem>()
     val movies = linkedMapOf<String, CatalogItem>()
@@ -79,9 +79,9 @@ fun buildClanCatalog(rows: List<LoadedRow>, sorted: Boolean = true): ClanCatalog
                 ContentKind.PROGRAM -> (if (movieRow) movies else programs).addTitle(item.copy(subtitle = null))
                 ContentKind.VIDEO -> when {
                     item.mediaForm == MediaForm.EXTRA -> item.seriesTitle()?.let(fromEpisodes::addTitle)
-                    // Lo que dura 58 minutos o más es una película, venga de donde venga.
+                    // Un vídeo suelto de 58 minutos o más es una película (en la descarga decide la revisión de cada serie).
                     movieRow || item.isFullMovie || item.parentStructure == ProgramStructure.MOVIES ||
-                        (item.durationMs ?: 0L) >= MOVIE_MIN_MS ->
+                        (byDuration && (item.durationMs ?: 0L) >= MOVIE_MIN_MS) ->
                         movies.addTitle(item.copy(subtitle = null))
                     else -> item.seriesTitle()?.let(fromEpisodes::addTitle)
                 }
@@ -166,10 +166,8 @@ private const val BASELINE_KEY = "#baseline"
 /** Lo que hay dentro de una serie. */
 private class ProgramScan(
     val programId: String,
-    /** Sus vídeos de 58 minutos o más. */
-    val films: List<CatalogItem>,
-    /** No tiene ningún capítulo normal. */
-    val onlyFilms: Boolean,
+    /** Su único vídeo, si dura 58 minutos o más: la serie es en realidad una película. */
+    val film: CatalogItem?,
 )
 
 /** Lo que trae una vuelta de descargas. */
@@ -473,9 +471,10 @@ class ClanCatalogViewModel(
     }
 
     /**
-     * Mira dentro de cada serie: lo que dura 58 minutos o más es una película y pasa, suelta,
-     * a Películas. Si la serie no tiene nada más, deja de salir entre las series. Cada serie
-     * se revisa de nuevo cada pocos días, por si le llega una película.
+     * Mira dentro de cada serie. Una serie con varios vídeos se queda siempre como serie,
+     * dure lo que dure cada uno. Solo si tiene un único vídeo y dura 58 minutos o más es
+     * una película: pasa a Películas y deja de salir entre las series. Cada serie se revisa
+     * de nuevo cada pocos días, por si cambia.
      */
     private suspend fun scanForFilms() {
         val now = clock()
@@ -492,26 +491,22 @@ class ClanCatalogViewModel(
 
     /** `null` si RTVE no responde: se reintenta en el próximo arranque. */
     private suspend fun scanProgram(programId: String): ProgramScan? = try {
-        val films = mutableListOf<CatalogItem>()
-        var episodes = false
+        val shown = mutableListOf<CatalogItem>()
         var page = 1
         var more: Boolean
         do {
             val result = repository.scanProgramVideos(programId, page)
             for (video in result.items) {
                 if (video.kind != ContentKind.VIDEO || video.mediaForm == MediaForm.EXTRA) continue
-                val ms = video.durationMs
-                when {
-                    ms == null -> episodes = true
-                    ms >= MOVIE_MIN_MS -> films += video
-                    ms >= EPISODE_MIN_MS -> episodes = true
-                }
+                // Los de menos de 4 minutos (avances, cortes) no cuentan como vídeos de la serie.
+                if ((video.durationMs ?: EPISODE_MIN_MS) >= EPISODE_MIN_MS) shown += video
             }
             more = result.hasMore && result.items.isNotEmpty()
             page++
         } while (more && page <= MAX_SCAN_PAGES)
-        // Si quedan páginas sin mirar no se puede afirmar que solo tenga películas.
-        ProgramScan(programId, films.distinctBy { it.id }, onlyFilms = films.isNotEmpty() && !episodes && !more)
+        val only = shown.distinctBy { it.id }.singleOrNull()
+        // Si quedan páginas sin mirar no se puede afirmar que sea el único.
+        ProgramScan(programId, film = only?.takeIf { !more && (it.durationMs ?: 0L) >= MOVIE_MIN_MS })
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (error: Exception) {
@@ -529,28 +524,27 @@ class ClanCatalogViewModel(
         for (scan in results) {
             scanned[scan.programId] = now
             val program = series.firstOrNull { it.id == scan.programId } ?: known[scan.programId]
-            val films = scan.films.filter { it.id !in before.removed }.map { it.asFilmOf(program?.title) }
-            val filmIds = films.mapTo(HashSet()) { it.id }
-            films.forEach { known[it.id] = it }
-            // Se sustituyen las que ya estaban (por si cambia el título) y se devuelve a su serie
-            // lo que se sacó de ella sin llegar a la duración de una película.
-            movies = movies.filter { it.id !in filmIds && !(it.programId == scan.programId && (it.durationMs ?: Long.MAX_VALUE) < MOVIE_MIN_MS) } + films
-            if (scan.onlyFilms) {
-                // Si la serie estaba anclada, lo anclado pasan a ser sus películas.
+            // Lo que una revisión anterior sacó de esta serie se quita siempre: se vuelve a poner solo si sigue valiendo.
+            movies = movies.filter { it.programId != scan.programId || it.id == scan.film?.id }
+            val film = scan.film?.takeIf { it.id !in before.removed }
+            if (film != null) {
+                val entry = film.asFilmOf(program?.title)
+                known[entry.id] = entry
+                movies = movies.filter { it.id != entry.id } + entry
+                // Si la serie estaba anclada, lo anclado pasa a ser su película.
                 if (pinned.remove(scan.programId)) {
                     val at = fresh.remove(scan.programId)
-                    for (film in scan.films) {
-                        if (film.id in before.removed || film.id in before.unpinned) continue
-                        pinned += film.id
-                        if (at != null) fresh[film.id] = at
+                    if (entry.id !in before.unpinned) {
+                        pinned += entry.id
+                        if (at != null) fresh[entry.id] = at
                     }
                 }
                 series = series.filter { it.id != scan.programId }
                 filmOnly = filmOnly + scan.programId
             } else if (scan.programId in filmOnly) {
-                // Le han llegado capítulos: vuelve a ser una serie.
+                // Ya no es una sola película: vuelve a ser una serie.
                 filmOnly = filmOnly - scan.programId
-                if (program != null && program.id !in before.removed) series = series + program
+                if (program != null && program.id !in before.removed && series.none { it.id == program.id }) series = series + program
             }
         }
         stored = before.copy(
@@ -664,14 +658,14 @@ class ClanCatalogViewModel(
             .flatMap { (_, feed, _) ->
                 feed.rows.filter { !it.isInline && !it.isLive && it.contentUrl != null }.take(2).mapNotNull { byUrl[it.contentUrl] }
             }
-        val highlighted = buildClanCatalog(highlightRows, sorted = false).let { it.series + it.movies }
+        val highlighted = buildClanCatalog(highlightRows, sorted = false, byDuration = false).let { it.series + it.movies }
         val seedRows = listOf(LoadedRow(SEED_ROW_TITLE, seed), LoadedRow(SEED_ROW_TITLE, movieSeed, true))
         val networkRows = listOf(LoadedRow(SEED_ROW_TITLE, topMovies.await(), true), LoadedRow(SEED_ROW_TITLE, kidsCollection.await(), true)) +
             containerMovies.map { LoadedRow(SEED_ROW_TITLE, it.await(), true) } + linked + loaded +
             // El listado va al final: la imagen y el nombre de una portada mandan sobre los suyos.
             LoadedRow(AZ_ROW_TITLE, listing.await().orEmpty())
-        val all = buildClanCatalog(seedRows + networkRows)
-        val network = buildClanCatalog(networkRows)
+        val all = buildClanCatalog(seedRows + networkRows, byDuration = false)
+        val network = buildClanCatalog(networkRows, byDuration = false)
         val failure = firstFailure
         if (all.isEmpty && failure != null) throw failure
         Download(all, network, highlighted, complete = failure == null)

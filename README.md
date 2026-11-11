@@ -38,8 +38,9 @@ son marcas de la Corporación de Radio y Televisión Española.
   y lo visto en un fichero, para cambiar de tele o reinstalar.
 - **Arranque inmediato** con el catálogo guardado y pantalla de inicio hasta que
   las tres primeras filas están dibujadas.
-- **Películas ≥ 58 min** van a Películas, también las que están dentro de una serie:
-  salen sueltas y, si la serie no tiene nada más, deja de aparecer. **Mejor calidad** disponible al empezar.
+- **Películas:** un vídeo suelto de ≥ 58 min, o una serie cuyo único vídeo los dura
+  (sale como "Serie - Título"). Una serie con varios vídeos se queda siempre en Series.
+  **Mejor calidad** disponible al empezar.
 - **Solo Android TV**, con identidad propia (`es.clanpeques`): se instala junto
   a OpenRTVE.
 
