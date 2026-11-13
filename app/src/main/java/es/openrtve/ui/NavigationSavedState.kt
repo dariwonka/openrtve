@@ -18,6 +18,7 @@ private const val SAVED_TAB = "navigation.tab"
 private const val SAVED_GLOBAL = "navigation.global"
 private const val SAVED_GENERATION = "navigation.generation"
 private const val SETTINGS_DESTINATION = "settings"
+private const val SVT_DESTINATION = "svt"
 private val navigationJson = Json { ignoreUnknownKeys = true }
 
 private fun savedStack(tab: Tab) = "navigation.stack.${tab.name.lowercase()}"
@@ -77,7 +78,11 @@ internal fun SavedStateHandle.restoreNavigationState(): NavigationState {
     val stacks = Tab.entries.associateWith { currentTab ->
         get<ArrayList<String>>(savedStack(currentTab)).orEmpty().mapNotNull(::decodeRoute)
     }
-    val global = GlobalDestination.Settings.takeIf { get<String>(SAVED_GLOBAL) == SETTINGS_DESTINATION }
+    val global = when (get<String>(SAVED_GLOBAL)) {
+        SETTINGS_DESTINATION -> GlobalDestination.Settings
+        SVT_DESTINATION -> GlobalDestination.Svt
+        else -> null
+    }
     return NavigationState(
         tab = tab, stacks = stacks, global = global, generation = get<Int>(SAVED_GENERATION) ?: 0,
         rootRequests = Tab.entries.associateWith { get<Int>(savedRootRequest(it)) ?: 0 },
@@ -93,6 +98,8 @@ internal fun SavedStateHandle.saveNavigationState(state: NavigationState) {
     }
     if (state.global == GlobalDestination.Settings) {
         this[SAVED_GLOBAL] = SETTINGS_DESTINATION
+    } else if (state.global == GlobalDestination.Svt) {
+        this[SAVED_GLOBAL] = SVT_DESTINATION
     } else {
         remove<String>(SAVED_GLOBAL)
     }

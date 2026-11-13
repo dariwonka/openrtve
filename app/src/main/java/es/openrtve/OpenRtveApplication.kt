@@ -24,7 +24,14 @@ class OpenRtveApplication : Application(), SingletonImageLoader.Factory {
             .components {
                 // Cada imagen del servicio de RTVE se pide al tamaño en que se pinta.
                 add(RtveImageSizeInterceptor())
-                add(OkHttpNetworkFetcherFactory(callFactory = { container.okHttpClient }))
+                // Las carátulas de SVT Barn salen de svtstatic.se, fuera de la allowlist de rtve.es.
+                add(OkHttpNetworkFetcherFactory(callFactory = {
+                    okhttp3.Call.Factory { request ->
+                        val host = request.url.host
+                        val client = if (host == "svtstatic.se" || host.endsWith(".svtstatic.se")) container.mediaHttpClient else container.okHttpClient
+                        client.newCall(request)
+                    }
+                }))
             }
             .diskCache {
                 DiskCache.Builder()

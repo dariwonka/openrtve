@@ -46,6 +46,8 @@ class CatalogActions(
 
     val openSettings: () -> Unit = { navigation.openGlobal(GlobalDestination.Settings) }
 
+    val openSvt: () -> Unit = { navigation.openGlobal(GlobalDestination.Svt) }
+
     val showMessage: (String) -> Unit = { navigation.show(UiMessage.Text(it)) }
 
 }

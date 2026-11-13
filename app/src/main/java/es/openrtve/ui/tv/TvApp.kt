@@ -109,6 +109,8 @@ fun TvApp(container: AppContainer) {
                 onSection = showSection,
                 onSearch = { navigation.selectTab(Tab.SEARCH) },
                 onSettings = { if (destination != GlobalDestination.Settings) actions.openSettings() },
+                onSvt = { if (destination != GlobalDestination.Svt) actions.openSvt() },
+                svtSelected = destination == GlobalDestination.Svt,
             )
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 DestinationHost(nav, navigation) { current ->
@@ -121,6 +123,7 @@ fun TvApp(container: AppContainer) {
                             hiddenIds = outsideSeries,
                         )
                         GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage, removed = catalog.removed, onRestore = catalogViewModel::restore, onBackupRestored = catalogViewModel::reloadFromStore)
+                        GlobalDestination.Svt -> TvSvtScreen(container, onMessage = actions.showMessage)
                         // Dos raíces: el buscador y los títulos de Clan. Una serie abre su página; un vídeo se reproduce.
                         null -> if (nav.tab == Tab.SEARCH) TvSearchScreen(
                             repository = repository,

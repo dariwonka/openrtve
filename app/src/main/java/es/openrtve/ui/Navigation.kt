@@ -23,6 +23,7 @@ sealed interface Destination : AppDestination {
 /** Pantallas globales: no pertenecen ni se guardan en la pila de una pestaña. */
 sealed interface GlobalDestination : AppDestination {
     data object Settings : GlobalDestination
+    data object Svt : GlobalDestination
 }
 
 /** Mensajes efímeros que la UI muestra una vez y descarta. */
@@ -49,6 +50,7 @@ fun entryKey(tab: Tab, index: Int, generation: Int = 0): String = when {
 
 fun globalEntryKey(destination: GlobalDestination): String = when (destination) {
     GlobalDestination.Settings -> "global/settings"
+    GlobalDestination.Svt -> "global/svt"
 }
 
 data class NavigationState(

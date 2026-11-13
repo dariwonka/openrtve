@@ -74,6 +74,8 @@ internal fun TvTopBar(
     onSection: (ClanSection) -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
+    onSvt: () -> Unit = {},
+    svtSelected: Boolean = false,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -85,6 +87,7 @@ internal fun TvTopBar(
     ) {
         TvChoiceButton(stringResource(R.string.catalog_series), section == ClanSection.SERIES) { onSection(ClanSection.SERIES) }
         TvChoiceButton(stringResource(R.string.catalog_movies), section == ClanSection.MOVIES) { onSection(ClanSection.MOVIES) }
+        TvChoiceButton("SVT Barn", svtSelected, onClick = onSvt)
         Spacer(Modifier.weight(1f))
         IconButton(onClick = onSearch) { Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.tab_search)) }
         IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title)) }
