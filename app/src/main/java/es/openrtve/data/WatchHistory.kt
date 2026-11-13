@@ -49,6 +49,8 @@ class WatchHistory(
     private val json: Json = Json,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /** Aviso al empezar a ver algo: el catálogo lo ancla y lo sube delante. */
+    private val onWatched: (CatalogItem) -> Unit = {},
 ) {
     private val file = AtomicFile(file)
     private val mutableEntries = MutableStateFlow(load())
@@ -73,6 +75,7 @@ class WatchHistory(
     /** Registra el item antes de reproducirlo para que el progreso tenga a qué asociarse. */
     fun register(item: CatalogItem) {
         if (item.kind == ContentKind.LIVE) return
+        onWatched(item)
         val existing = entryFor(item.id)
         save(
             (mutableEntries.value.filterNot { it.item.id == item.id } +

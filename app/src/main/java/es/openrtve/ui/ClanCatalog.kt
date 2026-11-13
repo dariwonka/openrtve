@@ -110,6 +110,27 @@ const val EPISODE_MIN_MS = 4L * 60_000L
 fun catalogEntryOf(item: CatalogItem): CatalogItem? =
     buildClanCatalog(listOf(LoadedRow("", listOf(item)))).let { it.movies.firstOrNull() ?: it.series.firstOrNull() }
 
+/**
+ * Lo que se acaba de ver pasa a ser lo primero de su lista: se ancla (aunque se hubiera desanclado
+ * a mano) y se marca como el más reciente. Una serie se ancla por su programa, una película por sí
+ * misma; si aún no está en la base de datos (viene del buscador), se añade.
+ */
+fun StoredCatalog.withWatched(item: CatalogItem, now: Long): StoredCatalog {
+    val entry = when {
+        movies.any { it.id == item.id } -> movies.first { it.id == item.id }
+        item.programId != null && series.any { it.id == item.programId } -> series.first { it.id == item.programId }
+        else -> catalogEntryOf(item)
+    } ?: return this
+    if (entry.id in removed) return this
+    val inList = series.any { it.id == entry.id } || movies.any { it.id == entry.id }
+    val isMovie = entry.kind == ContentKind.VIDEO
+    val base = if (inList) this else copy(
+        series = if (isMovie) series else (series + entry).alphabetical(),
+        movies = if (isMovie) (movies + entry).alphabetical() else movies,
+    )
+    return base.copy(pinned = pinned + entry.id, pinnedFresh = pinnedFresh + (entry.id to now), unpinned = unpinned - entry.id)
+}
+
 /** Serie a la que pertenece un capítulo, como título propio; `null` si el feed no la nombra. */
 private fun CatalogItem.seriesTitle(): CatalogItem? {
     val id = programId ?: return null
@@ -312,15 +333,22 @@ class ClanCatalogViewModel(
         viewModelScope.launch {
             val saved = store?.read() ?: return@launch
             val gone = saved.removed.keys - stored.removed.keys
-            if (gone.isEmpty()) return@launch
+            val pinsChanged = saved.pinned != stored.pinned || saved.pinnedFresh != stored.pinnedFresh || saved.unpinned != stored.unpinned
+            if (gone.isEmpty() && !pinsChanged) return@launch
+            val knownIds = (stored.series + stored.movies).mapTo(HashSet()) { it.id }
+            val addedSeries = saved.series.filter { it.id !in knownIds && it.id !in gone }
+            val addedMovies = saved.movies.filter { it.id !in knownIds && it.id !in gone }
             stored = stored.copy(
                 removedItems = stored.removedItems.filter { it.id !in gone } + saved.removedItems.filter { it.id in gone },
-                series = stored.series.filter { it.id !in gone },
-                movies = stored.movies.filter { it.id !in gone },
+                series = (stored.series.filter { it.id !in gone } + addedSeries).let { if (addedSeries.isEmpty()) it else it.alphabetical() },
+                movies = (stored.movies.filter { it.id !in gone } + addedMovies).let { if (addedMovies.isEmpty()) it else it.alphabetical() },
                 removed = stored.removed + saved.removed.filterKeys { it in gone },
-                pinned = stored.pinned - gone,
-                pinnedFresh = stored.pinnedFresh - gone,
+                pinned = saved.pinned - gone,
+                pinnedFresh = saved.pinnedFresh - gone,
+                unpinned = saved.unpinned,
             )
+            // Lo que se acaba de ver sube delante: el arranque rápido ya no manda sobre el orden.
+            if (pinsChanged) unlockHead()
             publish()
         }
     }

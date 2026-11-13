@@ -5,6 +5,7 @@ import es.openrtve.domain.ContentKind
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -87,6 +88,15 @@ class ClanCatalogStore(
                 pinnedFresh = current.pinnedFresh - ids.toSet(),
             ),
         )
+    }
+
+    private val updates = kotlinx.coroutines.sync.Mutex()
+
+    /** Cambia lo guardado de forma atómica respecto a otras actualizaciones de este tipo. */
+    suspend fun update(change: (StoredCatalog) -> StoredCatalog) = updates.withLock {
+        val current = read() ?: return@withLock
+        val next = change(current)
+        if (next != current) write(next)
     }
 
     /** Escritura atómica: un corte a medias deja la copia anterior. */

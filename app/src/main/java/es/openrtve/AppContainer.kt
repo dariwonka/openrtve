@@ -13,6 +13,8 @@ import es.openrtve.data.SafeHttpsClient
 import es.openrtve.data.WatchHistory
 import es.openrtve.domain.PlaybackResolver
 import es.openrtve.domain.RtveHostPolicy
+import es.openrtve.ui.withWatched
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
 class AppContainer(private val context: Context) {
@@ -43,7 +45,12 @@ class AppContainer(private val context: Context) {
     /** El PIN de borrado se pide una vez por sesión de la app. */
     @Volatile var removalUnlocked: Boolean = false
     val clanCatalogStore = ClanCatalogStore(context.filesDir.resolve("clan-catalog.json"))
-    val watchHistory = WatchHistory(context.filesDir.resolve("watch-history.json"))
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    /** Lo que se ve se ancla y sube al principio de su lista (ver [es.openrtve.ui.withWatched]). */
+    val watchHistory = WatchHistory(
+        context.filesDir.resolve("watch-history.json"),
+        onWatched = { item -> scope.launch { clanCatalogStore.update { it.withWatched(item, System.currentTimeMillis()) } } },
+    )
     val backup = CatalogBackup(context.filesDir.resolve("clan-catalog.json"), context.filesDir.resolve("watch-history.json"))
     val playbackResolver = PlaybackResolver()
     val drmTokenClient = DrmTokenClient(httpClient)
