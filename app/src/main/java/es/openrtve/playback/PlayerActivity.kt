@@ -244,7 +244,8 @@ class PlayerActivity : ComponentActivity() {
     private var seekLastStep = 0L
 
     /**
-     * Con los controles a la vista, izquierda/derecha saltan un minuto por pulsación y,
+     * Con el aviso de "Siguiente" a la vista, OK pasa al siguiente episodio. Con los controles
+     * a la vista, izquierda/derecha saltan un minuto por pulsación y,
      * manteniendo la tecla, el salto crece poco a poco; el botón central pausa/reanuda.
      */
     @android.annotation.SuppressLint("RestrictedApi")
@@ -253,6 +254,13 @@ class PlayerActivity : ComponentActivity() {
         // Atrás cierra el panel de ajustes de una sola pulsación.
         if (menu != null && event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
             if (event.action == android.view.KeyEvent.ACTION_UP) menu = null
+            return true
+        }
+        // Con el aviso de "Siguiente" a la vista, OK salta al siguiente episodio, esté donde esté el foco.
+        if (menu == null && showNext && nextItem != null &&
+            (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER)
+        ) {
+            if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) playNext()
             return true
         }
         if (view != null && menu == null && view.useController && view.isControllerFullyVisible) {
@@ -876,7 +884,6 @@ private fun PlaybackScreen(
                         view.hideController()
                         onOpenMenu()
                     }
-                    view.findViewById<ImageButton>(R.id.player_next).setOnClickListener { onPlayNext() }
                     view.findViewById<ImageButton>(R.id.player_aspect).setOnClickListener {
                         view.resizeMode = if (view.resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT) {
                             AspectRatioFrameLayout.RESIZE_MODE_ZOOM
@@ -905,7 +912,6 @@ private fun PlaybackScreen(
                     view.findViewById<TextView>(R.id.player_title).text = title
                     view.useController = controlsEnabled && menu == null
                     if (!controlsEnabled || menu != null) view.hideController()
-                    view.findViewById<ImageButton>(R.id.player_next).visibility = if (nextTitle != null) View.VISIBLE else View.GONE
                     // Directo: sin tiempos absolutos (la ventana DVR no es una duración) y con indicador en vivo.
                     val live = view.findViewById<TextView>(R.id.player_live)
                     val isLive = liveState != null

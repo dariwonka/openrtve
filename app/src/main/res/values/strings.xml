@@ -83,7 +83,6 @@
     <string name="player_track_forced">forzados</string>
     <string name="player_next">Siguiente: %1$s</string>
     <string name="player_next_in">Siguiente en %2$d s: %1$s</string>
-    <string name="player_next_button">Siguiente episodio</string>
     <string name="settings_max_quality">Calidad máxima de vídeo</string>
     <string name="settings_max_quality_summary">Automática usa la mejor que admita la conexión; 576p equivale al ahorro de datos</string>
     <string name="settings_autoplay">Reproducción automática</string>

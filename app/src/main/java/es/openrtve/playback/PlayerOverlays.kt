@@ -152,12 +152,17 @@ internal fun SeekIndicator(positionMs: Long, deltaMs: Long) {
     }
 }
 
-/** "Siguiente: título" al final del episodio, con cuenta atrás si la reproducción automática está activa. */
+/**
+ * "Siguiente: título" al final del episodio, con cuenta atrás si la reproducción automática
+ * está activa. Es el botón de siguiente: va siempre marcado (borde blanco) porque OK lo pulsa
+ * sin tener que mover el cursor (lo gestiona `PlayerActivity.dispatchKeyEvent`).
+ */
 @Composable
 internal fun NextEpisodeCard(title: String, secondsLeft: Int?, onPlay: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Button(
             onClick = onPlay,
+            border = androidx.compose.foundation.BorderStroke(3.dp, Color.White),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 24.dp, bottom = 96.dp),
