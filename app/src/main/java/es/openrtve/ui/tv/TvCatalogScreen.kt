@@ -128,6 +128,7 @@ internal fun TvCatalogScreen(
     isRemovalUnlocked: () -> Boolean,
     onUnlockRemoval: () -> Unit,
     reselectRequest: Int = 0,
+    focusFirstTick: Int = 0,
 ) {
     val titles = state.catalog.titles(section)
     val error = state.error
@@ -144,6 +145,7 @@ internal fun TvCatalogScreen(
                 gridState = gridState,
                 focusId = focusId,
                 reselectRequest = reselectRequest,
+                focusFirstTick = focusFirstTick,
             )
         }
         state.isLoading -> TvCenterMessage(stringResource(R.string.state_loading))
@@ -164,6 +166,7 @@ private fun TvTitleGrid(
     gridState: LazyGridState,
     focusId: String?,
     reselectRequest: Int,
+    focusFirstTick: Int = 0,
 ) {
     var pinFor by remember { mutableStateOf<CatalogItem?>(null) }
     val scope = rememberCoroutineScope()
@@ -178,13 +181,6 @@ private fun TvTitleGrid(
     var refocusId by remember { mutableStateOf<String?>(null) }
     val refocus = remember { FocusRequester() }
     val target = shown.indexOfFirst { it.id == focusId }.coerceAtLeast(0)
-    val toStart: () -> Unit = {
-        scope.launch {
-            gridState.scrollToItem(0)
-            withFrameNanos { }
-            runCatching { first.requestFocus() }
-        }
-    }
     // Al eliminar, el cursor se queda donde estaba: ahí queda ahora el siguiente título.
     val removeAndRefocus: (CatalogItem) -> Unit = { item ->
         val index = latest.indexOfFirst { it.id == item.id }
@@ -217,8 +213,21 @@ private fun TvTitleGrid(
     }
     // Repetir Inicio vuelve al principio de la lista.
     RootReselectionEffect(reselectRequest) { gridState.scrollToItem(0) }
-    // Atrás desde un título o del carrusel lleva al primero; desde el primero sale de la app.
-    BackHandler(enabled = focusedIndex > 0 && menuItem == null, onBack = toStart)
+    // Elegir Series o Películas deja el cursor en el primer título de la lista.
+    var handledTick by remember { mutableIntStateOf(focusFirstTick) }
+    LaunchedEffect(focusFirstTick) {
+        if (focusFirstTick == handledTick) return@LaunchedEffect
+        handledTick = focusFirstTick
+        gridState.scrollToItem(0)
+        focusUntil(first) { focusedIndex == 0 }
+    }
+    // Atrás desde cualquier título (o desde los botones de arriba) lleva al primero; desde el primero sale de la app.
+    BackHandler(enabled = shown.isNotEmpty() && focusedIndex != 0 && menuItem == null && pinFor == null) {
+        scope.launch {
+            gridState.scrollToItem(0)
+            focusUntil(first) { focusedIndex == 0 }
+        }
+    }
     ProvideTvCenteredScroll {
         LazyVerticalGrid(
             state = gridState,

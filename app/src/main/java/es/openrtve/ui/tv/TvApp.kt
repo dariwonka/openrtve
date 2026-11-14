@@ -12,6 +12,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -86,7 +87,11 @@ fun TvApp(container: AppContainer) {
 
     val destination = nav.current
     // Elegir una lista o Inicio vuelve a la raíz desde cualquier pantalla.
+    // Cada vez que se pulsa Series, Películas o SVT Barn el cursor va al primer contenido.
+    var focusFirstTick by remember { mutableIntStateOf(0) }
     val showSection: (ClanSection) -> Unit = { chosen ->
+        focusFirstTick++
+        lastOpened = null
         val atRoot = destination == null && nav.tab == Tab.HOME
         val changed = section != chosen
         section = chosen
@@ -109,7 +114,10 @@ fun TvApp(container: AppContainer) {
                 onSection = showSection,
                 onSearch = { navigation.selectTab(Tab.SEARCH) },
                 onSettings = { if (destination != GlobalDestination.Settings) actions.openSettings() },
-                onSvt = { if (destination != GlobalDestination.Svt) actions.openSvt() },
+                onSvt = {
+                    focusFirstTick++
+                    if (destination != GlobalDestination.Svt) actions.openSvt()
+                },
                 svtSelected = destination == GlobalDestination.Svt,
             )
             Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -123,7 +131,7 @@ fun TvApp(container: AppContainer) {
                             hiddenIds = outsideSeries,
                         )
                         GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage, removed = catalog.removed, onRestore = catalogViewModel::restore, onBackupRestored = catalogViewModel::reloadFromStore)
-                        GlobalDestination.Svt -> TvSvtScreen(container, onMessage = actions.showMessage)
+                        GlobalDestination.Svt -> TvSvtScreen(container, onMessage = actions.showMessage, focusFirstTick = focusFirstTick)
                         // Dos raíces: el buscador y los títulos de Clan. Una serie abre su página; un vídeo se reproduce.
                         null -> if (nav.tab == Tab.SEARCH) TvSearchScreen(
                             repository = repository,
@@ -154,6 +162,7 @@ fun TvApp(container: AppContainer) {
                             focusId = lastOpened,
                             onRetry = catalogViewModel::retry,
                             reselectRequest = nav.rootRequests.getValue(Tab.HOME),
+                            focusFirstTick = focusFirstTick,
                         )
                     } }
                 }

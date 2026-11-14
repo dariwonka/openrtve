@@ -113,6 +113,16 @@ internal suspend fun requestFocusUntilGranted(requester: FocusRequester, granted
     }
 }
 
+/** Pide el foco a [requester] hasta que [isFocused] lo confirme (el ítem puede tardar en componerse). */
+internal suspend fun focusUntil(requester: FocusRequester, isFocused: () -> Boolean) {
+    repeat(FOCUS_ATTEMPTS) {
+        withFrameNanos { }
+        if (isFocused()) return
+        runCatching { requester.requestFocus() }
+        delay(FOCUS_RETRY_MS)
+    }
+}
+
 private const val FOCUS_ATTEMPTS = 20
 private const val FOCUS_RETRY_MS = 60L
 
