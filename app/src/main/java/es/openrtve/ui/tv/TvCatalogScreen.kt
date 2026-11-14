@@ -191,24 +191,14 @@ private fun TvTitleGrid(
             if (latest.isNotEmpty() && index >= 0) refocusIndex = index.coerceAtMost(latest.size - 1)
         }
     }
-    // Al anclar, el título sube y el cursor lo sigue. Al desanclar, el cursor se queda donde
-    // estaba el anclado: ahí queda ahora el siguiente.
+    // Al anclar o desanclar, el cursor se queda en la misma posición de la lista, no en el título.
     val pinAndFollow: (CatalogItem) -> Unit = { item ->
-        val wasPinned = item.id in pinnedIds
         val before = latest.indexOfFirst { it.id == item.id }
         onTogglePin(item)
         scope.launch {
             withFrameNanos { }
             withFrameNanos { }
-            if (wasPinned) {
-                if (latest.isNotEmpty() && before >= 0) refocusIndex = before.coerceAtMost(latest.size - 1)
-            } else {
-                val index = latest.indexOfFirst { it.id == item.id }
-                if (index >= 0) {
-                    gridState.scrollToItem(index)
-                    refocusId = item.id
-                }
-            }
+            if (latest.isNotEmpty() && before >= 0) refocusIndex = before.coerceAtMost(latest.size - 1)
         }
     }
     // Repetir Inicio vuelve al principio de la lista.
