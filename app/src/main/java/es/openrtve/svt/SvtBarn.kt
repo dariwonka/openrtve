@@ -158,6 +158,11 @@ object SvtBarn {
         }.ordered()
     }.getOrDefault(emptyList())
 
+    /** Un `null` de la API no debe tumbar toda la lista. */
+    private fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+    private fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+    private fun JsonElement?.text(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content
+
     private fun List<SvtEpisode>.ordered() = sortedWith(compareBy({ it.season }, { it.number == 0 }, { it.number }))
 
     private fun String.slugOfPath(): String =
