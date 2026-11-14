@@ -28,6 +28,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import es.openrtve.AppContainer
+import es.openrtve.boing.Boing
+import es.openrtve.boing.Boing.asItem
 import es.openrtve.domain.ContentKind
 import es.openrtve.ui.ClanCatalogViewModel
 import es.openrtve.ui.ClanSection
@@ -55,7 +57,11 @@ fun TvApp(container: AppContainer) {
     // Un solo catálogo para toda la sesión: volver al inicio no lo descarga otra vez.
     val catalogViewModel: ClanCatalogViewModel = viewModel(
         key = "clan-catalog",
-        factory = viewModelFactory { initializer { ClanCatalogViewModel(repository, container.clanCatalogStore, container.infantilSeed, container.movieSeed) } },
+        factory = viewModelFactory { initializer { ClanCatalogViewModel(
+            repository, container.clanCatalogStore, container.infantilSeed, container.movieSeed,
+            extraSeries = container.boingCatalog.map { it.asItem() },
+            discoverExtra = { known -> discoverBoing(container, known) },
+        ) } },
     )
     val catalog by catalogViewModel.uiState.collectAsStateWithLifecycle()
     var section by rememberSaveable { mutableStateOf(ClanSection.SERIES) }
@@ -123,7 +129,7 @@ fun TvApp(container: AppContainer) {
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 DestinationHost(nav, navigation) { current ->
                     ProvideScreenInitialFocus { when (current) {
-                        is Destination.Program -> TvProgramScreen(
+                        is Destination.Program -> if (Boing.isBoing(current.item.id)) TvBoingScreen(container, current.item, onMessage = actions.showMessage) else TvProgramScreen(
                             repository = repository,
                             history = container.watchHistory,
                             program = current.item,
@@ -195,6 +201,15 @@ fun TvApp(container: AppContainer) {
     }
     }
 }
+
+/** Series de Boing que no se conocían: solo las que tienen algún capítulo (no juegos ni extras). */
+private suspend fun discoverBoing(container: AppContainer, known: Set<String>): List<es.openrtve.domain.CatalogItem> =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val api = container.boingApi
+        (api.programs() ?: return@withContext emptyList()).filter { Boing.PREFIX + it.guid !in known }.mapNotNull { series ->
+            series.takeIf { api.chapters(it.guid).orEmpty().isNotEmpty() }?.asItem()
+        }
+    }
 
 private const val MESSAGE_VISIBLE_MS = 4_000L
 private const val SPLASH_FADE_MS = 150

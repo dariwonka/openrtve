@@ -223,6 +223,10 @@ class ClanCatalogViewModel(
     /** Películas infantiles conocidas, para tenerlas desde el primer segundo. */
     private val movieSeed: List<CatalogItem> = emptyList(),
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Series de otras plataformas (Boing) que se suman a las de RTVE; no se miran por dentro como las de RTVE. */
+    private val extraSeries: List<CatalogItem> = emptyList(),
+    /** Series nuevas de esas plataformas: recibe los ids ya conocidos y devuelve solo las que no lo eran. */
+    private val discoverExtra: suspend (known: Set<String>) -> List<CatalogItem> = { emptyList() },
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ClanCatalogUiState())
     val uiState: StateFlow<ClanCatalogUiState> = mutableUiState.asStateFlow()
@@ -237,7 +241,7 @@ class ClanCatalogViewModel(
     private val known = mutableMapOf<String, CatalogItem>()
 
     init {
-        (seed + movieSeed).forEach { known[it.id] = it }
+        (seed + movieSeed + extraSeries).forEach { known[it.id] = it }
         load()
         viewModelScope.launch {
             delay(READY_TIMEOUT_MS)
@@ -415,6 +419,7 @@ class ClanCatalogViewModel(
                         movies = stored.movies.filter { it.id !in stored.removed },
                     )
                 }
+                addExtraSeries()
                 publish()
                 if (!mutableUiState.value.catalog.isEmpty) mutableUiState.update { it.copy(isLoading = false) }
                 if (saved != null && !mutableUiState.value.catalog.isEmpty) {
@@ -428,6 +433,7 @@ class ClanCatalogViewModel(
                 merge(result)
                 mutableUiState.update { it.copy(isLoading = false, ready = true) }
                 scanJob = viewModelScope.launch { scanForFilms() }
+                viewModelScope.launch { discoverExtraSeries() }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -435,6 +441,31 @@ class ClanCatalogViewModel(
                 mutableUiState.update { it.copy(isLoading = false, ready = true, error = error.toLoadError().takeIf { _ -> it.catalog.isEmpty }) }
             }
         }
+    }
+
+    /** Las series de Boing que aún no están en la copia guardada (y que no se hayan eliminado a mano). */
+    private fun addExtraSeries() {
+        val have = stored.series.mapTo(HashSet()) { it.id }
+        val missing = extraSeries.filter { it.id !in have && it.id !in stored.removed }
+        if (missing.isEmpty()) return
+        stored = stored.copy(series = (stored.series + missing).alphabetical())
+        persist()
+    }
+
+    /** Series nuevas de Boing: entran ancladas delante, como las novedades de RTVE, y salen en la próxima apertura. */
+    private suspend fun discoverExtraSeries() {
+        val knownIds = stored.series.mapTo(HashSet<String>()) { it.id } + stored.removed.keys + extraSeries.map { it.id }
+        val fresh = runCatching { discoverExtra(knownIds) }.getOrDefault(emptyList()).filter { it.id !in knownIds }
+        if (fresh.isEmpty()) return
+        val now = clock()
+        fresh.forEach { known[it.id] = it }
+        stored = stored.copy(
+            series = (stored.series + fresh).alphabetical(),
+            pinned = stored.pinned + fresh.map { it.id }.filter { it !in stored.unpinned },
+            pinnedFresh = stored.pinnedFresh + fresh.filter { it.id !in stored.unpinned }.map { it.id to now },
+        )
+        persist()
+        publish()
     }
 
     /** Suma lo descargado a lo que ya había; nunca resta. */
@@ -508,6 +539,7 @@ class ClanCatalogViewModel(
         val now = clock()
         val due = (stored.series.filter { it.kind == ContentKind.PROGRAM }.map { it.id } + stored.filmOnly)
             .distinct()
+            .filter { !it.startsWith("boing:") }
             .filter { id -> stored.scanned[id]?.let { now - it !in 0 until RESCAN_MS } ?: true }
             .sortedBy { stored.scanned[it] ?: 0L }
         val permits = Semaphore(MAX_PARALLEL_SCANS)

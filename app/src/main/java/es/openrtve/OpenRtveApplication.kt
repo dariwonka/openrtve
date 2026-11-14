@@ -28,7 +28,8 @@ class OpenRtveApplication : Application(), SingletonImageLoader.Factory {
                 add(OkHttpNetworkFetcherFactory(callFactory = {
                     okhttp3.Call.Factory { request ->
                         val host = request.url.host
-                        val client = if (host == "svtstatic.se" || host.endsWith(".svtstatic.se")) container.mediaHttpClient else container.okHttpClient
+                        val media = host == "svtstatic.se" || host.endsWith(".svtstatic.se") || BOING_HOSTS.any { host == it || host.endsWith(".$it") }
+                        val client = if (media) container.mediaHttpClient else container.okHttpClient
                         client.newCall(request)
                     }
                 }))
@@ -64,6 +65,8 @@ class OpenRtveApplication : Application(), SingletonImageLoader.Factory {
     }
 
     private companion object {
+        /** Carátulas de Boing: Brightcove, Azure y Akamai. */
+        val BOING_HOSTS = listOf("boltdns.net", "azurefd.net", "akamaized.net", "windows.net")
         /** Con imágenes al tamaño en que se pintan (~30-60 KB), varios miles: más ya no se nota. */
         const val MAX_IMAGE_CACHE_BYTES = 250L * 1024 * 1024
         /** Una app recién instalada recibe una cuota pequeña: lo justo para la portada y las fichas recientes. */
