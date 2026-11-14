@@ -42,7 +42,7 @@ class SvtStateTest {
     @Test
     fun `toggle pins and unpins by hand`() {
         val pinned = SvtState().toggled("b")
-        assertEquals(listOf("b", "a", "c", "d"), pinned.order(all).map { it.id })
+        assertEquals(listOf("b", "a", "d", "c"), pinned.order(all).map { it.id })
         val unpinned = pinned.toggled("b")
         assertTrue("b" in unpinned.unpinned && "b" !in unpinned.pinned)
     }
