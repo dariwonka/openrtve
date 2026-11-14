@@ -61,7 +61,7 @@ object Boing {
                     slug = a[1].text() ?: return@mapNotNull null,
                     title = a[2].text() ?: return@mapNotNull null,
                     seconds = (a[3] as? JsonPrimitive)?.intOrNull ?: 0,
-                    number = (a[4] as? JsonPrimitive)?.intOrNull ?: 0,
+                    number = sane((a[4] as? JsonPrimitive)?.intOrNull),
                     image = a[5].text().orEmpty(),
                     season = (a[6] as? JsonPrimitive)?.intOrNull ?: 0,
                 )
@@ -108,7 +108,7 @@ object Boing {
                     slug = v["Slug"].text() ?: return@mapNotNull null,
                     title = if (menus.size > 1) "$name · $title" else title,
                     seconds = 0,
-                    number = (v["Order"] as? JsonPrimitive)?.intOrNull ?: 0,
+                    number = sane((v["Order"] as? JsonPrimitive)?.intOrNull),
                     image = v["poster"].text() ?: v["Thumbnail"].text().orEmpty(),
                     season = if (menus.size > 1) index + 1 else 0,
                 )
@@ -120,7 +120,7 @@ object Boing {
     fun parseVideoInfo(body: String): Pair<Int, Int>? = runCatching {
         val v = (Json.parseToJsonElement(body) as JsonObject)["Video"] as JsonObject
         val seconds = (v["DurationSeconds"] as? JsonPrimitive)?.intOrNull ?: return null
-        seconds to ((v["episode_number"] as? JsonPrimitive)?.intOrNull ?: 0)
+        seconds to sane((v["episode_number"] as? JsonPrimitive)?.intOrNull)
     }.getOrNull()
 
     /** La dirección del vídeo (HLS, si no DASH). `null` si no hay o está protegido. */
@@ -136,6 +136,9 @@ object Boing {
         url("mpegdash")?.let { return PlaybackDecision.Ready(uri = it, mimeType = MIME_DASH, title = title) }
         null
     }.getOrNull()
+
+    /** Boing pone 1000 o 130x donde no hay número de capítulo: eso no es un número. */
+    private fun sane(n: Int?): Int = n?.takeIf { it in 1..500 } ?: 0
 
     private const val MIME_HLS = "application/x-mpegURL"
     private const val MIME_DASH = "application/dash+xml"
