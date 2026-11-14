@@ -23,7 +23,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import es.openrtve.AppContainer
 import es.openrtve.playback.PlayerActivity
+import androidx.compose.runtime.mutableStateMapOf
+import es.openrtve.svt.SvtApi
 import es.openrtve.svt.SvtBarn
+import es.openrtve.svt.SvtEpisode
 import es.openrtve.svt.SvtBarn.asItem
 import es.openrtve.svt.SvtProgram
 import es.openrtve.svt.SvtStreamResolver
@@ -38,27 +41,51 @@ import kotlinx.coroutines.withContext
 @Composable
 fun TvSvtScreen(container: AppContainer, onMessage: (String) -> Unit) {
     val context = LocalContext.current
-    val programs by produceSvtPrograms(context)
+    val api = remember(container) { SvtApi(container.mediaHttpClient) }
+    val resolver = remember(container) { SvtStreamResolver(container.mediaHttpClient) }
+    // Primero la copia guardada (sale al momento); luego la lista actual de SVT la sustituye.
+    val saved by produceSvtPrograms(context)
+    var fresh by remember { mutableStateOf<List<SvtProgram>?>(null) }
+    LaunchedEffect(Unit) {
+        fresh = withContext(Dispatchers.IO) { runCatching { api.programs() }.getOrNull()?.takeIf { it.isNotEmpty() } }
+    }
+    val programs = remember(saved, fresh) {
+        val bySlug = saved.associateBy { it.slug }
+        fresh?.map { p -> p.copy(image = p.image.ifBlank { bySlug[p.slug]?.image.orEmpty() }, episodes = bySlug[p.slug]?.episodes.orEmpty()) } ?: saved
+    }
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
     var lastProgramId by rememberSaveable { mutableStateOf<String?>(null) }
-    val resolver = remember(container) { SvtStreamResolver(container.mediaHttpClient) }
+    val loadedEpisodes = remember { mutableStateMapOf<String, List<SvtEpisode>>() }
     val scope = rememberCoroutineScope()
     val open = programs.firstOrNull { it.id == openId }
     BackHandler(enabled = open != null) { openId = null }
+    // Al abrir un programa se piden sus episodios actuales; mientras llegan se enseñan los guardados.
+    LaunchedEffect(open?.id) {
+        val program = open ?: return@LaunchedEffect
+        val episodes = withContext(Dispatchers.IO) { api.episodes(program.slug) }
+        if (episodes != null) loadedEpisodes[program.id] = episodes
+    }
 
     Column(Modifier.fillMaxSize()) {
         TvScreenTitle(open?.title ?: "SVT Barn")
         when {
-            programs.isEmpty() -> TvCenterMessage("Cargando…")
+            programs.isEmpty() -> TvCenterMessage(if (saved.isEmpty() && fresh == null) "Cargando…" else "SVT Barn no está disponible ahora")
             open == null -> ProgramGrid(programs, lastProgramId) { program ->
                 lastProgramId = program.id
                 openId = program.id
             }
-            else -> EpisodeGrid(open) { episode ->
-                scope.launch {
-                    val decision = runCatching { withContext(Dispatchers.IO) { resolver.resolve(episode.videoId, episode.title) } }.getOrNull()
-                    if (decision == null) onMessage("No se pudo cargar este vídeo de SVT")
-                    else context.startActivity(PlayerActivity.intent(context, decision))
+            else -> {
+                val episodes = loadedEpisodes[open.id] ?: open.episodes
+                when {
+                    episodes.isNotEmpty() -> EpisodeGrid(open.id, episodes) { episode ->
+                        scope.launch {
+                            val decision = runCatching { withContext(Dispatchers.IO) { resolver.resolve(episode.videoId, episode.title) } }.getOrNull()
+                            if (decision == null) onMessage("No se pudo cargar este vídeo de SVT")
+                            else context.startActivity(PlayerActivity.intent(context, decision))
+                        }
+                    }
+                    open.id in loadedEpisodes -> TvCenterMessage("Ahora no hay episodios disponibles")
+                    else -> TvCenterMessage("Cargando…")
                 }
             }
         }
@@ -100,8 +127,8 @@ private fun ProgramGrid(programs: List<SvtProgram>, focusId: String?, onOpen: (S
 }
 
 @Composable
-private fun EpisodeGrid(program: SvtProgram, onPlay: (es.openrtve.svt.SvtEpisode) -> Unit) {
-    val items = remember(program) { program.episodes.map { it to it.asItem() } }
+private fun EpisodeGrid(programId: String, episodes: List<SvtEpisode>, onPlay: (SvtEpisode) -> Unit) {
+    val items = remember(programId, episodes) { episodes.map { it to it.asItem() } }
     ProvideTvCenteredScroll {
         LazyVerticalGrid(
             state = rememberLazyGridState(),
