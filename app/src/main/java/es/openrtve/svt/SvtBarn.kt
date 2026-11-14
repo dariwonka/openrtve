@@ -111,23 +111,23 @@ object SvtBarn {
 
     /** La lista A-Ö de la sección Barn tal como la devuelve `categoryPage`; sin episodios todavía. */
     fun parsePrograms(body: String): List<SvtProgram> = runCatching {
-        val modules = Json.parseToJsonElement(body).jsonObject["data"]?.jsonObject?.get("categoryPage")?.jsonObject?.get("modules")?.jsonArray.orEmpty()
-        val items = modules.firstOrNull { it.jsonObject["id"]?.jsonPrimitive?.contentOrNull == "all-barn" }
-            ?.jsonObject?.get("selection")?.jsonObject?.get("items")?.jsonArray.orEmpty()
+        val modules = Json.parseToJsonElement(body).obj()?.get("data").obj()?.get("categoryPage").obj()?.get("modules").arr().orEmpty()
+        val items = modules.firstOrNull { it.obj()?.get("id").text() == "all-barn" }
+            ?.obj()?.get("selection").obj()?.get("items").arr().orEmpty()
         items.mapNotNull { element ->
-            val o = element.jsonObject
-            val item = o["item"]?.jsonObject ?: return@mapNotNull null
-            if (item["__typename"]?.jsonPrimitive?.contentOrNull !in KINDS) return@mapNotNull null
-            val slug = item["urls"]?.jsonObject?.get("svtplay")?.jsonPrimitive?.contentOrNull?.slugOfPath().orEmpty()
+            val o = element.obj() ?: return@mapNotNull null
+            val item = o["item"].obj() ?: return@mapNotNull null
+            if (item["__typename"].text() !in KINDS) return@mapNotNull null
+            val slug = item["urls"].obj()?.get("svtplay").text()?.slugOfPath().orEmpty()
             if (!isIncluded(slug)) return@mapNotNull null
-            val image = o["adaptiveImage"]?.jsonObject?.let { img ->
+            val image = o["adaptiveImage"].obj()?.let { img ->
                 val id = img["id"]?.jsonPrimitive?.contentOrNull
                 val changed = img["changed"]?.jsonPrimitive?.contentOrNull
                 if (id != null && changed != null) "$id/$changed" else null
             }.orEmpty()
             SvtProgram(
-                id = item["svtId"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null,
-                title = o["heading"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null,
+                id = item["svtId"].text() ?: return@mapNotNull null,
+                title = o["heading"].text() ?: return@mapNotNull null,
                 slug = slug,
                 image = image,
             )
@@ -136,22 +136,23 @@ object SvtBarn {
 
     /** Los episodios de un programa (respuesta de `listablesBySlug`), solo los que se pueden ver desde fuera de Suecia. */
     fun parseEpisodes(body: String): List<SvtEpisode> = runCatching {
-        val program = Json.parseToJsonElement(body).jsonObject["data"]?.jsonObject?.get("listablesBySlug")?.jsonArray?.firstOrNull()?.jsonObject
-        program?.get("seasons")?.jsonArray.orEmpty().flatMap { s ->
-            val season = s.jsonObject["number"]?.jsonPrimitive?.intOrNull ?: 0
-            s.jsonObject["episodes"]?.jsonArray.orEmpty().mapNotNull { e ->
-                val o = e.jsonObject
-                val rights = o["restrictions"]?.jsonObject
-                if (rights?.get("onlyAvailableInSweden")?.jsonPrimitive?.booleanOrNull == true) return@mapNotNull null
-                if (rights?.get("drmCopyProtection")?.jsonPrimitive?.booleanOrNull == true) return@mapNotNull null
-                val wide = o["images"]?.jsonObject?.get("wide")?.jsonObject
+        val program = Json.parseToJsonElement(body).obj()?.get("data").obj()?.get("listablesBySlug").arr()?.firstOrNull().obj()
+        program?.get("seasons").arr().orEmpty().flatMap { s ->
+            val season = (s.obj()?.get("number") as? JsonPrimitive)?.intOrNull ?: 0
+            s.obj()?.get("episodes").arr().orEmpty().mapNotNull { e ->
+                val o = e.obj() ?: return@mapNotNull null
+                val rights = o["restrictions"].obj()
+                if ((rights?.get("onlyAvailableInSweden") as? JsonPrimitive)?.booleanOrNull == true) return@mapNotNull null
+                if ((rights?.get("drmCopyProtection") as? JsonPrimitive)?.booleanOrNull == true) return@mapNotNull null
+                val wide = o["images"].obj()?.get("wide").obj()
+                val image = if (wide != null && wide["id"].text() != null && wide["changed"] is JsonPrimitive) "${wide["id"].text()}/${(wide["changed"] as JsonPrimitive).content}" else ""
                 SvtEpisode(
-                    videoId = o["videoSvtId"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@mapNotNull null,
-                    title = o["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null,
-                    seconds = o["duration"]?.jsonPrimitive?.intOrNull ?: 0,
+                    videoId = o["videoSvtId"].text()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null,
+                    title = o["name"].text() ?: return@mapNotNull null,
+                    seconds = (o["duration"] as? JsonPrimitive)?.intOrNull ?: 0,
                     season = season,
-                    number = o["number"]?.jsonPrimitive?.intOrNull ?: 0,
-                    image = wide?.let { "${it["id"]?.jsonPrimitive?.contentOrNull}/${it["changed"]?.jsonPrimitive?.contentOrNull}" }.orEmpty(),
+                    number = (o["number"] as? JsonPrimitive)?.intOrNull ?: 0,
+                    image = image,
                 )
             }
         }.ordered()
