@@ -3,6 +3,7 @@ package es.openrtve.ui
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import es.openrtve.AppContainer
 import es.openrtve.domain.BlockReason
@@ -20,7 +21,26 @@ class CatalogActions(
     private val navigation: NavigationViewModel,
     private val context: Context,
 ) {
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
+
+    /** Una película de Boing: se pide su dirección de vídeo ahora (caduca) y se reproduce. */
+    private fun playBoing(item: CatalogItem) {
+        val slug = item.playbackId ?: return
+        scope.launch {
+            val decision = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                container.boingApi.video(slug)?.let { es.openrtve.boing.Boing.pickStream(it, item.title) }
+            }
+            if (decision == null) {
+                navigation.show(UiMessage.Text("No se pudo cargar este vídeo de Boing"))
+            } else {
+                container.watchHistory.register(item)
+                context.startActivity(PlayerActivity.intent(context, decision.copy(historyKey = item.id), false, listOf(item.id)))
+            }
+        }
+    }
+
     fun play(item: CatalogItem, restart: Boolean = false) {
+        if (es.openrtve.boing.Boing.isBoing(item.id)) return playBoing(item)
         when (val decision = container.playbackResolver.resolve(item)) {
             is PlaybackDecision.Ready -> {
                 container.watchHistory.register(item)

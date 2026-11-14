@@ -225,6 +225,10 @@ class ClanCatalogViewModel(
     private val clock: () -> Long = System::currentTimeMillis,
     /** Series de otras plataformas (Boing) que se suman a las de RTVE; no se miran por dentro como las de RTVE. */
     private val extraSeries: List<CatalogItem> = emptyList(),
+    /** Películas de otras plataformas (el cine de Boing) que se suman a Películas. */
+    private val extraMovies: List<CatalogItem> = emptyList(),
+    /** Series que antes se mostraban como serie y ahora son películas sueltas: se quitan de Series. */
+    private val extraNotSeries: Set<String> = emptySet(),
     /** Series nuevas de esas plataformas: recibe los ids ya conocidos y devuelve solo las que no lo eran. */
     private val discoverExtra: suspend (known: Set<String>) -> List<CatalogItem> = { emptyList() },
 ) : ViewModel() {
@@ -241,7 +245,7 @@ class ClanCatalogViewModel(
     private val known = mutableMapOf<String, CatalogItem>()
 
     init {
-        (seed + movieSeed + extraSeries).forEach { known[it.id] = it }
+        (seed + movieSeed + extraSeries + extraMovies).forEach { known[it.id] = it }
         load()
         viewModelScope.launch {
             delay(READY_TIMEOUT_MS)
@@ -446,23 +450,34 @@ class ClanCatalogViewModel(
     /** Las series de Boing que aún no están en la copia guardada (y que no se hayan eliminado a mano). */
     private fun addExtraSeries() {
         val have = stored.series.mapTo(HashSet()) { it.id }
+        val haveMovies = stored.movies.mapTo(HashSet()) { it.id }
         val missing = extraSeries.filter { it.id !in have && it.id !in stored.removed }
-        if (missing.isEmpty()) return
-        stored = stored.copy(series = (stored.series + missing).alphabetical())
+        val missingMovies = extraMovies.filter { it.id !in haveMovies && it.id !in stored.removed }
+        val leftovers = stored.series.any { it.id in extraNotSeries }
+        if (missing.isEmpty() && missingMovies.isEmpty() && !leftovers) return
+        stored = stored.copy(
+            series = (stored.series.filter { it.id !in extraNotSeries } + missing).alphabetical(),
+            movies = if (missingMovies.isEmpty()) stored.movies else (stored.movies + missingMovies).alphabetical(),
+            pinned = stored.pinned - extraNotSeries,
+            pinnedFresh = stored.pinnedFresh - extraNotSeries,
+        )
         persist()
     }
 
     /** Series nuevas de Boing: entran ancladas delante, como las novedades de RTVE, y salen en la próxima apertura. */
     private suspend fun discoverExtraSeries() {
-        val knownIds = stored.series.mapTo(HashSet<String>()) { it.id } + stored.removed.keys + extraSeries.map { it.id }
+        val knownIds = (stored.series + stored.movies).mapTo(HashSet<String>()) { it.id } + stored.removed.keys + extraSeries.map { it.id } + extraNotSeries
         val fresh = runCatching { discoverExtra(knownIds) }.getOrDefault(emptyList()).filter { it.id !in knownIds }
         if (fresh.isEmpty()) return
         val now = clock()
         fresh.forEach { known[it.id] = it }
+        val (films, shows) = fresh.partition { it.kind == ContentKind.VIDEO }
+        val pin = fresh.filter { it.id !in stored.unpinned }
         stored = stored.copy(
-            series = (stored.series + fresh).alphabetical(),
-            pinned = stored.pinned + fresh.map { it.id }.filter { it !in stored.unpinned },
-            pinnedFresh = stored.pinnedFresh + fresh.filter { it.id !in stored.unpinned }.map { it.id to now },
+            series = (stored.series + shows).alphabetical(),
+            movies = if (films.isEmpty()) stored.movies else (stored.movies + films).alphabetical(),
+            pinned = stored.pinned + pin.map { it.id },
+            pinnedFresh = stored.pinnedFresh + pin.map { it.id to now },
         )
         persist()
         publish()

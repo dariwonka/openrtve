@@ -48,6 +48,11 @@ object Boing {
     /** Menús de una ficha que no son capítulos. */
     private val NOT_CHAPTERS = Regex("extra|corto|juego|quiz|karaoke|únete|unete|conoce|postres", RegexOption.IGNORE_CASE)
 
+    /** Series de Boing que en realidad son un cine: sus capítulos salen sueltos en Películas, no como serie. */
+    val MOVIE_CONTAINERS: Set<String> = setOf("3b38761a-ac23-4cb1-a395-e2c293aaf866") // "Cine Boing App"
+
+    fun isMovieContainer(guid: String) = guid in MOVIE_CONTAINERS
+
     fun isBoing(id: String?): Boolean = id?.startsWith(PREFIX) == true
 
     /** La copia guardada en la app. */
@@ -153,8 +158,16 @@ object Boing {
         loginRequired = false, paid = false, drm = false, programId = PREFIX + guid,
     )
 
+    /** Una película de Boing: un vídeo suelto, sin serie. [BoingEpisode.slug] va en `playbackId`. */
+    fun BoingEpisode.asMovie() = CatalogItem(
+        id = PREFIX + guid, playbackId = slug, assetId = null, title = title, subtitle = null,
+        imageUrl = image.ifBlank { null }, kind = ContentKind.VIDEO, allowedInCountry = null,
+        loginRequired = false, paid = false, drm = false,
+        durationMs = seconds.takeIf { it > 0 }?.let { it * 1000L },
+    )
+
     fun BoingEpisode.asItem(series: String, seriesTitle: String?) = CatalogItem(
-        id = PREFIX + guid, playbackId = null, assetId = null, title = title, subtitle = seriesTitle,
+        id = PREFIX + guid, playbackId = slug, assetId = null, title = title, subtitle = seriesTitle,
         imageUrl = image.ifBlank { null }, kind = ContentKind.VIDEO, allowedInCountry = null,
         loginRequired = false, paid = false, drm = false, programId = series,
         durationMs = seconds.takeIf { it > 0 }?.let { it * 1000L }, episode = number.takeIf { it > 0 },

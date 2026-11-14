@@ -56,4 +56,15 @@ class BoingTest {
         assertEquals("Serie", programs[0].title)
         assertNotNull(with(Boing) { programs[0].asItem() })
     }
+
+    @Test
+    fun `cine boing is a movie container and its videos become loose movies`() {
+        val file = listOf("src/main/assets/boing_catalogo.json", "app/src/main/assets/boing_catalogo.json").map(::File).first { it.exists() }
+        val cine = Boing.parseCatalog(file.readText()).first { Boing.isMovieContainer(it.guid) }
+        val movie = with(Boing) { cine.episodes.first().asMovie() }
+        assertEquals(es.openrtve.domain.ContentKind.VIDEO, movie.kind)
+        assertEquals(cine.episodes.first().slug, movie.playbackId)
+        assertNull(movie.programId)
+        assertTrue(Boing.isBoing(movie.id))
+    }
 }

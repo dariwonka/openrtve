@@ -30,6 +30,7 @@ import androidx.tv.material3.Text
 import es.openrtve.AppContainer
 import es.openrtve.boing.Boing
 import es.openrtve.boing.Boing.asItem
+import es.openrtve.boing.Boing.asMovie
 import es.openrtve.domain.ContentKind
 import es.openrtve.ui.ClanCatalogViewModel
 import es.openrtve.ui.ClanSection
@@ -59,7 +60,9 @@ fun TvApp(container: AppContainer) {
         key = "clan-catalog",
         factory = viewModelFactory { initializer { ClanCatalogViewModel(
             repository, container.clanCatalogStore, container.infantilSeed, container.movieSeed,
-            extraSeries = container.boingCatalog.map { it.asItem() },
+            extraSeries = container.boingCatalog.filter { !Boing.isMovieContainer(it.guid) }.map { it.asItem() },
+            extraMovies = container.boingCatalog.filter { Boing.isMovieContainer(it.guid) }.flatMap { s -> s.episodes.map { it.asMovie() } },
+            extraNotSeries = Boing.MOVIE_CONTAINERS.map { Boing.PREFIX + it }.toSet(),
             discoverExtra = { known -> discoverBoing(container, known) },
         ) } },
     )
@@ -206,9 +209,18 @@ fun TvApp(container: AppContainer) {
 private suspend fun discoverBoing(container: AppContainer, known: Set<String>): List<es.openrtve.domain.CatalogItem> =
     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val api = container.boingApi
-        (api.programs() ?: return@withContext emptyList()).filter { Boing.PREFIX + it.guid !in known }.mapNotNull { series ->
+        val programs = api.programs() ?: return@withContext emptyList()
+        val shows = programs.filter { !Boing.isMovieContainer(it.guid) && Boing.PREFIX + it.guid !in known }.mapNotNull { series ->
             series.takeIf { api.chapters(it.guid).orEmpty().isNotEmpty() }?.asItem()
         }
+        // El cine de Boing: cada vídeo nuevo que aparezca va directo a Películas (con su duración).
+        val films = programs.filter { Boing.isMovieContainer(it.guid) }.flatMap { api.chapters(it.guid).orEmpty() }
+            .filter { Boing.PREFIX + it.guid !in known }
+            .map { e ->
+                val info = api.video(e.slug)?.let(Boing::parseVideoInfo)
+                (if (info != null) e.copy(seconds = info.first) else e).asMovie()
+            }
+        shows + films
     }
 
 private const val MESSAGE_VISIBLE_MS = 4_000L
