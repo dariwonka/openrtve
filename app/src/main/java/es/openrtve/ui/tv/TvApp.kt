@@ -113,7 +113,10 @@ fun TvApp(container: AppContainer) {
         }
     }
     // Pasar el cursor por un botón de arriba muestra su contenido sin mover el cursor al contenido.
-    val previewSection: (ClanSection) -> Unit = { chosen ->
+    val previewSection: (ClanSection) -> Unit = preview@{ chosen ->
+        // Al abrir una serie, el cursor de la tarjeta pulsada puede caer un instante en el botón de
+        // arriba; eso no es "pasar por encima" y no debe cerrar la serie recién abierta.
+        if (destination is Destination.Program) return@preview
         val atRoot = destination == null && nav.tab == Tab.HOME
         if (!(atRoot && section == chosen)) {
             lastOpened = null
