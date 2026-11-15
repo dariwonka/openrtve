@@ -101,6 +101,7 @@ fun TvBoingScreen(container: AppContainer, program: CatalogItem, onMessage: (Str
                                     if (decision == null) {
                                         onMessage("No se pudo cargar este vídeo de Boing")
                                     } else {
+                                        container.playQueue.set(items)
                                         container.watchHistory.register(item)
                                         context.startActivity(
                                             PlayerActivity.intent(context, decision.copy(historyKey = item.id), false, listOfNotNull(item.id, item.programId)),

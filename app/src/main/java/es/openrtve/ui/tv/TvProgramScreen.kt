@@ -42,6 +42,8 @@ fun TvProgramScreen(
     onPlay: (CatalogItem) -> Unit,
     /** Vídeos que no se enseñan aquí: los que ya salen sueltos en Películas y los eliminados. */
     hiddenIds: Set<String> = emptySet(),
+    /** Se avisa con la lista que se ve, en su orden, justo antes de reproducir: de ella sale el siguiente capítulo. */
+    onQueue: (List<CatalogItem>) -> Unit = {},
 ) {
     val screen = rememberProgramScreen(repository, history, program)
     val viewModel = screen.viewModel
@@ -83,7 +85,7 @@ fun TvProgramScreen(
                         val entry = screen.entriesById[item.id]
                         TvEpisodeCard(
                             item = item,
-                            onClick = { onPlay(item) },
+                            onClick = { onQueue(shown); onPlay(item) },
                             modifier = (if (index == 0) Modifier.initialFocus() else Modifier).wrapRowFocus(index, shown.size),
                             progress = entry?.takeIf { it.inProgress }?.progress,
                             badge = if (entry?.finished == true) stringResource(R.string.episode_watched) else null,

@@ -86,6 +86,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runInterruptible
 
 @OptIn(UnstableApi::class)
@@ -147,7 +148,11 @@ class PlayerActivity : ComponentActivity() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             refreshPaused()
-            if (playbackState == Player.STATE_ENDED && nextItem != null && settings.current.autoplayNext) playNext()
+            if (playbackState == Player.STATE_ENDED) {
+                // Lo que acaba queda como visto aunque el siguiente tarde en llegar.
+                saveProgress()
+                if (nextItem != null && settings.current.autoplayNext) playNext()
+            }
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -518,7 +523,7 @@ class PlayerActivity : ComponentActivity() {
         }
         if (extrasForUri != target.uri) {
             extrasForUri = target.uri
-            loadExtras(target.videoId)
+            loadExtras(target.historyKey, target.videoId)
         }
         val current = player.currentMediaItem?.mediaId
         if (current == target.uri || (target.fallbackUri != null && current == target.fallbackUri)) {
@@ -602,11 +607,13 @@ class PlayerActivity : ComponentActivity() {
     private val container get() = (application as OpenRtveApplication).container
 
     /** Siguiente episodio: un extra que no bloquea la reproducción. */
-    private fun loadExtras(videoId: String?) {
+    private fun loadExtras(historyKey: String?, videoId: String?) {
         extrasJob?.cancel()
         nextItem = null
         showNext = false
         nextCountdown = null
+        // El siguiente es el que viene detrás en la lista que se estaba viendo (RTVE, Boing o SVT).
+        container.playQueue.after(historyKey)?.let { nextItem = it; return }
         if (videoId == null) return
         extrasJob = lifecycleScope.launch {
             launch {
@@ -641,19 +648,46 @@ class PlayerActivity : ComponentActivity() {
     private fun playNext() {
         val next = nextItem ?: return
         val player = controller ?: return
-        val decision = container.playbackResolver.resolve(next) as? PlaybackDecision.Ready ?: return
-        // El ticker guarda cada 10 s: sin esto, el episodio que acaba puede no quedar como visto.
-        saveProgress()
-        history.register(next)
-        val ids = listOfNotNull(next.id, next.programId)
-        request = PlaybackRequest.from(decision, restart = false, catalogIds = ids)
-        setIntent(intent(this, decision, catalogIds = ids))
-        pendingPlay = true
-        usedFallback = false
-        errorRes = null
-        showNext = false
-        applyPresentation()
-        startRequested(player)
+        if (startingNext) return
+        startingNext = true
+        lifecycleScope.launch {
+            val decision = try {
+                resolveNext(next)
+            } finally {
+                startingNext = false
+            }
+            if (decision == null) {
+                showNext = false
+                return@launch
+            }
+            // El ticker guarda cada 10 s: sin esto, el episodio que acaba puede no quedar como visto.
+            saveProgress()
+            history.register(next)
+            val ids = listOfNotNull(next.id, next.programId)
+            request = PlaybackRequest.from(decision, restart = false, catalogIds = ids)
+            setIntent(intent(this@PlayerActivity, decision, catalogIds = ids))
+            pendingPlay = true
+            usedFallback = false
+            errorRes = null
+            showNext = false
+            applyPresentation()
+            startRequested(player)
+        }
+    }
+
+    private var startingNext = false
+
+    /** La dirección de vídeo del siguiente: Boing y SVT la piden ahora (caduca); RTVE se resuelve localmente. */
+    private suspend fun resolveNext(next: CatalogItem): PlaybackDecision.Ready? = when {
+        es.openrtve.boing.Boing.isBoing(next.id) -> withContext(kotlinx.coroutines.Dispatchers.IO) {
+            next.playbackId?.let { container.boingApi.video(it) }?.let { es.openrtve.boing.Boing.pickStream(it, next.title) }
+                ?.copy(historyKey = next.id)
+        }
+        next.id.startsWith("svt:") -> withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { es.openrtve.svt.SvtStreamResolver(container.mediaHttpClient).resolve(next.id.removePrefix("svt:"), next.title) }.getOrNull()
+                ?.copy(historyKey = next.id)
+        }
+        else -> container.playbackResolver.resolve(next) as? PlaybackDecision.Ready
     }
 
     /** Guarda la posición para "Seguir viendo"; el ticker lo llama cada segundo y onStop al salir. */

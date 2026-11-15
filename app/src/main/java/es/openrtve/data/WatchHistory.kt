@@ -75,7 +75,8 @@ class WatchHistory(
     /** Registra el item antes de reproducirlo para que el progreso tenga a qué asociarse. */
     fun register(item: CatalogItem) {
         if (item.kind == ContentKind.LIVE) return
-        onWatched(item)
+        // Los capítulos de SVT no son del catálogo de Clan: solo se recuerda cuáles se han visto.
+        if (!item.id.startsWith("svt:")) onWatched(item)
         val existing = entryFor(item.id)
         save(
             (mutableEntries.value.filterNot { it.item.id == item.id } +
@@ -111,7 +112,8 @@ class WatchHistory(
 
     private fun save(entries: List<WatchEntry>) {
         val trimmed = entries
-            .filter { nowMillis() - it.updatedAtMillis < MAX_AGE_MS }
+            // Lo visto hasta el final se recuerda mucho más: de ahí salen las marcas de "visto" de los capítulos.
+            .filter { nowMillis() - it.updatedAtMillis < if (it.finished) MAX_FINISHED_AGE_MS else MAX_AGE_MS }
             .sortedByDescending { it.updatedAtMillis }
             .take(MAX_ENTRIES)
         mutableEntries.value = trimmed
@@ -203,7 +205,8 @@ class WatchHistory(
     }
 
     companion object {
-        private const val MAX_ENTRIES = 60
+        private const val MAX_ENTRIES = 1_500
+        private const val MAX_FINISHED_AGE_MS = 2L * 365 * 24 * 60 * 60 * 1_000
         private const val MAX_AGE_MS = 60L * 24 * 60 * 60 * 1_000
         const val MIN_POSITION_MS = 30_000L
         private const val FINISHED_FRACTION = 0.95

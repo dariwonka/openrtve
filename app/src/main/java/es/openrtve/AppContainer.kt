@@ -51,6 +51,8 @@ class AppContainer(private val context: Context) {
     }
     val boingApi by lazy { es.openrtve.boing.BoingApi(mediaHttpClient) }
     val boingDurations = es.openrtve.boing.BoingDurations(context.filesDir.resolve("boing-durations.json"))
+    /** La lista de capítulos que se está viendo: de ella sale el siguiente al acabar uno. */
+    val playQueue = es.openrtve.playback.PlayQueue()
     val svtStore = es.openrtve.svt.SvtStateStore(context.filesDir.resolve("svt-state.json"))
     private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
     /** Lo que se ve se ancla y sube al principio de su lista (ver [es.openrtve.ui.withWatched]). */

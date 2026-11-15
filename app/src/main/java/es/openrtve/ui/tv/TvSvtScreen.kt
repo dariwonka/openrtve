@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import es.openrtve.AppContainer
 import es.openrtve.R
@@ -93,6 +94,8 @@ fun TvSvtScreen(container: AppContainer, onMessage: (String) -> Unit, focusFirst
     }
     val loadedEpisodes = remember { mutableStateMapOf<String, List<SvtEpisode>>() }
     val scope = rememberCoroutineScope()
+    val history by container.watchHistory.entries.collectAsStateWithLifecycle()
+    val watched = remember(history) { history.filter { it.item.id.startsWith("svt:") }.associateBy { it.item.id.removePrefix("svt:") } }
     val open = programs.firstOrNull { it.id == openId }
     BackHandler(enabled = open != null) { openId = null }
     // Al abrir un programa se piden sus episodios actuales; mientras llegan se enseñan los guardados.
@@ -121,7 +124,7 @@ fun TvSvtScreen(container: AppContainer, onMessage: (String) -> Unit, focusFirst
             else -> {
                 val episodes = loadedEpisodes[open.id] ?: open.episodes
                 when {
-                    episodes.isNotEmpty() -> EpisodeGrid(open.id, episodes, lastEpisodeId, focusFirstTick, onExit = { openId = null }) { episode ->
+                    episodes.isNotEmpty() -> EpisodeGrid(open.id, episodes, lastEpisodeId, focusFirstTick, watched, onExit = { openId = null }) { episode ->
                         scope.launch {
                             val decision = runCatching { withContext(Dispatchers.IO) { resolver.resolve(episode.videoId, episode.title) } }.getOrNull()
                             if (decision == null) {
@@ -130,7 +133,10 @@ fun TvSvtScreen(container: AppContainer, onMessage: (String) -> Unit, focusFirst
                                 lastEpisodeId = episode.videoId
                                 // Lo que se ve se ancla y pasa a ser el primero de la lista.
                                 svtState = store.update { it.watched(open.id, System.currentTimeMillis()) }
-                                context.startActivity(PlayerActivity.intent(context, decision))
+                                // El siguiente capítulo es el de la lista; y lo visto queda marcado.
+                                container.playQueue.set(episodes.map { it.asItem() })
+                                container.watchHistory.register(episode.asItem())
+                                context.startActivity(PlayerActivity.intent(context, decision.copy(historyKey = "svt:${episode.videoId}")))
                             }
                         }
                     }
@@ -173,6 +179,7 @@ private fun EpisodeGrid(
     episodes: List<SvtEpisode>,
     focusId: String?,
     focusFirstTick: Int,
+    watched: Map<String, es.openrtve.data.WatchEntry>,
     onExit: () -> Unit,
     onPlay: (SvtEpisode) -> Unit,
 ) {
@@ -181,7 +188,7 @@ private fun EpisodeGrid(
     // Como en una serie: Atrás desde los episodios vuelve directo a la lista de programas.
     SvtCardGrid(
         entries = items, startKey = focusId, focusFirstTick = focusFirstTick, episodic = true,
-        pinnedIds = emptySet(), backToFirstFirst = false, onExit = onExit, onTogglePin = null,
+        pinnedIds = emptySet(), backToFirstFirst = false, onExit = onExit, onTogglePin = null, watched = watched,
     ) { id -> byId[id]?.let(onPlay) }
 }
 
@@ -201,6 +208,7 @@ private fun SvtCardGrid(
     backToFirstFirst: Boolean,
     onExit: () -> Unit,
     onTogglePin: (suspend (String) -> Unit)?,
+    watched: Map<String, es.openrtve.data.WatchEntry> = emptyMap(),
     onClick: (String) -> Unit,
 ) {
     val context = LocalContext.current
@@ -283,7 +291,12 @@ private fun SvtCardGrid(
                         favorite = key in pinnedIds,
                     )
                 } else {
-                    TvEpisodeCard(item = item, onClick = { onClick(key) }, modifier = cardModifier, episodic = episodic)
+                    val entry = watched[key]
+                    TvEpisodeCard(
+                        item = item, onClick = { onClick(key) }, modifier = cardModifier, episodic = episodic,
+                        progress = entry?.takeIf { it.inProgress }?.progress,
+                        badge = if (entry?.finished == true) stringResource(R.string.episode_watched) else null,
+                    )
                 }
             }
         }

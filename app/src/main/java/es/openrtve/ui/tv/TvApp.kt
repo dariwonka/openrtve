@@ -138,6 +138,7 @@ fun TvApp(container: AppContainer) {
                             program = current.item,
                             onPlay = actions.playItem,
                             hiddenIds = outsideSeries,
+                            onQueue = container.playQueue::set,
                         )
                         GlobalDestination.Settings -> TvSettingsScreen(container, onMessage = actions.showMessage, removed = catalog.removed, onRestore = catalogViewModel::restore, onBackupRestored = catalogViewModel::reloadFromStore)
                         GlobalDestination.Svt -> TvSvtScreen(container, onMessage = actions.showMessage, focusFirstTick = focusFirstTick)

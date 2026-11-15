@@ -73,4 +73,17 @@ class WatchHistoryLimitsTest {
         assertEquals(listOf("ok"), recovered.map { it.item.id })
         assertEquals("un tipo desconocido se lee como vídeo", ContentKind.VIDEO, recovered.single().item.kind)
     }
+
+    @Test
+    fun `watched marks last for years and svt episodes do not touch the clan catalogue`() {
+        val seen = mutableListOf<String>()
+        val h = WatchHistory(file, nowMillis = { now++ }, ioDispatcher = Dispatchers.Unconfined, onWatched = { seen += it.id })
+        h.register(catalogItem("done"))
+        h.updateProgress("done", 599_000, 600_000)
+        h.register(catalogItem("svt:1"))
+        now += 400L * 24 * 60 * 60 * 1_000
+        h.register(catalogItem("later"))
+        assertTrue(h.entryFor("done")!!.finished)
+        assertEquals(listOf("done", "later"), seen)
+    }
 }
