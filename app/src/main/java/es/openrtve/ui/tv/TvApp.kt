@@ -216,6 +216,9 @@ fun TvApp(container: AppContainer) {
             modifier = Modifier.fillMaxSize(),
         )
     }
+    // Atenuador: encima de todo, también de la pantalla de inicio.
+    val appSettings by container.settings.settings.collectAsStateWithLifecycle()
+    es.openrtve.ui.DimOverlay(appSettings.dimLevel)
     }
 }
 

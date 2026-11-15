@@ -8,6 +8,9 @@
 
     <string name="settings_title">Ajustes</string>
     <string name="settings_playback">Reproducción</string>
+    <string name="settings_dimmer">Atenuador de pantalla</string>
+    <string name="settings_dimmer_summary">Oscurece toda la app y los vídeos, para ver de noche. 0 = sin filtro; 10 = casi negro.</string>
+    <string name="player_dimmer">Atenuador (0 = sin filtro)</string>
     <string name="settings_subtitles">Subtítulos por defecto</string>
     <string name="settings_subtitles_summary">Activa los subtítulos en español cuando existan</string>
     <string name="settings_storage">Almacenamiento</string>

@@ -73,6 +73,14 @@ fun TvSettingsScreen(
             viewModel.update { it.copy(subtitlesByDefault = v) }
         }
         Spacer(Modifier.height(8.dp))
+        TvSettingsLabel(stringResource(R.string.settings_dimmer))
+        Text(stringResource(R.string.settings_dimmer_summary), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            (0..es.openrtve.data.MAX_DIM_LEVEL).forEach { level ->
+                TvChoiceButton("$level", settings.dimLevel == level) { viewModel.update { it.copy(dimLevel = level) } }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         TvSettingsLabel(stringResource(R.string.settings_storage))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(onClick = { viewModel.clearCache { onMessage(cleared) } }) { Text(stringResource(R.string.settings_clear_cache)) }

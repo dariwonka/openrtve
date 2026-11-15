@@ -147,7 +147,7 @@ class PlayerActivity : ComponentActivity() {
         }
 
         override fun onTracksChanged(tracks: Tracks) {
-            if (menu != null) controller?.let { menu = buildPlayerMenu(this@PlayerActivity, it) }
+            if (menu != null) controller?.let { menu = menuFor(it) }
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -200,6 +200,7 @@ class PlayerActivity : ComponentActivity() {
 
         setContent {
             OpenRtveTheme {
+              androidx.compose.foundation.layout.Box {
                 PlaybackScreen(
                     controller = controller,
                     errorRes = errorRes,
@@ -207,11 +208,11 @@ class PlayerActivity : ComponentActivity() {
                     liveState = liveState,
                     onGoLive = { controller?.seekToDefaultPosition() },
                     menu = menu,
-                    onOpenMenu = { controller?.let { menu = buildPlayerMenu(this, it) } },
+                    onOpenMenu = { controller?.let { menu = menuFor(it) } },
                     onSelectOption = { option ->
                         controller?.let { c ->
                             option.apply(c)
-                            menu = buildPlayerMenu(this, c)
+                            menu = menuFor(c)
                         }
                     },
                     onCloseMenu = { menu = null },
@@ -232,6 +233,10 @@ class PlayerActivity : ComponentActivity() {
                     onRetry = ::retry,
                     onPictureInPicture = ::enterPictureInPictureNow,
                 )
+                // Atenuador: encima del vídeo y del panel; en la ventana flotante no se aplica.
+                val dim by settings.settings.collectAsStateWithLifecycle()
+                if (!inPictureInPicture) es.openrtve.ui.DimOverlay(dim.dimLevel)
+              }
             }
         }
         connect()
@@ -578,6 +583,11 @@ class PlayerActivity : ComponentActivity() {
     private fun dropLicense() {
         license?.second?.cancel()
         license = null
+    }
+
+    /** El menú del reproductor, con el nivel actual del atenuador (que vale para toda la app). */
+    private fun menuFor(player: Player) = buildPlayerMenu(this, player, settings.current.dimLevel) { level ->
+        settings.update { it.copy(dimLevel = level) }
     }
 
     private val settings get() = (application as OpenRtveApplication).container.settings

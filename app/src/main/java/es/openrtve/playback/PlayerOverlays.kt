@@ -71,6 +71,7 @@ internal fun PlayerSettingsPanel(menu: PlayerMenu, onSelect: (PlayerOption) -> U
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
         ) {
             val sections = listOf(
+                stringResource(R.string.player_dimmer) to menu.dimmer,
                 stringResource(R.string.player_quality) to menu.qualities,
                 stringResource(R.string.player_audio_track) to menu.audios,
                 stringResource(R.string.player_subtitles) to menu.subtitles,

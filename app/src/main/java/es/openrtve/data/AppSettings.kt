@@ -17,7 +17,11 @@ data class Settings(
     val subtitlesByDefault: Boolean = false,
     /** Encadenar el siguiente episodio al terminar. */
     val autoplayNext: Boolean = true,
+    /** Atenuador de pantalla: 0 = sin filtro, hasta [MAX_DIM_LEVEL] = casi negro. Vale para toda la app. */
+    val dimLevel: Int = 0,
 )
+
+const val MAX_DIM_LEVEL = 10
 
 /**
  * Preferencias del usuario en `SharedPreferences`, expuestas como `StateFlow`.
@@ -37,6 +41,7 @@ class AppSettings(context: Context) {
             putInt(KEY_MAX_HEIGHT, updated.maxVideoHeight)
             putBoolean(KEY_SUBTITLES, updated.subtitlesByDefault)
             putBoolean(KEY_AUTOPLAY, updated.autoplayNext)
+            putInt(KEY_DIM, updated.dimLevel.coerceIn(0, MAX_DIM_LEVEL))
         }
         mutableSettings.update { updated }
     }
@@ -46,6 +51,7 @@ class AppSettings(context: Context) {
         maxVideoHeight = prefs.getInt(KEY_MAX_HEIGHT, 0),
         subtitlesByDefault = prefs.getBoolean(KEY_SUBTITLES, false),
         autoplayNext = prefs.getBoolean(KEY_AUTOPLAY, true),
+        dimLevel = prefs.getInt(KEY_DIM, 0).coerceIn(0, MAX_DIM_LEVEL),
     )
 
     private companion object {
@@ -53,6 +59,7 @@ class AppSettings(context: Context) {
         const val KEY_PIP = "pip_on_leave"
         const val KEY_MAX_HEIGHT = "max_video_height"
         const val KEY_AUTOPLAY = "autoplay_next"
+        const val KEY_DIM = "dim_level"
         const val KEY_SUBTITLES = "subtitles_by_default"
     }
 }
