@@ -68,6 +68,7 @@ internal const val TvGridColumns = 4
  * Barra superior, la única navegación de la app: a la izquierda, Series (que es
  * también el inicio) y Películas; a la derecha, Buscar y Ajustes. Está en todas las pantallas.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 internal fun TvTopBar(
     /** Lista que se está viendo; `null` fuera del inicio (una serie, Ajustes). */
