@@ -34,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -76,21 +77,50 @@ internal fun TvTopBar(
     onSettings: () -> Unit,
     onSvt: () -> Unit = {},
     svtSelected: Boolean = false,
+    /** Pasar el cursor por encima ya muestra el contenido (sin pulsar). */
+    onSectionFocus: (ClanSection) -> Unit = {},
+    onSvtFocus: () -> Unit = {},
 ) {
+    val seriesButton = remember { FocusRequester() }
+    val moviesButton = remember { FocusRequester() }
+    val svtButton = remember { FocusRequester() }
+    // Al volver a la barra desde el contenido, el cursor va al botón del contenido que se está viendo.
+    val current by rememberUpdatedState(Triple(section, svtSelected, 0))
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = TvHorizontalMargin, end = TvHorizontalMargin, top = TvVerticalMargin, bottom = 8.dp)
-            .focusGroup(),
+            .focusProperties {
+                enter = {
+                    when {
+                        current.first == ClanSection.SERIES -> seriesButton
+                        current.first == ClanSection.MOVIES -> moviesButton
+                        current.second -> svtButton
+                        else -> FocusRequester.Default
+                    }
+                }
+            }
+            .focusGroup()
+            .onFocusChanged { TabPreview.active = it.hasFocus },
     ) {
-        TvChoiceButton(stringResource(R.string.catalog_series), section == ClanSection.SERIES) { onSection(ClanSection.SERIES) }
-        TvChoiceButton(stringResource(R.string.catalog_movies), section == ClanSection.MOVIES) { onSection(ClanSection.MOVIES) }
-        TvChoiceButton("SVT Barn", svtSelected, onClick = onSvt)
+        // Los tres, iguales (blancos): el contenido cambia al pasar el cursor; pulsar además baja al primer título.
+        TvChoiceButton(stringResource(R.string.catalog_series), false, Modifier.focusRequester(seriesButton), onFocused = { onSectionFocus(ClanSection.SERIES) }) {
+            TabPreview.active = false
+            onSection(ClanSection.SERIES)
+        }
+        TvChoiceButton(stringResource(R.string.catalog_movies), false, Modifier.focusRequester(moviesButton), onFocused = { onSectionFocus(ClanSection.MOVIES) }) {
+            TabPreview.active = false
+            onSection(ClanSection.MOVIES)
+        }
+        TvChoiceButton("SVT Barn", false, Modifier.focusRequester(svtButton), onFocused = onSvtFocus) {
+            TabPreview.active = false
+            onSvt()
+        }
         Spacer(Modifier.weight(1f))
-        IconButton(onClick = onSearch) { Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.tab_search)) }
-        IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title)) }
+        IconButton(onClick = { TabPreview.active = false; onSearch() }) { Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.tab_search)) }
+        IconButton(onClick = { TabPreview.active = false; onSettings() }) { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title)) }
     }
 }
 

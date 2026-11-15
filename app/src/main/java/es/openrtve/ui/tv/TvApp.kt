@@ -112,6 +112,16 @@ fun TvApp(container: AppContainer) {
             if (navigation.state.value.current != null) navigation.selectTab(Tab.HOME)
         }
     }
+    // Pasar el cursor por un botón de arriba muestra su contenido sin mover el cursor al contenido.
+    val previewSection: (ClanSection) -> Unit = { chosen ->
+        val atRoot = destination == null && nav.tab == Tab.HOME
+        if (!(atRoot && section == chosen)) {
+            lastOpened = null
+            section = chosen
+            navigation.selectTab(Tab.HOME)
+            if (navigation.state.value.current != null) navigation.selectTab(Tab.HOME)
+        }
+    }
     Box(Modifier.fillMaxSize()) {
     ProvideClock {
         Column(
@@ -129,6 +139,8 @@ fun TvApp(container: AppContainer) {
                     if (destination != GlobalDestination.Svt) actions.openSvt()
                 },
                 svtSelected = destination == GlobalDestination.Svt,
+                onSectionFocus = previewSection,
+                onSvtFocus = { if (destination != GlobalDestination.Svt) actions.openSvt() },
             )
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 DestinationHost(nav, navigation) { current ->

@@ -63,6 +63,14 @@ import es.openrtve.domain.RowLayout
 import es.openrtve.domain.imageFor
 
 /**
+ * Mientras el cursor está en los botones de arriba, un contenido que cambia solo por pasar
+ * el cursor (Series, Películas, SVT) no debe quitarle el foco pidiendo el suyo inicial.
+ */
+internal object TabPreview {
+    var active by mutableStateOf(false)
+}
+
+/**
  * Si la pantalla ya dio su foco inicial. Es estado de la pantalla, no del elemento
  * que lo pide: un elemento de una lista perezosa sale de la composición al hacer
  * scroll y, al volver (también cuando la lista lo compone para buscar adónde
@@ -92,7 +100,10 @@ internal fun Modifier.initialFocus(enabled: Boolean = true, requester: FocusRequ
     val screen = LocalScreenInitialFocus.current ?: remember { ScreenInitialFocus() }
     val requester = requester ?: remember { FocusRequester() }
     LaunchedEffect(screen, enabled) {
-        if (enabled) requestFocusUntilGranted(requester) { screen.granted }
+        if (enabled) {
+            // Contenido mostrado al pasar el cursor por un botón de arriba: el foco se queda arriba, y no se pide después.
+            if (TabPreview.active) screen.granted = true else requestFocusUntilGranted(requester) { screen.granted }
+        }
     }
     return onFocusChanged { if (it.hasFocus) screen.granted = true }.focusRequester(requester)
 }
@@ -105,7 +116,7 @@ internal fun Modifier.initialFocus(enabled: Boolean = true, requester: FocusRequ
  */
 internal suspend fun requestFocusUntilGranted(requester: FocusRequester, granted: () -> Boolean) {
     repeat(FOCUS_ATTEMPTS) {
-        if (granted()) return
+        if (granted() || TabPreview.active) return
         // El destino puede ser un ítem perezoso: se espera a que esté compuesto y medido.
         withFrameNanos { }
         runCatching { requester.requestFocus() }
@@ -348,10 +359,14 @@ internal fun TvRankBadge(rank: Int, modifier: Modifier = Modifier) {
 
 @Composable
 @OptIn(ExperimentalTvMaterial3Api::class)
-internal fun TvChoiceButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun TvChoiceButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onFocused: (() -> Unit)? = null, onClick: () -> Unit) {
     // El chip de filtro de Material para TV: seleccionado con su marca y relleno, y
     // con la respuesta al foco estándar. Se activa al pulsar, no al pasar por él.
-    FilterChip(selected = selected, onClick = onClick, modifier = modifier) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        modifier = if (onFocused != null) modifier.onFocusChanged { if (it.isFocused) onFocused() } else modifier,
+    ) {
         Text(label, maxLines = 1)
     }
 }

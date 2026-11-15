@@ -225,7 +225,8 @@ private fun SvtCardGrid(
     var handledTick by remember { mutableIntStateOf(focusFirstTick) }
     LaunchedEffect(Unit) {
         if (start > 0) state.scrollToItem(start)
-        focusUntil(startRequester) { focusedIndex >= 0 }
+        // Si se llega pasando el cursor por el botón de arriba, el foco se queda arriba.
+        if (!TabPreview.active) focusUntil(startRequester) { focusedIndex >= 0 || TabPreview.active }
     }
     LaunchedEffect(focusFirstTick) {
         if (focusFirstTick == handledTick) return@LaunchedEffect
@@ -237,7 +238,7 @@ private fun SvtCardGrid(
     val lifecycle = (context as? ComponentActivity)?.lifecycle
     LaunchedEffect(lifecycle) {
         lifecycle?.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            if (focusedIndex < 0 && startKey != null) focusUntil(startRequester) { focusedIndex >= 0 }
+            if (focusedIndex < 0 && startKey != null && !TabPreview.active) focusUntil(startRequester) { focusedIndex >= 0 }
         }
     }
     BackHandler(enabled = menuKey == null) {
