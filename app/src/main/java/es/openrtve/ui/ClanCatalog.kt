@@ -253,7 +253,13 @@ class ClanCatalogViewModel(
         }
     }
 
-    fun retry() = load()
+    /** Un reintento manual descarga siempre, aunque la última descarga sea reciente. */
+    fun retry() {
+        forceSync = true
+        load()
+    }
+
+    private var forceSync = false
 
     /** Quita un título de las listas y de favoritos; no vuelve salvo que RTVE lo retire y lo reponga. */
     fun remove(result: CatalogItem) {
@@ -432,6 +438,14 @@ class ClanCatalogViewModel(
                     markReady()
                 }
             }
+            // Con una descarga completa reciente no se vuelve a pedir todo: la copia guardada ya está al día.
+            val recent = !forceSync && stored.syncedAt > 0 && clock() - stored.syncedAt in 0 until SYNC_FRESH_MS && !mutableUiState.value.catalog.isEmpty
+            forceSync = false
+            if (recent) {
+                mutableUiState.update { it.copy(isLoading = false, ready = true) }
+                scanJob = viewModelScope.launch { scanForFilms() }
+                return@launch
+            }
             try {
                 val result = download()
                 merge(result)
@@ -539,6 +553,7 @@ class ClanCatalogViewModel(
             removedItems = before.removedItems.filter { it.id in removed },
             scanned = before.scanned,
             filmOnly = before.filmOnly,
+            syncedAt = if (result.complete) clock() else before.syncedAt,
         )
         if (stored != before) persist()
         publish()
@@ -747,6 +762,8 @@ class ClanCatalogViewModel(
     }
 
     private companion object {
+        /** Tiempo durante el que una descarga completa de las portadas se da por buena. */
+        const val SYNC_FRESH_MS = 6L * 60 * 60 * 1_000
         const val MAX_PARALLEL_ROWS = 6
         const val MAX_MOVIE_PAGES = 8
         const val MAX_PARALLEL_SCANS = 4

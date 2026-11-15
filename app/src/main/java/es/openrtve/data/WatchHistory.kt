@@ -84,7 +84,13 @@ class WatchHistory(
         )
     }
 
-    fun updateProgress(itemId: String, positionMs: Long, durationMs: Long) {
+    /** Guarda ya en disco lo que hay en memoria (pausa, final, salir): el ticker del reproductor solo actualiza la memoria. */
+    fun flush() {
+        writes.trySend(Unit)
+    }
+
+    /** Con [persist] en `false` solo cambia la memoria; el disco se escribe en el siguiente [flush] o guardado normal. */
+    fun updateProgress(itemId: String, positionMs: Long, durationMs: Long, persist: Boolean = true) {
         val entry = entryFor(itemId) ?: return
         if (durationMs <= 0) return
         val finished = positionMs >= durationMs * FINISHED_FRACTION
@@ -97,6 +103,7 @@ class WatchHistory(
                     updatedAtMillis = nowMillis(),
                     finished = finished,
                 ),
+            persist,
         )
     }
 
@@ -110,7 +117,7 @@ class WatchHistory(
     /** Vuelve a poner una entrada quitada, tal como estaba. */
     fun restore(entry: WatchEntry) = save(mutableEntries.value.filterNot { it.item.id == entry.item.id } + entry)
 
-    private fun save(entries: List<WatchEntry>) {
+    private fun save(entries: List<WatchEntry>, persist: Boolean = true) {
         val trimmed = entries
             // Lo visto hasta el final se recuerda mucho más: de ahí salen las marcas de "visto" de los capítulos.
             .filter { nowMillis() - it.updatedAtMillis < if (it.finished) MAX_FINISHED_AGE_MS else MAX_AGE_MS }
@@ -118,7 +125,7 @@ class WatchHistory(
             .take(MAX_ENTRIES)
         mutableEntries.value = trimmed
         // El escritor toma la instantánea más reciente cuando puede guardar.
-        writes.trySend(Unit)
+        if (persist) writes.trySend(Unit)
     }
 
     private fun persist(entries: List<WatchEntry>) {

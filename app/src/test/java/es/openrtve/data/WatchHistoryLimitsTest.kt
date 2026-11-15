@@ -86,4 +86,14 @@ class WatchHistoryLimitsTest {
         assertTrue(h.entryFor("done")!!.finished)
         assertEquals(listOf("done", "later"), seen)
     }
+
+    @Test
+    fun `progress ticks stay in memory until flushed`() {
+        history.register(catalogItem("v1"))
+        history.updateProgress("v1", 120_000, 600_000, persist = false)
+        assertEquals(120_000L, history.entryFor("v1")!!.positionMs)
+        assertFalse("sin flush no se escribe", file.readText().contains("120000"))
+        history.flush()
+        assertTrue(file.readText().contains("120000"))
+    }
 }

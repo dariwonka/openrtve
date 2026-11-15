@@ -134,7 +134,11 @@ class PlayerActivity : ComponentActivity() {
 
         override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) = refreshLiveState()
 
-        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = refreshPaused()
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            refreshPaused()
+            // Al pausar se guarda en disco: si la tele se duerme o mata la app, no se pierde lo visto.
+            if (!playWhenReady) saveProgress()
+        }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             refreshPaused()
@@ -501,7 +505,7 @@ class PlayerActivity : ComponentActivity() {
                                     delay(LIVE_TICK_MS)
                                     refreshLiveState()
                                     refreshNextState()
-                                    if (++ticks % PROGRESS_SAVE_EVERY_TICKS == 0 && controller?.isPlaying == true) saveProgress()
+                                    if (++ticks % PROGRESS_SAVE_EVERY_TICKS == 0 && controller?.isPlaying == true) saveProgress(persist = false)
                                 }
                             }
                         }
@@ -691,7 +695,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     /** Guarda la posición para "Seguir viendo"; el ticker lo llama cada segundo y onStop al salir. */
-    private fun saveProgress() {
+    private fun saveProgress(persist: Boolean = true) {
         val player = controller ?: return
         val target = request ?: return
         val key = target.historyKey ?: return
@@ -700,7 +704,7 @@ class PlayerActivity : ComponentActivity() {
         if (player.isCurrentMediaItemLive) return
         val duration = player.duration
         if (duration == C.TIME_UNSET || duration <= 0) return
-        history.updateProgress(key, player.currentPosition, duration)
+        history.updateProgress(key, player.currentPosition, duration, persist)
     }
 
     private fun isWidevineAvailable(): Boolean =

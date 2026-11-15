@@ -179,7 +179,12 @@ class BoingApi(private val client: OkHttpClient) {
     fun programs(): List<BoingSeries>? = get("Programs/getPrograms")?.let { Boing.parsePrograms(it) }?.takeIf { it.isNotEmpty() }
 
     /** `null` si Boing no responde. */
-    fun chapters(guid: String): List<BoingEpisode>? = get("Program/getProgram", "programId" to guid)?.let { Boing.parseChapters(it) }
+    fun chapters(guid: String): List<BoingEpisode>? {
+        cache[guid]?.takeIf { System.currentTimeMillis() - it.first < TTL_MS }?.let { return it.second }
+        val list = get("Program/getProgram", "programId" to guid)?.let { Boing.parseChapters(it) }
+        if (list != null) cache[guid] = System.currentTimeMillis() to list
+        return list
+    }
 
     /** Ficha de un capítulo (duración, direcciones de vídeo); la dirección caduca, se pide al reproducir. */
     fun video(slug: String): String? = get("Video/getVideo", "slug" to slug)
@@ -192,6 +197,9 @@ class BoingApi(private val client: OkHttpClient) {
     }.getOrNull()
 
     private companion object {
+        /** Abrir y cerrar una serie no vuelve a pedir su ficha: 30 minutos en memoria. */
+        const val TTL_MS = 30L * 60 * 1_000
+        val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<BoingEpisode>>>()
         const val BASE = "https://feapi.turner.streamity.com/api/v1/"
         const val PLATFORM = "96a881d2-b1bc-4bd0-8c3c-4c69c5d41480"
         const val KEY = "pc__I4Ronpm-n4la827RuyTSaCKlFQ4a_2ssh4GEfY3EAzFu1gpYAA=="

@@ -42,6 +42,8 @@ data class StoredCatalog(
     val scanned: Map<String, Long> = emptyMap(),
     /** Series que solo contienen películas: no salen entre las series, sus películas van sueltas. */
     val filmOnly: Set<String> = emptySet(),
+    /** Última descarga completa de las portadas de RTVE: hasta pasadas unas horas no se repite. */
+    val syncedAt: Long = 0L,
 )
 
 /**
@@ -71,6 +73,7 @@ class ClanCatalogStore(
                 firstSeen = (root["firstSeen"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
                 scanned = (root["scanned3"] as? JsonObject).orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.longOrNull?.let { k to it } }.toMap(),
                 filmOnly = (root["filmOnly"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.toSet(),
+                syncedAt = (root["syncedAt"] as? JsonPrimitive)?.longOrNull ?: 0L,
             ).takeIf { it.series.isNotEmpty() || it.movies.isNotEmpty() || it.removed.isNotEmpty() || it.pinned.isNotEmpty() || it.unpinned.isNotEmpty() || it.removedItems.isNotEmpty() }
         }.getOrNull()
     }
@@ -113,6 +116,7 @@ class ClanCatalogStore(
                 put("firstSeen", buildJsonObject { catalog.firstSeen.forEach { (id, at) -> put(id, at) } })
                 put("scanned3", buildJsonObject { catalog.scanned.forEach { (id, at) -> put(id, at) } })
                 put("filmOnly", buildJsonArray { catalog.filmOnly.forEach { add(JsonPrimitive(it)) } })
+                put("syncedAt", catalog.syncedAt)
             }.toString()
             val pending = File(file.parentFile, file.name + ".tmp")
             pending.writeText(raw)

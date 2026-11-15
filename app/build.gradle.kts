@@ -82,6 +82,8 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // Instala el perfil de arranque también en instalaciones sin Play (APK a mano).
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

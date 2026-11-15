@@ -188,15 +188,23 @@ object SvtBarn {
 
 /** Habla con la API pública de SVT. Todo es bloqueante: llamar fuera del hilo principal. */
 class SvtApi(private val client: OkHttpClient) {
-    fun programs(): List<SvtProgram> = SvtBarn.parsePrograms(graphql(PROGRAMS_QUERY, buildJsonObject {
-        put("id", "barn")
-        put("filter", buildJsonObject { put("kidsFilter", true); put("userIsAbroad", true); put("includeFullOppetArkiv", false) })
-    }))
+    fun programs(): List<SvtProgram> {
+        programsCache?.takeIf { System.currentTimeMillis() - it.first < TTL_MS }?.let { return it.second }
+        val list = SvtBarn.parsePrograms(graphql(PROGRAMS_QUERY, buildJsonObject {
+            put("id", "barn")
+            put("filter", buildJsonObject { put("kidsFilter", true); put("userIsAbroad", true); put("includeFullOppetArkiv", false) })
+        }))
+        if (list.isNotEmpty()) programsCache = System.currentTimeMillis() to list
+        return list
+    }
 
     /** `null` si SVT no responde; lista vacía si el programa no tiene nada visible. */
-    fun episodes(slug: String): List<SvtEpisode>? = runCatching {
-        SvtBarn.parseEpisodes(graphql(EPISODES_QUERY, buildJsonObject { put("s", slug) }))
-    }.getOrNull()
+    fun episodes(slug: String): List<SvtEpisode>? {
+        episodesCache[slug]?.takeIf { System.currentTimeMillis() - it.first < TTL_MS }?.let { return it.second }
+        val list = runCatching { SvtBarn.parseEpisodes(graphql(EPISODES_QUERY, buildJsonObject { put("s", slug) })) }.getOrNull()
+        if (list != null) episodesCache[slug] = System.currentTimeMillis() to list
+        return list
+    }
 
     private fun graphql(query: String, variables: JsonObject): String {
         val body = buildJsonObject { put("query", query); put("variables", variables) }.toString()
@@ -206,6 +214,10 @@ class SvtApi(private val client: OkHttpClient) {
     }
 
     private companion object {
+        /** Entrar y salir de SVT no vuelve a pedir lo mismo: 30 minutos en memoria. */
+        const val TTL_MS = 30L * 60 * 1_000
+        @Volatile var programsCache: Pair<Long, List<SvtProgram>>? = null
+        val episodesCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<SvtEpisode>>>()
         const val URL = "https://contento.svt.se/graphql"
         const val PROGRAMS_QUERY = "query(\$id: String!, \$filter: Filter!) { categoryPage(id: \$id, abTestVariants: []) { modules { id selection { id " +
             "items(filter: \$filter) { heading adaptiveImage { id changed } item { __typename svtId urls { svtplay } } } } } } }"
