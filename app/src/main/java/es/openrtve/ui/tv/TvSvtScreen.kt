@@ -215,7 +215,9 @@ private fun SvtCardGrid(
     val state = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val latest by rememberUpdatedState(entries)
-    var focusedIndex by remember { mutableIntStateOf(-1) }
+    // Se recuerda por clave y no por posición: si la lista se reordena, "Atrás" sigue sabiendo dónde está el cursor.
+    var focusedKey by remember { mutableStateOf<String?>(null) }
+    fun focusedIndexNow(): Int = latest.indexOfFirst { it.first == focusedKey }
     var menuKey by remember { mutableStateOf<String?>(null) }
     var refocusIndex by remember { mutableIntStateOf(-1) }
     val refocus = remember { FocusRequester() }
@@ -226,26 +228,26 @@ private fun SvtCardGrid(
     LaunchedEffect(Unit) {
         if (start > 0) state.scrollToItem(start)
         // Si se llega pasando el cursor por el botón de arriba, el foco se queda arriba.
-        if (!TabPreview.active) focusUntil(startRequester) { focusedIndex >= 0 || TabPreview.active }
+        if (!TabPreview.active) focusUntil(startRequester) { focusedIndexNow() >= 0 || TabPreview.active }
     }
     LaunchedEffect(focusFirstTick) {
         if (focusFirstTick == handledTick) return@LaunchedEffect
         handledTick = focusFirstTick
         state.scrollToItem(0)
-        focusUntil(firstRequester) { focusedIndex == 0 }
+        focusUntil(firstRequester) { focusedIndexNow() == 0 }
     }
     // Al volver del reproductor el cursor queda en el episodio (o programa) que se estaba viendo.
     val lifecycle = (context as? ComponentActivity)?.lifecycle
     LaunchedEffect(lifecycle) {
         lifecycle?.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            if (focusedIndex < 0 && startKey != null && !TabPreview.active) focusUntil(startRequester) { focusedIndex >= 0 }
+            if (focusedIndexNow() < 0 && startKey != null && !TabPreview.active) focusUntil(startRequester) { focusedIndexNow() >= 0 }
         }
     }
     BackHandler(enabled = menuKey == null) {
-        if (!backToFirstFirst || focusedIndex == 0) onExit()
+        if (!backToFirstFirst || focusedIndexNow() == 0) onExit()
         else scope.launch {
             state.scrollToItem(0)
-            focusUntil(firstRequester) { focusedIndex == 0 }
+            focusUntil(firstRequester) { focusedIndexNow() == 0 }
         }
     }
     // Al anclar o desanclar, el cursor se queda en la misma posición de la lista, no en el programa.
@@ -282,7 +284,7 @@ private fun SvtCardGrid(
                 }
                 val cardModifier = (if (requester != null) Modifier.focusRequester(requester) else Modifier)
                     .then(if (index == refocusIndex) Modifier.focusRequester(refocus) else Modifier)
-                    .onFocusChanged { if (it.hasFocus) focusedIndex = index else if (focusedIndex == index) focusedIndex = -1 }
+                    .onFocusChanged { if (it.hasFocus) focusedKey = key else if (focusedKey == key) focusedKey = null }
                     .wrapRowFocus(index, entries.size)
                 if (onTogglePin != null) {
                     // Igual que la lista de Series: misma tarjeta, estrella si es favorito, menú con pulsación larga.

@@ -202,12 +202,15 @@ private fun TvTitleGrid(
     var pinFor by remember { mutableStateOf<CatalogItem?>(null) }
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
-    var focusedIndex by remember { mutableIntStateOf(-1) }
+    // El título con el cursor se recuerda por su id, no por su posición: si la lista se reordena
+    // (lo que acabas de ver sube al primer puesto) el cursor sigue siendo ese título y "Atrás" lo sabe.
+    var focusedId by remember { mutableStateOf<String?>(null) }
     var menuItem by remember { mutableStateOf<CatalogItem?>(null) }
     // Al volver de una serie, el foco es de la serie que se abrió; si no, del primer título.
     // Los anclados ya vienen delante en la lista.
     val shown = titles
     val latest by rememberUpdatedState(titles)
+    fun focusedIndexNow(): Int = latest.indexOfFirst { it.id == focusedId }
     var refocusIndex by remember { mutableIntStateOf(-1) }
     var refocusId by remember { mutableStateOf<String?>(null) }
     val refocus = remember { FocusRequester() }
@@ -240,13 +243,13 @@ private fun TvTitleGrid(
         if (focusFirstTick == handledTick) return@LaunchedEffect
         handledTick = focusFirstTick
         gridState.scrollToItem(0)
-        focusUntil(first) { focusedIndex == 0 }
+        focusUntil(first) { focusedIndexNow() == 0 }
     }
     // Atrás desde cualquier título (o desde los botones de arriba) lleva al primero; desde el primero sale de la app.
-    BackHandler(enabled = shown.isNotEmpty() && focusedIndex != 0 && menuItem == null && pinFor == null) {
+    BackHandler(enabled = shown.isNotEmpty() && focusedIndexNow() != 0 && menuItem == null && pinFor == null) {
         scope.launch {
             gridState.scrollToItem(0)
-            focusUntil(first) { focusedIndex == 0 }
+            focusUntil(first) { focusedIndexNow() == 0 }
         }
     }
     ProvideTvCenteredScroll {
@@ -276,7 +279,7 @@ private fun TvTitleGrid(
                     item, RowLayout.LANDSCAPE, { onOpen(item) },
                     start
                         .then(if (index == refocusIndex || item.id == refocusId) Modifier.focusRequester(refocus) else Modifier)
-                        .onFocusChanged { if (it.hasFocus) focusedIndex = index else if (focusedIndex == index) focusedIndex = -1 }
+                        .onFocusChanged { if (it.hasFocus) focusedId = item.id else if (focusedId == item.id) focusedId = null }
                         .wrapRowFocus(index, shown.size),
                     onLongClick = { menuItem = item },
                     favorite = item.id in pinnedIds,
