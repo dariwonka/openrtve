@@ -1,11 +1,11 @@
 # Perfil de arranque escrito a mano: compila de antemano lo que se usa al abrir la app y al moverse por las listas.
 # (Un perfil generado midiendo en un dispositivo sería más fino; este cubre las mismas zonas con comodines.)
 HSPLes/openrtve/**;->**(**)**
-PLes/openrtve/**;
+Les/openrtve/**;
 HSPLandroidx/compose/**;->**(**)**
-PLandroidx/compose/**;
+Landroidx/compose/**;
 HSPLandroidx/tv/**;->**(**)**
-PLandroidx/tv/**;
+Landroidx/tv/**;
 HSPLandroidx/lifecycle/**;->**(**)**
 HSPLandroidx/activity/**;->**(**)**
 HSPLcoil3/**;->**(**)**
