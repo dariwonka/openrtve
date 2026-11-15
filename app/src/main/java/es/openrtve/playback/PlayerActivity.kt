@@ -216,7 +216,7 @@ class PlayerActivity : ComponentActivity() {
                             menu = menuFor(c)
                         }
                     },
-                    onCloseMenu = { menu = null },
+                    onCloseMenu = { previewDim = null; menu = null },
                     seekShown = seekShown,
                     paused = paused,
                     controlsVisible = controlsVisible,
@@ -236,7 +236,7 @@ class PlayerActivity : ComponentActivity() {
                 )
                 // Atenuador: encima del vídeo y del panel; en la ventana flotante no se aplica.
                 val dim by settings.settings.collectAsStateWithLifecycle()
-                if (!inPictureInPicture) es.openrtve.ui.DimOverlay(dim.dimLevel)
+                if (!inPictureInPicture) es.openrtve.ui.DimOverlay(previewDim ?: dim.dimLevel)
               }
             }
         }
@@ -587,9 +587,13 @@ class PlayerActivity : ComponentActivity() {
     }
 
     /** El menú del reproductor, con el nivel actual del atenuador (que vale para toda la app). */
-    private fun menuFor(player: Player) = buildPlayerMenu(this, player, settings.current.dimLevel) { level ->
+    private fun menuFor(player: Player) = buildPlayerMenu(this, player, settings.current.dimLevel, onDimPreview = { previewDim = it }) { level ->
         settings.update { it.copy(dimLevel = level) }
+        previewDim = null
     }
+
+    /** Nivel del atenuador que se está probando en el menú: se confirma al pulsar, se descarta con Atrás. */
+    private var previewDim by mutableStateOf<Int?>(null)
 
     private val settings get() = (application as OpenRtveApplication).container.settings
 

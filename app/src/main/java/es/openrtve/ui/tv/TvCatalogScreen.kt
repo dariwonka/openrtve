@@ -104,7 +104,9 @@ internal fun TvTopBar(
                 }
             }
             .focusGroup()
-            .onFocusChanged { TabPreview.active = it.hasFocus },
+            // El contenido que cambia al pasar por un botón activa TabPreview (en TvApp); al bajar, se apaga.
+            // Que el foco caiga solo en la barra (al abrir o cerrar una serie) no lo activa.
+            .onFocusChanged { if (!it.hasFocus) TabPreview.active = false },
     ) {
         // Los tres, iguales (blancos): el contenido cambia al pasar el cursor; pulsar además baja al primer título.
         TvChoiceButton(stringResource(R.string.catalog_series), false, Modifier.focusRequester(seriesButton), onFocused = { onSectionFocus(ClanSection.SERIES) }) {

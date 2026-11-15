@@ -107,7 +107,7 @@ private fun OptionRow(option: PlayerOption, modifier: Modifier, onClick: () -> U
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) option.onFocus?.invoke() }
             .background(if (focused) Color(0xFFFF1744) else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 8.dp),

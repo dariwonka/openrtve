@@ -119,6 +119,7 @@ fun TvApp(container: AppContainer) {
         if (destination is Destination.Program) return@preview
         val atRoot = destination == null && nav.tab == Tab.HOME
         if (!(atRoot && section == chosen)) {
+            TabPreview.active = true
             lastOpened = null
             section = chosen
             navigation.selectTab(Tab.HOME)
@@ -143,7 +144,7 @@ fun TvApp(container: AppContainer) {
                 },
                 svtSelected = destination == GlobalDestination.Svt,
                 onSectionFocus = previewSection,
-                onSvtFocus = { if (destination != GlobalDestination.Svt) actions.openSvt() },
+                onSvtFocus = { if (destination != GlobalDestination.Svt && destination !is Destination.Program) { TabPreview.active = true; actions.openSvt() } },
             )
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 DestinationHost(nav, navigation) { current ->

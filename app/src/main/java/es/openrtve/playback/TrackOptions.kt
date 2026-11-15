@@ -14,6 +14,8 @@ data class PlayerOption(
     val label: String,
     val selected: Boolean,
     val apply: (Player) -> Unit,
+    /** Se llama al pasar el cursor por la fila (vista previa, sin confirmar). */
+    val onFocus: (() -> Unit)? = null,
 )
 
 data class PlayerMenu(
@@ -29,12 +31,12 @@ data class PlayerMenu(
  * Construye los menús a partir de las pistas reales del stream, como hace la app
  * oficial: calidades por altura, audios e idiomas de subtítulos con nombre legible.
  */
-fun buildPlayerMenu(context: Context, player: Player, dimLevel: Int? = null, onDim: (Int) -> Unit = {}): PlayerMenu {
+fun buildPlayerMenu(context: Context, player: Player, dimLevel: Int? = null, onDimPreview: (Int) -> Unit = {}, onDim: (Int) -> Unit = {}): PlayerMenu {
     val tracks = player.currentTracks
     val params = player.trackSelectionParameters
     return PlayerMenu(
         dimmer = if (dimLevel == null) emptyList() else (0..es.openrtve.data.MAX_DIM_LEVEL).map { level ->
-            PlayerOption(label = if (level == 0) "0" else "$level", selected = dimLevel == level, apply = { onDim(level) })
+            PlayerOption(label = if (level == 0) "0" else "$level", selected = dimLevel == level, apply = { onDim(level) }, onFocus = { onDimPreview(level) })
         },
         qualities = qualityOptions(context, tracks, player),
         speeds = SPEEDS.map { speed ->
