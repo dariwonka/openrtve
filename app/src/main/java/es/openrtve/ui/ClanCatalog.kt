@@ -177,6 +177,9 @@ data class ClanCatalogUiState(
     val error: LoadError? = null,
 )
 
+/** Tiempo durante el que una descarga completa de las portadas se da por buena (lo usa la app). */
+const val SYNC_FRESH_MS = 6L * 60 * 60 * 1_000
+
 /** Sin copia guardada, si el catálogo tarda más en descargarse se enseña lo que haya. */
 private const val READY_TIMEOUT_MS = 8_000L
 
@@ -231,6 +234,8 @@ class ClanCatalogViewModel(
     private val extraNotSeries: Set<String> = emptySet(),
     /** Series nuevas de esas plataformas: recibe los ids ya conocidos y devuelve solo las que no lo eran. */
     private val discoverExtra: suspend (known: Set<String>) -> List<CatalogItem> = { emptyList() },
+    /** Con una descarga completa más reciente que esto no se vuelve a descargar al abrir; 0 = siempre. */
+    private val syncFreshMs: Long = 0L,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ClanCatalogUiState())
     val uiState: StateFlow<ClanCatalogUiState> = mutableUiState.asStateFlow()
@@ -439,7 +444,7 @@ class ClanCatalogViewModel(
                 }
             }
             // Con una descarga completa reciente no se vuelve a pedir todo: la copia guardada ya está al día.
-            val recent = !forceSync && stored.syncedAt > 0 && clock() - stored.syncedAt in 0 until SYNC_FRESH_MS && !mutableUiState.value.catalog.isEmpty
+            val recent = !forceSync && stored.syncedAt > 0 && clock() - stored.syncedAt in 0 until syncFreshMs && !mutableUiState.value.catalog.isEmpty
             forceSync = false
             if (recent) {
                 mutableUiState.update { it.copy(isLoading = false, ready = true) }
@@ -762,8 +767,6 @@ class ClanCatalogViewModel(
     }
 
     private companion object {
-        /** Tiempo durante el que una descarga completa de las portadas se da por buena. */
-        const val SYNC_FRESH_MS = 6L * 60 * 60 * 1_000
         const val MAX_PARALLEL_ROWS = 6
         const val MAX_MOVIE_PAGES = 8
         const val MAX_PARALLEL_SCANS = 4

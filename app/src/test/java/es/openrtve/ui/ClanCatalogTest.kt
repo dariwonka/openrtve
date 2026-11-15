@@ -393,4 +393,22 @@ class ClanCatalogTest {
         assertTrue(viewModel.uiState.value.removed.isEmpty())
         assertEquals(listOf("Bluey", "Peppa Pig"), viewModel.uiState.value.catalog.series.map { it.title })
     }
+
+    @Test
+    fun `a recent complete download is not repeated on the next launch`() = runTest(mainDispatcher.dispatcher) {
+        val store = tempStore()
+        var now = 1_000_000_000_000L
+        val a = program("1", "Alfa")
+        ClanCatalogViewModel(online(a), store, clock = { now }, syncFreshMs = 6 * 3_600_000L)
+        advanceUntilIdle()
+        now += 3_600_000L
+        val b = program("2", "Beta")
+        val soon = ClanCatalogViewModel(online(a, b), store, clock = { now }, syncFreshMs = 6 * 3_600_000L)
+        advanceUntilIdle()
+        assertEquals(listOf("Alfa"), soon.uiState.value.catalog.series.map { it.title })
+        now += 6 * 3_600_000L
+        val later = ClanCatalogViewModel(online(a, b), store, clock = { now }, syncFreshMs = 6 * 3_600_000L)
+        advanceUntilIdle()
+        assertEquals(setOf("Alfa", "Beta"), later.uiState.value.catalog.series.map { it.title }.toSet())
+    }
 }

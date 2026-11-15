@@ -64,6 +64,7 @@ fun TvApp(container: AppContainer) {
             extraMovies = container.boingCatalog.filter { Boing.isMovieContainer(it.guid) }.flatMap { s -> s.episodes.map { it.asMovie() } },
             extraNotSeries = Boing.MOVIE_CONTAINERS.map { Boing.PREFIX + it }.toSet(),
             discoverExtra = { known -> discoverBoing(container, known) },
+            syncFreshMs = es.openrtve.ui.SYNC_FRESH_MS,
         ) } },
     )
     val catalog by catalogViewModel.uiState.collectAsStateWithLifecycle()
