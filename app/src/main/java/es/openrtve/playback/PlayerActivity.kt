@@ -1049,4 +1049,4 @@ private fun PlaybackError(@StringRes errorRes: Int, onRetry: () -> Unit, onBack:
 private const val LIVE_TICK_MS = 1_000L
 private const val PROGRESS_SAVE_EVERY_TICKS = 10
 private const val LIVE_EDGE_TOLERANCE_MS = 20_000L
-private const val NEXT_PROMPT_BEFORE_END_MS = 20_000L
+private const val NEXT_PROMPT_BEFORE_END_MS = 10_000L

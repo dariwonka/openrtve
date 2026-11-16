@@ -359,13 +359,21 @@ internal fun TvRankBadge(rank: Int, modifier: Modifier = Modifier) {
 
 @Composable
 @OptIn(ExperimentalTvMaterial3Api::class)
-internal fun TvChoiceButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onFocused: (() -> Unit)? = null, onClick: () -> Unit) {
+internal fun TvChoiceButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onFocused: (() -> Unit)? = null, whiteWhenSelected: Boolean = false, onClick: () -> Unit) {
     // El chip de filtro de Material para TV: seleccionado con su marca y relleno, y
     // con la respuesta al foco estándar. Se activa al pulsar, no al pasar por él.
     FilterChip(
         selected = selected,
         onClick = onClick,
         modifier = if (onFocused != null) modifier.onFocusChanged { if (it.isFocused) onFocused() } else modifier,
+        colors = if (whiteWhenSelected) androidx.tv.material3.FilterChipDefaults.colors(
+            selectedContainerColor = Color.White,
+            selectedContentColor = Color.Black,
+            focusedSelectedContainerColor = Color.White,
+            focusedSelectedContentColor = Color.Black,
+            pressedSelectedContainerColor = Color.White,
+            pressedSelectedContentColor = Color.Black,
+        ) else androidx.tv.material3.FilterChipDefaults.colors(),
     ) {
         Text(label, maxLines = 1)
     }

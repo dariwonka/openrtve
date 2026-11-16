@@ -109,15 +109,15 @@ internal fun TvTopBar(
             .onFocusChanged { if (!it.hasFocus) TabPreview.active = false },
     ) {
         // Los tres, iguales (blancos): el contenido cambia al pasar el cursor; pulsar además baja al primer título.
-        TvChoiceButton(stringResource(R.string.catalog_series), false, Modifier.focusRequester(seriesButton), onFocused = { onSectionFocus(ClanSection.SERIES) }) {
+        TvChoiceButton(stringResource(R.string.catalog_series), section == ClanSection.SERIES, Modifier.focusRequester(seriesButton), onFocused = { onSectionFocus(ClanSection.SERIES) }, whiteWhenSelected = true) {
             TabPreview.active = false
             onSection(ClanSection.SERIES)
         }
-        TvChoiceButton(stringResource(R.string.catalog_movies), false, Modifier.focusRequester(moviesButton), onFocused = { onSectionFocus(ClanSection.MOVIES) }) {
+        TvChoiceButton(stringResource(R.string.catalog_movies), section == ClanSection.MOVIES, Modifier.focusRequester(moviesButton), onFocused = { onSectionFocus(ClanSection.MOVIES) }, whiteWhenSelected = true) {
             TabPreview.active = false
             onSection(ClanSection.MOVIES)
         }
-        TvChoiceButton("SVT Barn", false, Modifier.focusRequester(svtButton), onFocused = onSvtFocus) {
+        TvChoiceButton("SVT Barn", svtSelected, Modifier.focusRequester(svtButton), onFocused = onSvtFocus, whiteWhenSelected = true) {
             TabPreview.active = false
             onSvt()
         }
