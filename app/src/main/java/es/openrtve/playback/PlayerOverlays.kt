@@ -57,7 +57,6 @@ internal fun PlayerSettingsPanel(menu: PlayerMenu, onSelect: (PlayerOption) -> U
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.45f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
     ) {
         Column(
