@@ -43,12 +43,6 @@
             style="@style/PlayerIconButton"
             android:contentDescription="@string/player_settings"
             android:src="@drawable/ic_player_settings" />
-
-        <ImageButton
-            android:id="@+id/player_pip"
-            style="@style/PlayerIconButton"
-            android:contentDescription="@string/player_pip"
-            android:src="@drawable/ic_player_pip" />
     </LinearLayout>
 
     <LinearLayout

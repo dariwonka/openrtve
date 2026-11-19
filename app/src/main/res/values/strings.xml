@@ -72,7 +72,6 @@
 
     <string name="player_audio_track">Pista de audio</string>
     <string name="player_subtitles">Subtítulos</string>
-    <string name="player_pip">Imagen en imagen</string>
     <string name="player_play_pause">Reproducir o pausar</string>
     <string name="player_settings">Ajustes de reproducción</string>
     <string name="player_quality">Calidad</string>

@@ -229,10 +229,8 @@ class PlayerActivity : ComponentActivity() {
                     nextCountdown = nextCountdown,
                     onPlayNext = ::playNext,
                     controlsEnabled = !inPictureInPicture,
-                    canPictureInPicture = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && canEnterPictureInPicture(),
                     onBack = ::finish,
                     onRetry = ::retry,
-                    onPictureInPicture = ::enterPictureInPictureNow,
                 )
                 // Atenuador: encima del vídeo y del panel; en la ventana flotante no se aplica.
                 val dim by settings.settings.collectAsStateWithLifecycle()
@@ -372,12 +370,6 @@ class PlayerActivity : ComponentActivity() {
         val view = playerView
         if (view != null && view.useController && view.dispatchKeyEvent(event)) return true
         return super.onKeyDown(keyCode, event)
-    }
-
-    private fun enterPictureInPictureNow() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && canEnterPictureInPicture()) {
-            enterPictureInPictureMode(pictureInPictureParams().build())
-        }
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
@@ -907,10 +899,8 @@ private fun PlaybackScreen(
     nextCountdown: Int?,
     onPlayNext: () -> Unit,
     controlsEnabled: Boolean,
-    canPictureInPicture: Boolean,
     onBack: () -> Unit,
     onRetry: () -> Unit,
-    onPictureInPicture: () -> Unit,
 ) {
     Box(
         contentAlignment = Alignment.Center,
@@ -929,10 +919,6 @@ private fun PlaybackScreen(
                         if (l != oldL || t != oldT || r != oldR || b != oldB) activity.refreshPictureInPictureParams()
                     }
                     view.findViewById<ImageButton>(R.id.player_back).setOnClickListener { onBack() }
-                    view.findViewById<ImageButton>(R.id.player_pip).apply {
-                        visibility = if (canPictureInPicture) View.VISIBLE else View.GONE
-                        setOnClickListener { onPictureInPicture() }
-                    }
                     view.findViewById<ImageButton>(R.id.player_settings).setOnClickListener {
                         view.hideController()
                         onOpenMenu()
