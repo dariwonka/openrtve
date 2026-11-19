@@ -7,7 +7,7 @@ import android.util.AttributeSet
 import android.widget.TextView
 
 /**
- * Texto de una línea con contorno negro de 1 píxel hacia fuera, legible también sobre fondos
+ * Texto de una línea con contorno negro de 2 píxeles hacia fuera, legible también sobre fondos
  * claros. Dibuja el mismo [getLayout] dos veces (trazo y relleno) sin cambiar el color del
  * TextView, para no provocar redibujados.
  */
@@ -32,8 +32,8 @@ class OutlinedTextView @JvmOverloads constructor(context: Context, attrs: Attrib
     }
 
     private companion object {
-        // Un trazo centrado de 2 px deja 1 px visible por fuera del texto.
-        const val OUTLINE_STROKE_PX = 2f
+        // Un trazo centrado de 4 px deja 2 px visible por fuera del texto.
+        const val OUTLINE_STROKE_PX = 4f
         const val OUTLINE_COLOR = 0xFF000000.toInt()
     }
 }

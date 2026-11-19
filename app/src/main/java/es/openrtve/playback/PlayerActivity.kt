@@ -1,21 +1,16 @@
 package es.openrtve.playback
 
-import android.app.PictureInPictureParams
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
-import android.util.Rational
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.OptIn
-import androidx.annotation.RequiresApi
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -95,7 +90,6 @@ class PlayerActivity : ComponentActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller by mutableStateOf<MediaController?>(null)
     private var errorRes by mutableStateOf<Int?>(null)
-    private var inPictureInPicture by mutableStateOf(false)
     private var title by mutableStateOf("")
     private var liveState by mutableStateOf<LiveState?>(null)
     private var menu by mutableStateOf<PlayerMenu?>(null)
@@ -228,13 +222,12 @@ class PlayerActivity : ComponentActivity() {
                     nextTitle = nextItem?.takeIf { showNext }?.title,
                     nextCountdown = nextCountdown,
                     onPlayNext = ::playNext,
-                    controlsEnabled = !inPictureInPicture,
                     onBack = ::finish,
                     onRetry = ::retry,
                 )
-                // Atenuador: encima del vídeo y del panel; en la ventana flotante no se aplica.
+                // Atenuador: encima del vídeo y del panel.
                 val dim by settings.settings.collectAsStateWithLifecycle()
-                if (!inPictureInPicture) es.openrtve.ui.DimOverlay(previewDim ?: dim.dimLevel)
+                es.openrtve.ui.DimOverlay(previewDim ?: dim.dimLevel)
               }
             }
         }
@@ -372,11 +365,6 @@ class PlayerActivity : ComponentActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        inPictureInPicture = isInPictureInPictureMode
-    }
-
     override fun onSaveInstanceState(outState: Bundle) {
         request?.let { outState.putBundle(SAVED_REQUEST, it.toBundle()) }
         super.onSaveInstanceState(outState)
@@ -399,40 +387,22 @@ class PlayerActivity : ComponentActivity() {
         controller?.let(::startRequested)
     }
 
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        if (Build.VERSION.SDK_INT in Build.VERSION_CODES.O until Build.VERSION_CODES.S &&
-            canEnterPictureInPicture() &&
-            settings.current.pictureInPictureOnLeave &&
-            controller?.isPlaying == true
-        ) {
-            enterPictureInPictureMode(pictureInPictureParams().build())
-        }
-    }
-
-    /**
-     * Comportamiento estándar de un reproductor de vídeo: al salir de la pantalla
-     * se pausa (salvo en imagen en imagen), y al cerrarla (atrás, o cerrar la
-     * ventana PiP) se detiene.
-     */
+    /** Al salir de la pantalla el vídeo se pausa, y al cerrarla (atrás) se detiene. */
     override fun onStop() {
         super.onStop()
         seekHandler.removeCallbacks(endSeek)
         endSeek.run()
         saveProgress()
-        val inPictureInPicture = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
-        if (!inPictureInPicture || isFinishing) {
-            startJob?.cancel()
-            startJob = null
-            dropLicense()
-        }
+        startJob?.cancel()
+        startJob = null
+        dropLicense()
         val player = controller ?: return
         when {
             isFinishing -> {
                 player.stop()
                 player.clearMediaItems()
             }
-            !inPictureInPicture -> player.pause()
+            else -> player.pause()
         }
     }
 
@@ -725,36 +695,7 @@ class PlayerActivity : ComponentActivity() {
         val insets = WindowCompat.getInsetsController(window, window.decorView)
         insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insets.hide(WindowInsetsCompat.Type.systemBars())
-        refreshPictureInPictureParams()
     }
-
-    /**
-     * Parámetros de PiP para el sistema: entrada automática al salir (si el ajuste
-     * lo permite) y, con la vista ya medida, el recuadro del vídeo como
-     * origen para que la transición salga de él y no de toda la pantalla.
-     */
-    internal fun refreshPictureInPictureParams() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        setPictureInPictureParams(
-            pictureInPictureParams()
-                .setAutoEnterEnabled(canEnterPictureInPicture() && settings.current.pictureInPictureOnLeave)
-                .setSeamlessResizeEnabled(false)
-                .build(),
-        )
-    }
-
-    @RequiresApi(Build.VERSION_CODES.O)
-    private fun pictureInPictureParams(): PictureInPictureParams.Builder =
-        PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(16, 9))
-            .apply {
-                val rect = Rect()
-                if (playerView?.videoSurfaceView?.getGlobalVisibleRect(rect) == true) setSourceRectHint(rect)
-            }
-
-    @RequiresApi(Build.VERSION_CODES.N)
-    private fun canEnterPictureInPicture(): Boolean =
-        request != null && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     @StringRes
     private fun PlaybackException.toMessageRes(): Int {
@@ -898,7 +839,6 @@ private fun PlaybackScreen(
     nextTitle: String?,
     nextCountdown: Int?,
     onPlayNext: () -> Unit,
-    controlsEnabled: Boolean,
     onBack: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -915,9 +855,6 @@ private fun PlaybackScreen(
                 factory = { context ->
                     val view = LayoutInflater.from(context).inflate(R.layout.player_view, FrameLayout(context), false) as PlayerView
                     val activity = context as PlayerActivity
-                    view.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
-                        if (l != oldL || t != oldT || r != oldR || b != oldB) activity.refreshPictureInPictureParams()
-                    }
                     view.findViewById<ImageButton>(R.id.player_back).setOnClickListener { onBack() }
                     view.findViewById<ImageButton>(R.id.player_settings).setOnClickListener {
                         view.hideController()
@@ -953,8 +890,8 @@ private fun PlaybackScreen(
                 update = { view ->
                     view.player = controller
                     view.findViewById<TextView>(R.id.player_title).text = title
-                    view.useController = controlsEnabled && menu == null
-                    if (!controlsEnabled || menu != null) view.hideController()
+                    view.useController = menu == null
+                    if (menu != null) view.hideController()
                     // Directo: sin tiempos absolutos (la ventana DVR no es una duración) y con indicador en vivo.
                     val live = view.findViewById<TextView>(R.id.player_live)
                     val isLive = liveState != null

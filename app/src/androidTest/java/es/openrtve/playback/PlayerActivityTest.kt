@@ -111,7 +111,7 @@ class PlayerActivityTest {
                 await { activity!!.lifecycle.currentState == Lifecycle.State.CREATED }
                 release.countDown()
                 SystemClock.sleep(1_000)
-                assertNull("Salir sin PiP invalida el arranque pendiente", onMain { controller.currentMediaItem })
+                assertNull("Salir invalida el arranque pendiente", onMain { controller.currentMediaItem })
             }
         } finally {
             release.countDown()
@@ -121,7 +121,7 @@ class PlayerActivityTest {
 
     private fun withPlayer(test: (PlaybackDecision.Ready, MediaController) -> Unit) {
         val settings = container.settings.current
-        container.settings.update { it.copy(pictureInPictureOnLeave = false, autoplayNext = false) }
+        container.settings.update { it.copy(autoplayNext = false) }
         val file = File(context.cacheDir, "player-test-${System.nanoTime()}.wav")
         val samples = 8_000 * 60
         val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN).apply {

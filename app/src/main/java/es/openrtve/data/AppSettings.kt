@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.update
 
 data class Settings(
     /** Al salir del reproductor con un vídeo en marcha, seguir en una ventana flotante. */
-    val pictureInPictureOnLeave: Boolean = true,
     /** Altura máxima de vídeo (0 = automática). 576 equivale al ahorro de datos de la app oficial. */
     val maxVideoHeight: Int = 0,
     /** Activar subtítulos en español cuando existan. */
@@ -37,7 +36,6 @@ class AppSettings(context: Context) {
     fun update(transform: (Settings) -> Settings) {
         val updated = transform(current)
         prefs.edit {
-            putBoolean(KEY_PIP, updated.pictureInPictureOnLeave)
             putInt(KEY_MAX_HEIGHT, updated.maxVideoHeight)
             putBoolean(KEY_SUBTITLES, updated.subtitlesByDefault)
             putBoolean(KEY_AUTOPLAY, updated.autoplayNext)
@@ -47,7 +45,6 @@ class AppSettings(context: Context) {
     }
 
     private fun read() = Settings(
-        pictureInPictureOnLeave = prefs.getBoolean(KEY_PIP, true),
         maxVideoHeight = prefs.getInt(KEY_MAX_HEIGHT, 0),
         subtitlesByDefault = prefs.getBoolean(KEY_SUBTITLES, false),
         autoplayNext = prefs.getBoolean(KEY_AUTOPLAY, true),
@@ -56,7 +53,6 @@ class AppSettings(context: Context) {
 
     private companion object {
         const val PREFS_NAME = "clanpeques_settings"
-        const val KEY_PIP = "pip_on_leave"
         const val KEY_MAX_HEIGHT = "max_video_height"
         const val KEY_AUTOPLAY = "autoplay_next"
         const val KEY_DIM = "dim_level"
