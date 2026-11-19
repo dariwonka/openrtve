@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -47,7 +49,7 @@ import es.openrtve.R
  * sirve igual para el táctil y para el mando.
  */
 @Composable
-internal fun PlayerSettingsPanel(menu: PlayerMenu, onSelect: (PlayerOption) -> Unit, onDismiss: () -> Unit) {
+internal fun PlayerSettingsPanel(menu: PlayerMenu, onSelect: (PlayerOption) -> Unit, onDismiss: () -> Unit, onFocusOther: () -> Unit) {
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -63,7 +65,8 @@ internal fun PlayerSettingsPanel(menu: PlayerMenu, onSelect: (PlayerOption) -> U
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .fillMaxHeight()
-                .width(320.dp)
+                .widthIn(min = 150.dp)
+                .width(IntrinsicSize.Max)
                 .background(Color(0xF0141620))
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 16.dp)
@@ -79,7 +82,7 @@ internal fun PlayerSettingsPanel(menu: PlayerMenu, onSelect: (PlayerOption) -> U
                 SectionTitle(title)
                 options.forEachIndexed { index, option ->
                     val focus = if (sectionIndex == 0 && index == 0) Modifier.focusRequester(firstFocus) else Modifier
-                    OptionRow(option, focus) { onSelect(option) }
+                    OptionRow(option, focus, onFocusOther) { onSelect(option) }
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -95,21 +98,21 @@ private fun SectionTitle(title: String) {
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
     )
 }
 
 @Composable
-private fun OptionRow(option: PlayerOption, modifier: Modifier, onClick: () -> Unit) {
+private fun OptionRow(option: PlayerOption, modifier: Modifier, onFocusOther: () -> Unit, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged { focused = it.isFocused; if (it.isFocused) option.onFocus?.invoke() }
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) (option.onFocus ?: onFocusOther)() }
             .background(if (focused) Color(0xFFFF1744) else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
         Text(
             text = option.label,

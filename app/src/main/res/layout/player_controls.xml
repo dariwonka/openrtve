@@ -20,12 +20,6 @@
         android:paddingTop="8dp"
         android:paddingEnd="8dp">
 
-        <ImageButton
-            android:id="@+id/player_back"
-            style="@style/PlayerIconButton"
-            android:contentDescription="@string/action_back"
-            android:src="@drawable/ic_player_back" />
-
         <es.openrtve.playback.OutlinedTextView
             android:id="@+id/player_title"
             android:layout_width="0dp"

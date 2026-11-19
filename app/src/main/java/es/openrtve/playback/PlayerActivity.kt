@@ -211,6 +211,7 @@ class PlayerActivity : ComponentActivity() {
                         }
                     },
                     onCloseMenu = { previewDim = null; menu = null },
+                    onClearPreview = { previewDim = null },
                     seekShown = seekShown,
                     paused = paused,
                     controlsVisible = controlsVisible,
@@ -828,6 +829,7 @@ private fun PlaybackScreen(
     onOpenMenu: () -> Unit,
     onSelectOption: (PlayerOption) -> Unit,
     onCloseMenu: () -> Unit,
+    onClearPreview: () -> Unit,
     seekShown: Pair<Long, Long>?,
     paused: Boolean,
     controlsVisible: Boolean,
@@ -855,7 +857,6 @@ private fun PlaybackScreen(
                 factory = { context ->
                     val view = LayoutInflater.from(context).inflate(R.layout.player_view, FrameLayout(context), false) as PlayerView
                     val activity = context as PlayerActivity
-                    view.findViewById<ImageButton>(R.id.player_back).setOnClickListener { onBack() }
                     view.findViewById<ImageButton>(R.id.player_settings).setOnClickListener {
                         view.hideController()
                         onOpenMenu()
@@ -942,7 +943,7 @@ private fun PlaybackScreen(
         }
         menu?.let {
             androidx.activity.compose.BackHandler(onBack = onCloseMenu)
-            PlayerSettingsPanel(it, onSelectOption, onCloseMenu)
+            PlayerSettingsPanel(it, onSelectOption, onCloseMenu, onClearPreview)
         }
     }
 }
