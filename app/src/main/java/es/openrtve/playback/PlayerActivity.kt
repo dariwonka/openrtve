@@ -52,6 +52,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.C
+import androidx.media3.common.util.Util
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -62,7 +63,6 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.common.Tracks
-import androidx.media3.ui.AspectRatioFrameLayout
 import es.openrtve.domain.CatalogItem
 import es.openrtve.domain.canHaveNextEpisode
 import androidx.media3.ui.PlayerView
@@ -937,13 +937,17 @@ private fun PlaybackScreen(
                         view.hideController()
                         onOpenMenu()
                     }
-                    view.findViewById<ImageButton>(R.id.player_aspect).setOnClickListener {
-                        view.resizeMode = if (view.resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT) {
-                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        } else {
-                            AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    // Tiempo que queda: se recalcula cada vez que el tiempo transcurrido cambia.
+                    val remaining = view.findViewById<TextView>(R.id.player_remaining)
+                    view.findViewById<TextView>(androidx.media3.ui.R.id.exo_position).addTextChangedListener(object : android.text.TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                        override fun afterTextChanged(s: android.text.Editable?) {
+                            val player = view.player ?: return
+                            val left = player.duration - player.currentPosition
+                            remaining.text = if (player.duration == C.TIME_UNSET || left < 0) "" else "-" + Util.getStringForTime(java.lang.StringBuilder(), java.util.Formatter(java.util.Locale.ROOT), left)
                         }
-                    }
+                    })
                     activity.playerView = view
                     view.setControllerVisibilityListener(
                         PlayerView.ControllerVisibilityListener { visibility ->
@@ -968,8 +972,9 @@ private fun PlaybackScreen(
                     // Directo: sin tiempos absolutos (la ventana DVR no es una duración) y con indicador en vivo.
                     val live = view.findViewById<TextView>(R.id.player_live)
                     val isLive = liveState != null
+                    val remaining = view.findViewById<TextView>(R.id.player_remaining)
                     view.findViewById<TextView>(androidx.media3.ui.R.id.exo_position).visibility = if (isLive) View.GONE else View.VISIBLE
-                    view.findViewById<TextView>(androidx.media3.ui.R.id.exo_duration).visibility = if (isLive) View.GONE else View.VISIBLE
+                    remaining.visibility = if (isLive) View.GONE else View.VISIBLE
                     live.visibility = if (isLive) View.VISIBLE else View.GONE
                     if (liveState != null) {
                         live.setText(if (liveState.atLiveEdge) R.string.player_live else R.string.player_go_live)

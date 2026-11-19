@@ -72,7 +72,6 @@
 
     <string name="player_audio_track">Pista de audio</string>
     <string name="player_subtitles">Subtítulos</string>
-    <string name="player_aspect">Ajustar imagen</string>
     <string name="player_pip">Imagen en imagen</string>
     <string name="player_play_pause">Reproducir o pausar</string>
     <string name="player_settings">Ajustes de reproducción</string>
@@ -92,10 +91,6 @@
     <string name="settings_autoplay_summary">Encadena el siguiente episodio al terminar</string>
     <string name="player_live">DIRECTO</string>
     <string name="player_go_live">IR AL DIRECTO</string>
-    <plurals name="continue_remaining_minutes">
-        <item quantity="one">Queda %d min</item>
-        <item quantity="other">Quedan %d min</item>
-    </plurals>
     <string name="player_error_connect">No se pudo iniciar el reproductor</string>
     <string name="player_error_nothing">No hay nada en reproducción</string>
     <string name="player_error_geo">Este contenido no está disponible en tu ubicación</string>

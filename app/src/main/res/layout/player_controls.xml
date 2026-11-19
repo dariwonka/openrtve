@@ -26,7 +26,7 @@
             android:contentDescription="@string/action_back"
             android:src="@drawable/ic_player_back" />
 
-        <TextView
+        <es.openrtve.playback.OutlinedTextView
             android:id="@+id/player_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -43,12 +43,6 @@
             style="@style/PlayerIconButton"
             android:contentDescription="@string/player_settings"
             android:src="@drawable/ic_player_settings" />
-
-        <ImageButton
-            android:id="@+id/player_aspect"
-            style="@style/PlayerIconButton"
-            android:contentDescription="@string/player_aspect"
-            android:src="@drawable/ic_player_aspect" />
 
         <ImageButton
             android:id="@+id/player_pip"
@@ -89,7 +83,7 @@
                 android:textStyle="bold"
                 android:visibility="gone" />
 
-            <TextView
+            <es.openrtve.playback.OutlinedTextView
                 android:id="@id/exo_position"
                 style="@style/PlayerTimeText" />
 
@@ -98,8 +92,9 @@
                 android:layout_height="0dp"
                 android:layout_weight="1" />
 
-            <TextView
-                android:id="@id/exo_duration"
+            <!-- Tiempo que queda: lo actualiza la actividad junto con el tiempo transcurrido. -->
+            <es.openrtve.playback.OutlinedTextView
+                android:id="@+id/player_remaining"
                 style="@style/PlayerTimeText" />
         </LinearLayout>
 
