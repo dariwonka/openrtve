@@ -251,9 +251,9 @@ class PlayerActivity : ComponentActivity() {
     private var seekLastStep = 0L
 
     /**
-     * Con el aviso de "Siguiente" a la vista, OK pasa al siguiente episodio. Con los controles
-     * a la vista, izquierda/derecha saltan un minuto por pulsación y,
-     * manteniendo la tecla, el salto crece poco a poco; el botón central pausa/reanuda.
+     * Con el aviso de "Siguiente" a la vista, OK pasa al siguiente episodio. Izquierda/derecha
+     * saltan un minuto por pulsación (creciendo si se mantiene la tecla) estén o no a la vista los
+     * controles; arriba/abajo llevan el cursor entre el engranaje y pausa; OK pulsa el botón elegido.
      */
     @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
@@ -270,23 +270,32 @@ class PlayerActivity : ComponentActivity() {
             if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) playNext()
             return true
         }
-        if (view != null && menu == null && view.useController && view.isControllerFullyVisible) {
-            val focused = currentFocus?.id
-            val onBar = focused == null || focused == androidx.media3.ui.R.id.exo_progress ||
-                focused == androidx.media3.ui.R.id.exo_play_pause
+        if (view != null && menu == null && view.useController) {
             val key = event.keyCode
-            if (onBar && (key == android.view.KeyEvent.KEYCODE_DPAD_LEFT || key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)) {
-                if (event.action == android.view.KeyEvent.ACTION_DOWN) seekByKey(view, key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT, event.repeatCount)
+            val down = event.action == android.view.KeyEvent.ACTION_DOWN
+            // Izquierda y derecha siempre retroceden y adelantan, esté donde esté el cursor.
+            if (key == android.view.KeyEvent.KEYCODE_DPAD_LEFT || key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+                if (down) seekByKey(view, key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT, event.repeatCount)
                 return true
             }
-            if (focused == androidx.media3.ui.R.id.exo_progress &&
-                (key == android.view.KeyEvent.KEYCODE_DPAD_CENTER || key == android.view.KeyEvent.KEYCODE_ENTER)
-            ) {
-                if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                    view.player?.let { if (it.isPlaying) it.pause() else it.play() }
-                    view.showController()
+            if (view.isControllerFullyVisible) {
+                // Arriba y abajo mueven el cursor entre el engranaje (arriba) y pausa (abajo), sin salirse de ahí.
+                if (key == android.view.KeyEvent.KEYCODE_DPAD_UP || key == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
+                    if (down) {
+                        val target = if (key == android.view.KeyEvent.KEYCODE_DPAD_UP) R.id.player_settings else androidx.media3.ui.R.id.exo_play_pause
+                        view.findViewById<View>(target)?.requestFocus()
+                        view.showController()
+                    }
+                    return true
                 }
-                return true
+                // Sin cursor en ningún botón, OK pausa y reanuda.
+                if (currentFocus?.id == null && (key == android.view.KeyEvent.KEYCODE_DPAD_CENTER || key == android.view.KeyEvent.KEYCODE_ENTER)) {
+                    if (down && event.repeatCount == 0) {
+                        view.player?.let { if (it.isPlaying) it.pause() else it.play() }
+                        view.showController()
+                    }
+                    return true
+                }
             }
         }
         return super.dispatchKeyEvent(event)
@@ -872,6 +881,8 @@ private fun PlaybackScreen(
                             remaining.text = if (player.duration == C.TIME_UNSET || left < 0) "" else "-" + Util.getStringForTime(java.lang.StringBuilder(), java.util.Formatter(java.util.Locale.ROOT), left)
                         }
                     })
+                    // La barra de progreso no recibe el cursor: solo pausa y engranaje.
+                    view.findViewById<View>(androidx.media3.ui.R.id.exo_progress).isFocusable = false
                     activity.playerView = view
                     view.setControllerVisibilityListener(
                         PlayerView.ControllerVisibilityListener { visibility ->
@@ -880,7 +891,7 @@ private fun PlaybackScreen(
                             if (visibility == View.VISIBLE) {
                                 view.post {
                                     if (view.isControllerFullyVisible) {
-                                        view.findViewById<View>(androidx.media3.ui.R.id.exo_progress)?.requestFocus()
+                                        view.findViewById<View>(androidx.media3.ui.R.id.exo_play_pause)?.requestFocus()
                                     }
                                 }
                             }
