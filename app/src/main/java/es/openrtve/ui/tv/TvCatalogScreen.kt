@@ -1,5 +1,11 @@
 package es.openrtve.ui.tv
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.size
+import es.openrtve.ui.SyncActivity
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -122,10 +128,34 @@ internal fun TvTopBar(
             onSvt()
         }
         Spacer(Modifier.weight(1f))
+        SyncIndicator()
         IconButton(onClick = { TabPreview.active = false; onSearch() }) { Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.tab_search)) }
         IconButton(onClick = { TabPreview.active = false; onSettings() }) { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title)) }
     }
 }
+
+/**
+ * Rueda de carga junto a la lupa mientras se piden novedades o listas a los servidores. Solo se ve:
+ * no recibe el cursor ni pulsaciones. Espera un instante para no parpadear con peticiones rápidas.
+ */
+@Composable
+private fun SyncIndicator() {
+    val busy by SyncActivity.busy.collectAsStateWithLifecycle()
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(busy > 0) {
+        if (busy > 0) {
+            delay(SYNC_INDICATOR_DELAY_MS)
+            visible = true
+        } else {
+            visible = false
+        }
+    }
+    if (visible) {
+        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = Color.White)
+    }
+}
+
+private const val SYNC_INDICATOR_DELAY_MS = 400L
 
 /**
  * En una cuadrícula, la derecha en la última columna pasa a la primera tarjeta de

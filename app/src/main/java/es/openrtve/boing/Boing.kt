@@ -176,12 +176,12 @@ object Boing {
 
 /** Habla con el servidor de la app de Boing. Todo es bloqueante: llamar fuera del hilo principal. */
 class BoingApi(private val client: OkHttpClient) {
-    fun programs(): List<BoingSeries>? = get("Programs/getPrograms")?.let { Boing.parsePrograms(it) }?.takeIf { it.isNotEmpty() }
+    fun programs(): List<BoingSeries>? = es.openrtve.ui.SyncActivity.track { get("Programs/getPrograms") }?.let { Boing.parsePrograms(it) }?.takeIf { it.isNotEmpty() }
 
     /** `null` si Boing no responde. */
     fun chapters(guid: String): List<BoingEpisode>? {
         cache[guid]?.takeIf { System.currentTimeMillis() - it.first < TTL_MS }?.let { return it.second }
-        val list = get("Program/getProgram", "programId" to guid)?.let { Boing.parseChapters(it) }
+        val list = es.openrtve.ui.SyncActivity.track { get("Program/getProgram", "programId" to guid) }?.let { Boing.parseChapters(it) }
         if (list != null) cache[guid] = System.currentTimeMillis() to list
         return list
     }

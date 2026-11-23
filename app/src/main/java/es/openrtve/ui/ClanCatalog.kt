@@ -452,7 +452,7 @@ class ClanCatalogViewModel(
                 return@launch
             }
             try {
-                val result = download()
+                val result = SyncActivity.track { download() }
                 merge(result)
                 mutableUiState.update { it.copy(isLoading = false, ready = true) }
                 scanJob = viewModelScope.launch { scanForFilms() }
@@ -486,7 +486,7 @@ class ClanCatalogViewModel(
     /** Series nuevas de Boing: entran ancladas delante, como las novedades de RTVE, y salen en la próxima apertura. */
     private suspend fun discoverExtraSeries() {
         val knownIds = (stored.series + stored.movies).mapTo(HashSet<String>()) { it.id } + stored.removed.keys + extraSeries.map { it.id } + extraNotSeries
-        val fresh = runCatching { discoverExtra(knownIds) }.getOrDefault(emptyList()).filter { it.id !in knownIds }
+        val fresh = runCatching { SyncActivity.track { discoverExtra(knownIds) } }.getOrDefault(emptyList()).filter { it.id !in knownIds }
         if (fresh.isEmpty()) return
         val now = clock()
         fresh.forEach { known[it.id] = it }
@@ -578,9 +578,12 @@ class ClanCatalogViewModel(
             .filter { id -> stored.scanned[id]?.let { now - it !in 0 until RESCAN_MS } ?: true }
             .sortedBy { stored.scanned[it] ?: 0L }
         val permits = Semaphore(MAX_PARALLEL_SCANS)
-        for (batch in due.chunked(SCAN_BATCH)) {
-            val results = coroutineScope { batch.map { id -> async { permits.withPermit { scanProgram(id) } } }.awaitAll() }.filterNotNull()
-            if (results.isNotEmpty()) applyScan(results, now)
+        if (due.isEmpty()) return
+        SyncActivity.track {
+            for (batch in due.chunked(SCAN_BATCH)) {
+                val results = coroutineScope { batch.map { id -> async { permits.withPermit { scanProgram(id) } } }.awaitAll() }.filterNotNull()
+                if (results.isNotEmpty()) applyScan(results, now)
+            }
         }
     }
 

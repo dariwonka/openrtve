@@ -190,10 +190,10 @@ object SvtBarn {
 class SvtApi(private val client: OkHttpClient) {
     fun programs(): List<SvtProgram> {
         programsCache?.takeIf { System.currentTimeMillis() - it.first < TTL_MS }?.let { return it.second }
-        val list = SvtBarn.parsePrograms(graphql(PROGRAMS_QUERY, buildJsonObject {
+        val list = es.openrtve.ui.SyncActivity.track { SvtBarn.parsePrograms(graphql(PROGRAMS_QUERY, buildJsonObject {
             put("id", "barn")
             put("filter", buildJsonObject { put("kidsFilter", true); put("userIsAbroad", true); put("includeFullOppetArkiv", false) })
-        }))
+        })) }
         if (list.isNotEmpty()) programsCache = System.currentTimeMillis() to list
         return list
     }
@@ -201,7 +201,7 @@ class SvtApi(private val client: OkHttpClient) {
     /** `null` si SVT no responde; lista vacía si el programa no tiene nada visible. */
     fun episodes(slug: String): List<SvtEpisode>? {
         episodesCache[slug]?.takeIf { System.currentTimeMillis() - it.first < TTL_MS }?.let { return it.second }
-        val list = runCatching { SvtBarn.parseEpisodes(graphql(EPISODES_QUERY, buildJsonObject { put("s", slug) })) }.getOrNull()
+        val list = runCatching { es.openrtve.ui.SyncActivity.track { SvtBarn.parseEpisodes(graphql(EPISODES_QUERY, buildJsonObject { put("s", slug) })) } }.getOrNull()
         if (list != null) episodesCache[slug] = System.currentTimeMillis() to list
         return list
     }
